@@ -25,7 +25,7 @@ The following table presents a list of famous formulas in different fields that 
 
 Bacon-LSP3 can be used to reason the logic behind some simple decisions, like “a face image needs to show 2 eye features AND a mouth feature”
 
-| Forumla          | Plot                              | Bacon-LSP3 Explanation |
+| Relationship     | Plot                              | Bacon-LSP3 Explanation |
 | ---------------- | --------------------------------- | ---------------------- |
 | Full conjunction | ![min(a,b)](./images/lsp3-0.png)  | `min(A, B)`            |
 | Product t-norm   | ![ab](./images/lsp3-1_25.png)     | `A * B `               |
@@ -37,7 +37,7 @@ Bacon-LSP3 can be used to reason the logic behind some simple decisions, like �
 Run the following command to install:
 
 ```python
-
+pip install bacon-net
 ```
 
 ## Usage
@@ -56,11 +56,14 @@ net.fit(a, b, y)
 
 # explain the network
 m = net.explain(singleVariable=True)
+
+# make prediction
+p = net.predict(2.4)
 ```
 
 # Developing Bacon-Net
 
-To install baconnet, along with the tools you need to develop and run tests, run the following command:
+To install Bacon-Net, along with the tools you need to develop and run tests, run the following command:
 
 ```python
 pip install -e .[dev]
@@ -124,6 +127,10 @@ As I research into explainable AI, I see an opportunity to combine “BACON” w
 - **Bacon-CNN**
 
   Explainability layer on top of a CNN network
+
+- **Bacon-H1**
+
+  A combination of selected Bacon-Net networks
 
 ## Contact author
 
