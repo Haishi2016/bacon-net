@@ -7,7 +7,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 with codecs.open(os.path.join(here, "README.md"), encoding="utf-8") as fh:
     long_description = "\n" + fh.read()
 
-VERSION = '0.0.1'
+VERSION = '0.0.3'
 DESCRIPTION = 'A neural network architecture for building fully explainable neural network for arithmetic and gradient logic expression approximation.'
 
 # Setting up
@@ -21,8 +21,9 @@ setup(
     long_description_content_type="text/markdown",
     long_description=long_description,
     install_requires=[
-        "tensorflow >= 2",
-        "keras >= 2.2.4"
+        "tensorflow >= 2.7.0",
+        "keras >= 2.7.0",
+        "numpy >= 1.22.0"
     ],
     keywords=['ai', 'explainable', 'gradient logic',
               'approximation', 'formula', 'explainability', 'decision', 'decision making'],
@@ -32,7 +33,7 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
-        "Operating System :: OS Indepedent",
+        "Operating System :: OS Independent",
         "License :: OSI Approved :: Apache Software License",
     ],
     extras_require={
