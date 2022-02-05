@@ -2,7 +2,7 @@
 
 **BaconNet** is a neural network architecture for building fully explainable neural network for arithmetic and gradient logic expression approximation. A BaconNet network can be used to discover an arithmetical or a logical expression that approximates the given dataset. And the result network is precisely explainable.
 
-This repository contains a series of 2-variable BaconNet implementations. Multiple Bacon-Net can be used together to expand the search space; And BaconNet can be stacked into a **BaconStack** that handles arbitrary number of variables.
+This repository contains a series of 2-variable BaconNet implementations. Multiple BaconNet can be used together to expand the search space; And BaconNet can be stacked into a **BaconStack** that handles arbitrary number of variables.
 
 The following table presents a list of famous formulas in different fields that are re-discovered using Bacon-Net using synthetic training data. All networks in this repository are implemented using [Keras](https://keras.io/) and Python.
 
