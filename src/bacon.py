@@ -31,7 +31,7 @@ class baconNet(ABC):
         self.__size = size
 
     @abstractmethod
-    def explain(self, a, b):
+    def explain(self, singleVariable=False):
         pass
 
     @abstractmethod
