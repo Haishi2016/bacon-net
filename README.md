@@ -12,13 +12,13 @@ The following table presents a list of famous formulas in different fields that 
 
 > **NOTE**: Coefficients and constent terms will vary a little in different runs.
 
-| Forumla                                               | Expression                                       | Bacon-Poly2 Explanation                                        |
-| ----------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
-| Area of a circle                                      | ![area of circle](./images/circle-area.png)      | `z = 3.1416x^2`                                                |
-| Area of a ellipse                                     | ![area of ellipse](./images/ellipse-area.png)    | `z = 3.1416xy `                                                |
-| Newton's equation of motion (displacement)            | ![motion-equation](./images/motion-equation.png) | `z = 4.905x^2 + 5.0x` _(initial speed = 5, acceleration=9.81)_ |
-| An arbitary 2-degree 2-variable polynomial expression | ![polynomial](./images/polynomial.png)           | `z = 1.0x^2 + 4.0xy + 4.0y^2 + 5.0`                            |
-| Einstein's mass-energy equivalence                    | ![e=mc^2](./images/e-mc2.png)                    | `z = 0.0899x ` _(with c normalized to 0.299792458 m/s)_        |
+| Forumla                                               | Expression                                                                       | Bacon-Poly2 Explanation                                        |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Area of a circle                                      | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/circle-area.png)     | `z = 3.1416x^2`                                                |
+| Area of a ellipse                                     | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/ellipse-area.png)    | `z = 3.1416xy `                                                |
+| Newton's equation of motion (displacement)            | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/motion-equation.png) | `z = 4.905x^2 + 5.0x` _(initial speed = 5, acceleration=9.81)_ |
+| An arbitary 2-degree 2-variable polynomial expression | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/polynomial.png)      | `z = 1.0x^2 + 4.0xy + 4.0y^2 + 5.0`                            |
+| Einstein's mass-energy equivalence                    | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/e-mc2.png)           | `z = 0.0899x ` _(with c normalized to 0.299792458 m/s)_        |
 
 ## Bacon-LSP3
 
@@ -26,12 +26,12 @@ The following table presents a list of famous formulas in different fields that 
 
 Bacon-LSP3 can be used to reason the logic behind some simple decisions, like “a face image needs to show 2 eye features AND a mouth feature”
 
-| Relationship     | Plot                              | Bacon-LSP3 Explanation |
-| ---------------- | --------------------------------- | ---------------------- |
-| Full conjunction | ![min(a,b)](./images/lsp3-0.png)  | `min(A, B)`            |
-| Product t-norm   | ![ab](./images/lsp3-1_25.png)     | `A * B `               |
-| Neutrality       | ![(a,b)/2](./images/lsp3-0_5.png) | `(A + B) / 2`          |
-| Full disjunction | ![max(a,b)](./images/lsp3-1.png)  | `max(A, B)`            |
+| Relationship     | Plot                                                                       | Bacon-LSP3 Explanation |
+| ---------------- | -------------------------------------------------------------------------- | ---------------------- |
+| Full conjunction | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/lsp3-0.png)    | `min(A, B)`            |
+| Product t-norm   | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/lsp3-1_25.png) | `A * B `               |
+| Neutrality       | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/lsp3-0_5.png)  | `(A + B) / 2`          |
+| Full disjunction | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/lsp3-1.png)    | `max(A, B)`            |
 
 ## Installation
 
@@ -86,7 +86,7 @@ Please see [here](./docs/define-bacon-net.md) for instructions on creating a new
 
 The idea behind Bacon-Net is simple: to construct a network that can do linear interpolation among a group of selected terms like _min(x,y)_ and _sin(x^2)_, as shown in the following diagram:
 
-![Bacon-Net](./images/bacon-net.png)
+![](https://github.com/Haishi2016/bacon-net/raw/main/images/bacon-net.png)
 
 - **Input layer** contains two variables. For gradient logic expressions.
 - **Expansion layer** defines the search space. Each node in this layer represents a candidate expression for the final approximation. Obviously, it’s desirable to have minimum overlaps among the function curves.
@@ -97,17 +97,17 @@ The idea behind Bacon-Net is simple: to construct a network that can do linear i
 
 It's also to feed the inputs to a family of Bacon-Net networks to search multiple expression spaces in parallel. A 1-active **Selection layer** is added on top to select the appropriate Bacon-Net in this case, as shown in the following diagram:
 
-![Bacon-Net-Select](./images/bacon-net-selection.png)
+![](https://github.com/Haishi2016/bacon-net/raw/main/images/bacon-net-selection.png)
 
 ## Bacon-Stack Architecture
 
 A Bacon-Stack is recursively defined: a Bacon-Stack that handles _n_ variables (denoted as _B(n)_) is constructed by feeding variable _x(i)_ and the result of a _B(n-1)_ into a _B(2)_ network, which is a Bacon-Net, as shown in the following diagram:
 
-![Bacon-Stack](./images/bacon-stack.png)
+![](https://github.com/Haishi2016/bacon-net/raw/main/images/bacon-stack.png)
 
 Bacon-Net doesn't assume variables to be commutative. To explore permutation of variable orders, a **Permutation layer** is added at the bottom of the Bacon-Stack, as shown in the following diagram:
 
-![Bacon-Stack-selection](./images/bacon-stack-selection.png)
+![](https://github.com/Haishi2016/bacon-net/raw/main/images/bacon-stack-selection.png)
 
 ## Why the name "BACON"?
 
