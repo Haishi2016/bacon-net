@@ -18,6 +18,7 @@ The following table presents a list of famous formulas in different fields that 
 | Area of a ellipse                                     | ![area of ellipse](./images/ellipse-area.png)    | `z = 3.1416xy `                                                |
 | Newton's equation of motion (displacement)            | ![motion-equation](./images/motion-equation.png) | `z = 4.905x^2 + 5.0x` _(initial speed = 5, acceleration=9.81)_ |
 | An arbitary 2-degree 2-variable polynomial expression | ![polynomial](./images/polynomial.png)           | `z = 1.0x^2 + 4.0xy + 4.0y^2 + 5.0`                            |
+| Einstein's mass-energy equivalence                    | ![e=mc^2](./images/e-mc2.png)                    | `z = 0.0899x ` _(with c normalized to 0.299792458 m/s)_        |
 
 ## Bacon-LSP3
 
@@ -40,7 +41,7 @@ Run the following command to install:
 pip install bacon-net
 ```
 
-## Usage
+## Sample Usage
 
 ```python
 from nets.poly2 import poly2
@@ -48,7 +49,8 @@ from nets.poly2 import poly2
 # create a network from the bacon-net network family
 net = poly2()
 
-# optionally, use dataCreator to generate 3 1-dimension arrays: input 1, input 2, output
+# optionally, use dataCreator to generate 3 1-dimension arrays: input a, input b, output (y)
+# set singleVariable flag if only a single variable (a) is used
 a, b, y = dataCreator.create(1000, 1, lambda a, b: math.pi * a * a, singleVariable=True)
 
 # train the network
@@ -57,8 +59,11 @@ net.fit(a, b, y)
 # explain the network
 m = net.explain(singleVariable=True)
 
-# make prediction
+# make prediction (pass two parameters if two variables are used)
 p = net.predict(2.4)
+
+# make predictions on array (pass two arrays if two variables are used)
+p = net.predict([1.0, 2.3, 4.3])
 ```
 
 # Developing Bacon-Net
@@ -106,9 +111,9 @@ Bacon-Net doesn't assume variables to be commutative. To explore permutation of 
 
 ## Why the name "BACON"?
 
-When I was in high school in encountered with a BASIC algorithm that used a brute-force method to discover a arithmetical expression to approximate a given dataset. I remembered the program was called “BACON”. However, it’s been unfruitful to find such references in Internet, so my memory may have failed me. Regardless, I’ve been wanting to recreate “BACON” all these years, and I finally get around to do it just now.
+When I was in high school in encountered with a BASIC program that used a brute-force method to discover a arithmetical expression to approximate a given dataset. I remembered the program was called “BACON”. However, it’s been unfruitful to find such references in Internet, so my memory may have failed me. Regardless, I’ve been wanting to recreate “BACON” all these years, and I finally got around to do it just now during my week off.
 
-As I research into explainable AI, I see an opportunity to combine “BACON” with AI so that we can build some precisely explainable AI networks, plus the benefit of implementing a parallelable BACON using modern technologies.
+As I research into explainable AI, I see an opportunity to combine “BACON” with AI so that we can build some precisely explainable AI networks, plus the benefit of implementing a parallelable, GPU-accelerated BACON using modern technologies.
 
 ## Upcoming Bacon-Net networks
 
@@ -131,6 +136,10 @@ As I research into explainable AI, I see an opportunity to combine “BACON” w
 - **Bacon-H1**
 
   A combination of selected Bacon-Net networks
+
+- **Bacon-Cal1**
+
+  A simple calculus solver
 
 ## Contact author
 
