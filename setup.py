@@ -12,15 +12,18 @@ DESCRIPTION = 'A neural network architecture for building fully explainable neur
 
 # Setting up
 setup(
-    name="baconnet",
+    name="bacon-net",
     version=VERSION,
-    url="https://github.com/Haishi2016/baconnet",
+    url="https://github.com/Haishi2016/bacon-net",
     author="haishibai (Haishi Bai)",
     author_email="<haishi.bai@live.com>",
     description=DESCRIPTION,
     long_description_content_type="text/markdown",
     long_description=long_description,
-    install_requires=[],
+    install_requires=[
+        "tensorflow >= 2",
+        "keras >= 2.2.4"
+    ],
     keywords=['ai', 'explainable', 'gradient logic',
               'approximation', 'formula', 'explainability', 'decision', 'decision making'],
     classifiers=[
@@ -37,6 +40,6 @@ setup(
             "pytest >= 3.7",
         ],
     },
-    py_modules=["baconnet"],
+    py_modules=["bacon", "nets"],
     package_dir={'': 'src'}
 )
