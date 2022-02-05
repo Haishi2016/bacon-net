@@ -12,6 +12,10 @@ a, b, y = dataCreator.create(
 net.fit(a, b, y)
 m = net.explain(singleVariable=True)
 print(m)
+a = net.predict(1)
+print("area of circle with radius 1 = " + str(a))
+b = net.predict([1, 2, 3])
+print("area of circles with radius 1,2,3 = ", b)
 
 # rediscover formula to calculate area of ellipse:  a = pi * a * b
 print("\nRediscover formula to calculate area of ellipse ... \n")
@@ -37,3 +41,5 @@ a, b, y = dataCreator.create(
 net.fit(a, b, y)
 m = net.explain()
 print(m)
+
+print("\n -= WAN =-\n")

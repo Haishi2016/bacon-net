@@ -19,12 +19,25 @@ The following table presents a list of famous formulas in different fields that 
 | Newton's equation of motion (displacement)            | ![motion-equation](./images/motion-equation.png) | `z = 4.905x^2 + 5.0x` _(initial speed = 5, acceleration=9.81)_ |
 | An arbitary 2-degree 2-variable polynomial expression | ![polynomial](./images/polynomial.png)           | `z = 1.0x^2 + 4.0xy + 4.0y^2 + 5.0`                            |
 
+## Bacon-LSP3
+
+**Bacon-LSP3** evaluates four possible gradient logic relationships between two variables in space _I = [0, 1]_: full conjunction, full disjunction, product t-norm (medium hyperconjunction) and neutrality.
+
+Bacon-LSP3 can be used to reason the logic behind some simple decisions, like “a face image needs to show 2 eye features AND a mouth feature”
+
+| Forumla          | Plot                              | Bacon-LSP3 Explanation |
+| ---------------- | --------------------------------- | ---------------------- |
+| Full conjunction | ![min(a,b)](./images/lsp3-0.png)  | `min(A, B)`            |
+| Product t-norm   | ![ab](./images/lsp3-1_25.png)     | `A * B `               |
+| Neutrality       | ![(a,b)/2](./images/lsp3-0_5.png) | `(A + B) / 2`          |
+| Full disjunction | ![max(a,b)](./images/lsp3-1.png)  | `max(A, B)`            |
+
 ## Installation
 
 Run the following command to install:
 
 ```python
-pip install bacon-net
+
 ```
 
 ## Usage
