@@ -42,4 +42,12 @@ net.fit(a, b, y)
 m = net.explain()
 print(m)
 
+# rediscover E = mc^2
+print("\nRediscover mass-energy equivalence ... \n")
+a, b, y = dataCreator.create(
+    1000, 1, lambda a, b: a * 0.299792458 * 0.299792458, singleVariable=True)
+net.fit(a, b, y)
+m = net.explain(singleVariable=True)
+print(m)
+
 print("\n -= WAN =-\n")
