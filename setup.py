@@ -14,6 +14,7 @@ DESCRIPTION = 'A neural network architecture for building fully explainable neur
 setup(
     name="baconnet",
     version=VERSION,
+    url="https://github.com/Haishi2016/baconnet",
     author="haishibai (Haishi Bai)",
     author_email="<haishi.bai@live.com>",
     description=DESCRIPTION,
@@ -36,6 +37,6 @@ setup(
             "pytest >= 3.7",
         ],
     },
-    py_modules=["hello"],
+    py_modules=["baconnet"],
     package_dir={'': 'src'}
 )
