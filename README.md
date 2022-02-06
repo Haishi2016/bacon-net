@@ -12,7 +12,7 @@ The following table presents a list of famous formulas in different fields that 
 
 > **NOTE**: Coefficients and constent terms will vary a little in different runs.
 
-| Forumla                                               | Expression                                                                       | Bacon-Poly2 Explanation                                        |
+| Formula                                               | Expression                                                                       | Bacon-Poly2 Explanation                                        |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Area of a circle                                      | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/circle-area.png)     | `z = 3.1416x^2`                                                |
 | Area of a ellipse                                     | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/ellipse-area.png)    | `z = 3.1416xy `                                                |
