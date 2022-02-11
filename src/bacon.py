@@ -79,16 +79,19 @@ class baconNet(ABC):
             np.column_stack((a, b)), y, epochs=600, batch_size=10, verbose=0, callbacks=[callback])
         return history
 
+    def get_model(self):
+        return self.__model
+
 
 class dataCreator:
-    def create(size, scale, aggregate, singleVariable=False):
-        a = np.random.rand(size) * scale
-        if not singleVariable:
-            b = np.random.rand(size) * scale
-        else:
-            b = np.zeros(size)
-        y = aggregate(a, b)
-        return a, b, y
+    def create(size, scale, aggregate, params=2):
+        values = []
+        for i in range(params):
+            values.append(np.random.rand(size) * scale)
+        if len(values) < 2:
+            values.append(np.zeros(size))
+        y = aggregate(values)
+        return values, y
 
 
 class expansionLayer(tf.keras.layers.Layer):
@@ -100,3 +103,42 @@ class expansionLayer(tf.keras.layers.Layer):
         X = self.expander(
             inputs[:, 0:1], inputs[:, 1:2])
         return X[0]
+
+
+class expression:
+    def __init__(self, terms):
+        self.terms = terms
+
+    def string(self, precision):
+        strs = []
+        for t in self.terms:
+            strs.append(t.string(precision))
+        return " + ".join(filter(None, strs))
+
+
+class term:
+    def __init__(self, coefficient=0, leftExp=None, rightExp=None, leftOpt="", rightOpt=""):
+        self.leftExp = leftExp
+        self.rightExp = rightExp
+        self.leftOpt = leftOpt
+        self.rightOpt = rightOpt
+        self.coefficient = coefficient
+
+    def string(self, precision=-1):
+        if self.coefficient == 0:
+            return ""
+        if precision == -1:
+            ret = str(self.coefficient)
+        else:
+            ret = str(round(self.coefficient, precision))
+        if self.leftExp != None:
+            if isinstance(self.leftExp, expression):
+                ret += "(" + self.leftExp.string() + ")" + self.leftOpt
+            else:
+                ret += self.leftExp + self.leftOpt
+        if self.rightExp != None:
+            if isinstance(self.rightExp, expression):
+                ret += "(" + self.rightExp.string() + ")" + self.rightOpt
+            else:
+                ret += self.rightExp + self.rightOpt
+        return ret

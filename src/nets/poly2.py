@@ -1,5 +1,5 @@
-from bacon import baconNet
-import numpy as np
+from lib2to3.pgen2.token import LEFTSHIFT
+from bacon import baconNet, expression, term
 import tensorflow as tf
 
 import sys
@@ -22,18 +22,19 @@ class poly2(baconNet):
         delta = 0.01
         terms = []
         if abs(m[2][0]) > delta and abs(a) > delta:
-            terms.append(str(round(m[2][0], 4)) + "x^2")
+            terms.append(term(coefficient=m[2][0], leftExp="x", leftOpt="^2"))
         if abs(m[4][0]) > delta and abs(b*a) > delta:
-            terms.append(str(round(m[4][0], 4)) + "xy")
+            terms.append(term(coefficient=m[4][0], leftExp="x", rightExp="y"))
         if abs(m[3][0]) > delta and abs(b) > delta:
-            terms.append(str(round(m[3][0], 4)) + "y^2")
+            terms.append(
+                term(coefficient=m[3][0], rightExp="y", rightOpt="^2"))
         if abs(m[0][0]) > delta and abs(a) > delta:
-            terms.append(str(round(m[0][0], 4)) + "x")
+            terms.append(term(coefficient=m[0][0], leftExp="x"))
         if abs(m[1][0]) > delta and abs(b) > delta:
-            terms.append(str(round(m[1][0], 4)) + "y")
+            terms.append(term(coefficient=m[1][0], rightExp="y"))
         if abs(m[5][0]) > delta and abs(c) > delta:
-            terms.append(str(round(c, 4)))
-        return "z = " + " + ".join(terms)
+            terms.append(term(coefficient=c))
+        return expression(terms)
 
     def expand(self, a, b):
         X = tf.stack((tf.cast(a, dtype='float32'),

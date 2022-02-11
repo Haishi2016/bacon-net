@@ -41,6 +41,6 @@ setup(
             "pytest >= 3.7",
         ],
     },
-    py_modules=["bacon", "nets"],
+    py_modules=["bacon", "stack", "nets"],
     package_dir={'': 'src'}
 )
