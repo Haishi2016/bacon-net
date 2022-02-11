@@ -1,5 +1,5 @@
 from bacon import baconNet
-import numpy as np
+import tensorflow as tf
 
 import sys
 sys.path.append("..")
@@ -28,8 +28,8 @@ class lsp3(baconNet):
             return "A * B"
         return "can't explain"
 
-    def expand(self, a, b, y):
-        X = np.column_stack((np.minimum(a, b),
-                             np.maximum(a, b),
-                             np.product(np.array([a, b]), axis=0)))
-        return np.column_stack((a, b)), X, y
+    def expand(self, a, b):
+        X = tf.stack((tf.cast(tf.minimum(a, b), dtype='float32'),
+                      tf.cast(tf.maximum(a, b), dtype='float32'),
+                      tf.cast(tf.math.multiply(a, b), dtype='float32')))
+        return tf.transpose(X)

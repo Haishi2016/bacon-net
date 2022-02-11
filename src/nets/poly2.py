@@ -1,5 +1,6 @@
 from bacon import baconNet
 import numpy as np
+import tensorflow as tf
 
 import sys
 sys.path.append("..")
@@ -34,10 +35,11 @@ class poly2(baconNet):
             terms.append(str(round(c, 4)))
         return "z = " + " + ".join(terms)
 
-    def expand(self, a, b, y):
-        X = np.column_stack((a, b,
-                             np.power(a, 2),
-                             np.power(b, 2),
-                             np.product(np.array([a, b]), axis=0),
-                             np.ones(len(a))))
-        return np.column_stack((a, b)), X, y
+    def expand(self, a, b):
+        X = tf.stack((tf.cast(a, dtype='float32'),
+                      tf.cast(b, dtype='float32'),
+                      tf.cast(tf.math.pow(a, 2), dtype='float32'),
+                      tf.cast(tf.math.pow(b, 2), dtype='float32'),
+                      tf.cast(tf.math.multiply(a, b), dtype='float32'),
+                      tf.ones(tf.shape(a), dtype='float32')))
+        return tf.transpose(X)
