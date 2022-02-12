@@ -33,6 +33,10 @@ Bacon-LSP3 can be used to reason the logic behind some simple decisions, like â€
 | Neutrality       | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/lsp3-0_5.png)  | `(A + B) / 2`          |
 | Full disjunction | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/lsp3-1.png)    | `max(A, B)`            |
 
+## Bacon-Stack
+
+Bacon-Stack expands on Bacon-Net and allows arbitrary number of variables. See [Back-Stack Architecture](#bacon-stack-architecture) for more details on Bacon-Stack design.
+
 ## Installation
 
 Run the following command to install:
@@ -104,6 +108,10 @@ It's also to feed the inputs to a family of Bacon-Net networks to search multipl
 A Bacon-Stack is recursively defined: a Bacon-Stack that handles _n_ variables (denoted as _B(n)_) is constructed by feeding variable _x(i)_ and the result of a _B(n-1)_ into a _B(2)_ network, which is a Bacon-Net, as shown in the following diagram:
 
 ![](https://github.com/Haishi2016/bacon-net/raw/main/images/bacon-stack.png)
+
+The following diagram illustrates how a 5-variable Bacon-Stack is implemented using Keras custom layers and multi-input features.
+
+![](https://github.com/Haishi2016/bacon-net/raw/main/images/5-variable-stack.png)
 
 Bacon-Net doesn't assume variables to be commutative. To explore permutation of variable orders, a **Permutation layer** is added at the bottom of the Bacon-Stack, as shown in the following diagram:
 
