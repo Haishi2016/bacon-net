@@ -10,7 +10,7 @@ The following table presents a list of famous formulas in different fields that 
 
 **Bacon-Poly2** can be used to discover 1-variable or 2-variable quadratic polynomials or linear polynomials. The following table lists some samples of Bacon-Poly2 re-discovering some of the well-known geometric formulas and physics formulas.
 
-> **NOTE**: Coefficients and constent terms will vary a little in different runs.
+> **NOTE**: Coefficients and constant terms will vary a little in different runs.
 
 | Formula                                               | Expression                                                                       | Bacon-Poly2 Explanation                                        |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -113,9 +113,11 @@ The following diagram illustrates how a 5-variable Bacon-Stack is implemented us
 
 ![](https://github.com/Haishi2016/bacon-net/raw/main/images/5-variable-stack.png)
 
-Bacon-Net doesn't assume variables to be commutative. To explore permutation of variable orders, a **Permutation layer** is added at the bottom of the Bacon-Stack, as shown in the following diagram:
+Bacon-Stack doesn't assume variables to be commutative. To explore permutation of variable orders, a **Permutation layer** is added at the bottom of the Bacon-Stack, as shown in the following diagram:
 
 ![](https://github.com/Haishi2016/bacon-net/raw/main/images/bacon-stack-selection.png)
+
+> **NOTE**: Before the permutation layer is implemented, Bacon-Stack is constrained to handle expressions that can be rewrite as binary trees with ordered parameters. For example, the network will have difficulties to understand `(a+b)*c+d*e`, but will be fine with `(a+b)*c+d+e`.
 
 ## Why the name "BACON"?
 
