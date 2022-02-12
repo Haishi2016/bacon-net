@@ -6,31 +6,31 @@ import numpy as np
 net = lsp3()
 
 print("\nFeeding data for min(A,B) ... \n")
-a, b, y = dataCreator.create(
-    1000, 1, lambda a, b: np.minimum(a, b))
-net.fit(a, b, y)
+x, y = dataCreator.create(
+    1000, 1, lambda x: np.minimum(x[0], x[1]))
+net.fit(x[0], x[1], y)
 m = net.explain()
-print("Network explains: " + m)
+print("Network explains: " + m.string(namePattern='A', ignoreOne=True))
 
 print("\nFeeding data for max(A,B) ... \n")
-a, b, y = dataCreator.create(
-    1000, 1, lambda a, b: np.maximum(a, b))
-net.fit(a, b, y)
+x, y = dataCreator.create(
+    1000, 1, lambda x: np.maximum(x[0], x[1]))
+net.fit(x[0], x[1], y)
 m = net.explain()
-print("Network explains: " + m)
+print("Network explains: " + m.string(namePattern='A', ignoreOne=True))
 
 print("\nFeeding data for A*B... \n")
-a, b, y = dataCreator.create(
-    1000, 1, lambda a, b: np.product(np.array([a, b]), axis=0))
-net.fit(a, b, y)
+x, y = dataCreator.create(
+    1000, 1, lambda x: np.product(np.array([x[0], x[1]]), axis=0))
+net.fit(x[0], x[1], y)
 m = net.explain()
-print("Network explains: " + m)
+print("Network explains: " + m.string(namePattern='A', ignoreOne=True))
 
 print("\nFeeding data for (A+B)/2... \n")
-a, b, y = dataCreator.create(
-    1000, 1, lambda a, b: (a+b)/2)
-net.fit(a, b, y)
+x, y = dataCreator.create(
+    1000, 1, lambda x: (x[0]+x[1])/2)
+net.fit(x[0], x[1], y)
 m = net.explain()
-print("Network explains: " + m)
+print("Network explains: " + m.string(namePattern='A', ignoreOne=True))
 
 print("\n -= WAN =-\n")
