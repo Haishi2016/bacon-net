@@ -10,28 +10,24 @@ class poly2(baconNet):
     def __init__(self):
         super().__init__(6)
 
-    def get_contribution(self, a, b):
-        return super().get_contribution(a, b)
-
-    def explain(self, singleVariable=False):
+    def explain_contribution(self, m, c, singleVariable=False):
         a = 1
         b = 1
         if singleVariable:
             b = 0
-        m, c = self.get_contribution(a, b)
         delta = 0.01
         terms = []
         if abs(m[2][0]) > delta and abs(a) > delta:
-            terms.append(term(coefficient=m[2][0], leftExp="x", leftOpt="^2"))
+            terms.append(term(coefficient=m[2][0], term="[x]^2"))
         if abs(m[4][0]) > delta and abs(b*a) > delta:
-            terms.append(term(coefficient=m[4][0], leftExp="x", rightExp="y"))
+            terms.append(term(coefficient=m[4][0], term="[x][y]"))
         if abs(m[3][0]) > delta and abs(b) > delta:
             terms.append(
-                term(coefficient=m[3][0], rightExp="y", rightOpt="^2"))
+                term(coefficient=m[3][0], term="[y]^2"))
         if abs(m[0][0]) > delta and abs(a) > delta:
-            terms.append(term(coefficient=m[0][0], leftExp="x"))
+            terms.append(term(coefficient=m[0][0], term="[x]"))
         if abs(m[1][0]) > delta and abs(b) > delta:
-            terms.append(term(coefficient=m[1][0], rightExp="y"))
+            terms.append(term(coefficient=m[1][0], term="[y]"))
         if abs(m[5][0]) > delta and abs(c) > delta:
             terms.append(term(coefficient=c))
         return expression(terms)

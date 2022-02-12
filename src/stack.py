@@ -16,29 +16,32 @@ class baconStack():
             raise Exception("unsupported bacon type: " + type)
 
     def __init__(self, size=0, bacons=None, baconType=None, baconNames=None):
-        myBacons = []
+        self.__bacons = []
         if baconType != None and size > 0:
             for i in range(size):
-                myBacons.append(self.__createBacon(baconType))
+                self.__bacons.append(self.__createBacon(baconType))
         if baconNames != None:
-            if len(myBacons) > 0:
+            if len(self.__bacons) > 0:
                 raise Exception("can't use both baconType and baconNames")
             for b in range(baconNames):
-                myBacons.append(self.__createBacon(b))
+                self.__bacons.append(self.__createBacon(b))
         if bacons != None:
-            if len(myBacons) > 0:
+            if len(self.__bacons) > 0:
                 raise Exception(
                     "bacons parameter can't be used with baconType or baconNames")
-            myBacons = bacons.copy()
+            self.__bacons = bacons.copy()
         inputs = []
-        for b in myBacons:
+        i = 3
+        for b in self.__bacons:
             if len(inputs) == 0:
-                inputs.append(keras.Input(shape=(2,)))
+                inputs.append(keras.Input(
+                    shape=(2,), name="input 1 and 2"))
                 x = b.get_model()(inputs[len(inputs)-1])
             else:
-                inputs.append(keras.Input(shape=(1,)))
+                inputs.append(keras.Input(shape=(1,), name="input " + str(i)))
                 x = layers.concatenate([x, inputs[len(inputs)-1]])
                 x = b.get_model()(x)
+                i += 1
         self.__model = keras.Model(inputs=inputs, outputs=[
                                    x], name="bacon-stack")
         self.__model.compile(
@@ -63,3 +66,20 @@ class baconStack():
             epochs=600, batch_size=10, verbose=0, callbacks=[callback]
         )
         return history
+
+    def explain(self):
+        baconIdx = 0
+        expressions = []
+        for idx in range(len(self.__model.layers)):
+            layer = self.__model.get_layer(index=idx)
+            if type(layer) is keras.Sequential:
+                expressions.append(self.__bacons[baconIdx].explain())
+                baconIdx += 1
+        for i in range(len(expressions)-1):
+            for j in range(len(expressions[i+1].terms)):
+                expressions[i+1].terms[j].leftExp = expressions[i]
+            pass
+        return expressions[len(expressions)-1]
+
+    def get_model(self):
+        return self.__model

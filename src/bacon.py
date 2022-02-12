@@ -7,7 +7,7 @@ from tensorflow import keras
 from keras.utils.generic_utils import get_custom_objects
 from keras.layers import Activation
 import numpy as np
-
+from sympy import *
 # surpress warnings on running GPU Tensorflow on CPU
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -33,23 +33,29 @@ class baconNet(ABC):
         self.__size = size
 
     @ abstractmethod
-    def explain(self, singleVariable=False):
+    def explain_contribution(self, m, c, singleVariable=False):
         pass
 
-    @ abstractmethod
-    def get_contribution(self, a, b):
-        m = np.matmul(
-            self.__model.layers[1].weights[0], self.__model.layers[2].weights[0])
-        if self.__constantTerm:
+    def explain(self, singleVariable=False):
+        return self.explain_model(self.__model, singleVariable)
+
+    def explain_model(self, model, singleVariable=False):
+        m, c = self.get_contribution_from_model(
+            self.__model, self.__size, self.__constantTerm)
+        return self.explain_contribution(m, c, singleVariable)
+
+    def get_contribution_from_model(self, model, size, constantTerm=True):
+        m = np.matmul(model.layers[1].weights[0], model.layers[2].weights[0])
+        if constantTerm:
             # assuming the last input is a constant column
-            bias0 = self.__model.layers[1].bias.numpy()
-            weight0 = self.__model.layers[1].weights[0][self.__size-1]
+            bias0 = model.layers[1].bias.numpy()
+            weight0 = model.layers[1].weights[0][size-1]
             for i in range(len(bias0)):
                 bias0[i] = bias0[i] + weight0[i]
-            weight1 = self.__model.layers[2].weights[0]
+            weight1 = model.layers[2].weights[0]
             for i in range(len(bias0)):
                 bias0[i] = bias0[i] * weight1[i][0]
-            c = bias0.sum() + self.__model.layers[2].bias.numpy()[0]
+            c = bias0.sum() + model.layers[2].bias.numpy()[0]
         else:
             c = 0
         return m, c
@@ -109,36 +115,62 @@ class expression:
     def __init__(self, terms):
         self.terms = terms
 
-    def string(self, precision):
+    def string(self, precision=-1, ignoreOne=False, delta=0.01, namePattern='x', patternIndex=0, sympy=True):
         strs = []
         for t in self.terms:
-            strs.append(t.string(precision))
-        return " + ".join(filter(None, strs))
+            strs.append(t.string(precision, ignoreOne,
+                        delta, namePattern, patternIndex, sympy))
+        ret = " + ".join(filter(None, strs))
+        return ret
+
+    def simplify(self, exp, precision=0, ignoreOne=True):
+        ex1 = simplify(exp.replace("+ -", "-"))
+        ex1 = expand(ex1)
+        ex2 = ex1
+        if precision >= 0:
+            for a in preorder_traversal(ex1):
+                if isinstance(a, Float):
+                    ex2 = ex2.subs(a, round(a, precision))
+        strExp = str(simplify(ex2))
+        strExp = strExp.replace('**', '^')
+        if precision >= 0 and ignoreOne:
+            strExp = strExp.replace(str(round(1.0, precision))+'*', '')
+        strExp = strExp.replace('*', '')
+        return strExp
 
 
 class term:
-    def __init__(self, coefficient=0, leftExp=None, rightExp=None, leftOpt="", rightOpt=""):
-        self.leftExp = leftExp
-        self.rightExp = rightExp
-        self.leftOpt = leftOpt
-        self.rightOpt = rightOpt
+    def __init__(self, coefficient=0, term="", leftExp=None):
         self.coefficient = coefficient
+        self.term = term
+        self.leftExp = leftExp
 
-    def string(self, precision=-1):
+    def string(self, precision=-1, ignoreOne=False, delta=0.01, namePattern='x', patternIndex=0, sympy=True):
         if self.coefficient == 0:
             return ""
-        if precision == -1:
-            ret = str(self.coefficient)
+        if ignoreOne and abs(self.coefficient-1) < delta and (not sympy):
+            ret = ""
         else:
-            ret = str(round(self.coefficient, precision))
+            if precision == -1:
+                ret = str(self.coefficient)
+            else:
+                ret = str(round(self.coefficient, precision))
+        txt = self.term
+        if sympy:
+            txt = txt.replace("][", "]*[")
         if self.leftExp != None:
-            if isinstance(self.leftExp, expression):
-                ret += "(" + self.leftExp.string() + ")" + self.leftOpt
+            txt = txt.replace('[x]', "(" + self.leftExp.string(
+                precision, ignoreOne, delta, namePattern, patternIndex-2) + ")")
+        if namePattern != 'x1':
+            txt = txt.replace('[x]', chr(ord(namePattern)+patternIndex))
+            txt = txt.replace('[y]', chr(ord(namePattern)+patternIndex+1))
+        else:
+            txt = txt.replace('[x]', 'x{' + str(patternIndex) + "}")
+            txt = txt.replace('[y]', 'x{' + str(patternIndex+1) + "}")
+        if sympy:
+            if txt == "":
+                return ret
             else:
-                ret += self.leftExp + self.leftOpt
-        if self.rightExp != None:
-            if isinstance(self.rightExp, expression):
-                ret += "(" + self.rightExp.string() + ")" + self.rightOpt
-            else:
-                ret += self.rightExp + self.rightOpt
-        return ret
+                return ret + "*" + txt.replace("^", "**")
+        else:
+            return ret + txt
