@@ -4,6 +4,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 import tensorflow as tf
+import copy
 
 
 class baconStack():
@@ -49,7 +50,7 @@ class baconStack():
         self.__model.compile(
             optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
 
-    def fit(self, x, y):
+    def fit(self, x, y, patience=20):
         cols = len(x)
         rows = len(x[0])
         inputs = []
@@ -61,31 +62,36 @@ class baconStack():
                 (x[0].reshape(-1, 1).flatten(), x[1].reshape(-1, 1).flatten())))
         for i in range(2, cols):
             inputs.append(x[i].reshape(-1, 1).flatten())
-        callback = tf.keras.callbacks.EarlyStopping(monitor='mae', patience=20)
+        if patience > 0:
+            callbacks = [tf.keras.callbacks.EarlyStopping(
+                monitor='mae', patience=patience)]
+        else:
+            callbacks = []
         history = self.__model.fit(
             x=[inputs],
             y=[y],
-            epochs=600, batch_size=10, verbose=0, callbacks=[callback]
+            epochs=600, batch_size=10, verbose=0, callbacks=callbacks
         )
         return history
 
-    def fit2(self, x, y, maeTarget=0.01, maxTries=-1):
+    def fit2(self, x, y, maeTarget=0.01, maxTries=-1, patience=20):
         counter = 1
         while True:
-            history = self.fit(x.copy(), y.copy())
+            history = self.fit(copy.deepcopy(x), copy.deepcopy(y), patience)
             mae = history.history['mae'][len(history.history['mae'])-1]
             print(f"attempt {counter}, mae = {mae}")
             if abs(mae) <= maeTarget or maxTries > 0 and counter >= maxTries:
                 return history, mae, counter
             counter += 1
 
-    def explain(self):
+    def explain(self, delta=0.01):
         baconIdx = 0
         expressions = []
         for idx in range(len(self.__model.layers)):
             layer = self.__model.get_layer(index=idx)
             if type(layer) is keras.Sequential:
-                expressions.append(self.__bacons[baconIdx].explain())
+                expressions.append(
+                    self.__bacons[baconIdx].explain(delta=delta))
                 baconIdx += 1
         for i in range(len(expressions)-1):
             for j in range(len(expressions[i+1].terms)):
