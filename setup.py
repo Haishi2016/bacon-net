@@ -7,7 +7,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 with codecs.open(os.path.join(here, "README.md"), encoding="utf-8") as fh:
     long_description = "\n" + fh.read()
 
-VERSION = '0.1.1'
+VERSION = '0.1.9'
 DESCRIPTION = 'A neural network architecture for building fully explainable neural network for arithmetic and gradient logic expression approximation.'
 
 # Setting up
@@ -21,10 +21,10 @@ setup(
     long_description_content_type="text/markdown",
     long_description=long_description,
     install_requires=[
-        "tensorflow >= 2.7.0",
-        "keras >= 2.7.0",
-        "numpy >= 1.22.0",
-        "simpy >= 4.0.1"
+        "tensorflow>=2.6.2",
+        "keras>=2.6.0",
+        "numpy>=1.19.5",
+        "sympy"
     ],
     keywords=['ai', 'explainable', 'gradient logic',
               'approximation', 'formula', 'explainability', 'decision', 'decision making'],
@@ -39,9 +39,9 @@ setup(
     ],
     extras_require={
         "dev": [
-            "pytest >= 3.7",
+            "pytest>=3.7",
         ],
     },
-    py_modules=["bacon", "stack", "nets"],
-    package_dir={'': 'src'}
+    packages=["bacon", "bacon.nets"],
+    py_modules=["net", "stack", "nets"]
 )

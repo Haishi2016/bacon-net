@@ -19,6 +19,7 @@ The following table presents a list of famous formulas in different fields that 
 | Newton's equation of motion (displacement)            | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/motion-equation.png) | `z = 4.905x^2 + 5.0x` _(initial speed = 5, acceleration=9.81)_ |
 | An arbitary 2-degree 2-variable polynomial expression | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/polynomial.png)      | `z = 1.0x^2 + 4.0xy + 4.0y^2 + 5.0`                            |
 | Einstein's mass-energy equivalence                    | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/e-mc2.png)           | `z = 0.0899x ` _(with c normalized to 0.299792458 m/s)_        |
+| Simple intergal                                       | ![](https://github.com/Haishi2016/bacon-net/raw/main/images/intergal.png)        | `z = 0.5x^2 + <C>` _(C is determined by training data)_        |
 
 ## Bacon-LSP3
 

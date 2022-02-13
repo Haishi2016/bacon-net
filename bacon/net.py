@@ -17,18 +17,18 @@ class baconNet(ABC):
     def __custom_activation(self, x):
         return x
 
-    def __init__(self, size, constantTerm=True):
+    def __init__(self, size, constantTerm=True, optimizer='adam', initializer='identity'):
         get_custom_objects().update(
             {'custom_activation': Activation(self.__custom_activation)})
         self.__model = tf.keras.models.Sequential()
         self.__model.add(tf.keras.Input(shape=(2,)))
         self.__model.add(expansionLayer(self.expand))
         self.__model.add(tf.keras.layers.Dense(
-            size, activation=self.__custom_activation))
+            size, activation=self.__custom_activation, kernel_initializer=initializer, bias_initializer='zeros'))
         self.__model.add(tf.keras.layers.Dense(
             1, activation=self.__custom_activation))
         self.__model.compile(
-            optimizer='adam', loss='mean_squared_error', metrics=['mae'])
+            optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
         self.__constantTerm = constantTerm
         self.__size = size
 
@@ -160,7 +160,7 @@ class term:
             txt = txt.replace("][", "]*[")
         if self.leftExp != None:
             txt = txt.replace('[x]', "(" + self.leftExp.string(
-                precision, ignoreOne, delta, namePattern, patternIndex-2) + ")")
+                precision, ignoreOne, delta, namePattern, patternIndex-2, sympy) + ")")
         if namePattern != 'x1':
             txt = txt.replace('[x]', chr(ord(namePattern)+patternIndex))
             txt = txt.replace('[y]', chr(ord(namePattern)+patternIndex+1))
