@@ -9,10 +9,9 @@ class lsp3(baconNet):
     def __init__(self, optimizer='adam', initializer='identity'):
         super().__init__(3, constantTerm=False, optimizer=optimizer, initializer=initializer)
 
-    def explain_contribution(self, m, c, singleVariable=False):
+    def explain_contribution(self, m, c, singleVariable=False, delta=0.01):
         if singleVariable:
             return expression(terms=[term(term="[x]", coefficient=1.0)])
-        delta = 0.01
         terms = []
         if abs(m[0][0]-1) < delta:
             return expression(terms=[term(term="min([x],[y])", coefficient=1.0)])

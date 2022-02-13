@@ -10,12 +10,11 @@ class poly2(baconNet):
     def __init__(self, optimizer='adam', initializer='identity'):
         super().__init__(6, optimizer=optimizer, initializer=initializer)
 
-    def explain_contribution(self, m, c, singleVariable=False):
+    def explain_contribution(self, m, c, singleVariable=False, delta=0.01):
         a = 1
         b = 1
         if singleVariable:
             b = 0
-        delta = 0.01
         terms = []
         if abs(m[2][0]) > delta and abs(a) > delta:
             terms.append(term(coefficient=m[2][0], term="[x]^2"))
