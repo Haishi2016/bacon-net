@@ -49,20 +49,22 @@ pip install bacon-net
 ## Sample Usage
 
 ```python
-from nets.poly2 import poly2
+from bacon.net import dataCreator
+from bacon.nets.poly2 import poly2
 
 # create a network from the bacon-net network family
 net = poly2()
 
-# optionally, use dataCreator to generate 3 1-dimension arrays: input a, input b, output (y)
-# set singleVariable flag if only a single variable (a) is used
-a, b, y = dataCreator.create(1000, 1, lambda a, b: math.pi * a * a, singleVariable=True)
+# optionally, use dataCreator to generate training data
+# set params to 1 if only a single variable (a) is used
+x, y = dataCreator.create(1000, 1, lambda x: math.pi * x[0] * x[0], params=1)
 
 # train the network
-net.fit(a, b, y)
+net.fit(x[0], x[1], y)
 
 # explain the network
 m = net.explain(singleVariable=True)
+print("f(x) = " + m.string(4))
 
 # make prediction (pass two parameters if two variables are used)
 p = net.predict(2.4)
