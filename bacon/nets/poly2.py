@@ -1,5 +1,5 @@
 from lib2to3.pgen2.token import LEFTSHIFT
-from bacon import baconNet, expression, term
+from bacon.net import baconNet, expression, term
 import tensorflow as tf
 
 import sys
@@ -7,8 +7,8 @@ sys.path.append("..")
 
 
 class poly2(baconNet):
-    def __init__(self):
-        super().__init__(6)
+    def __init__(self, optimizer='adam', initializer='identity'):
+        super().__init__(6, optimizer=optimizer, initializer=initializer)
 
     def explain_contribution(self, m, c, singleVariable=False):
         a = 1
