@@ -17,14 +17,14 @@ class baconNet(ABC):
     def __custom_activation(self, x):
         return x
 
-    def __init__(self, size, constantTerm=True, optimizer='adam', initializer='identity'):
+    def __init__(self, size, constantTerm=True, optimizer='rmsprop', initializer='identity'):
         get_custom_objects().update(
             {'custom_activation': Activation(self.__custom_activation)})
         self.__model = tf.keras.models.Sequential()
         self.__model.add(tf.keras.Input(shape=(2,)))
         self.__model.add(expansionLayer(self.expand))
         self.__model.add(tf.keras.layers.Dense(
-            size, activation=self.__custom_activation, kernel_initializer=initializer, bias_initializer='zeros'))
+            size, activation=self.__custom_activation, kernel_initializer=initializer))
         self.__model.add(tf.keras.layers.Dense(
             1, activation=self.__custom_activation))
         self.__model.compile(
@@ -33,16 +33,16 @@ class baconNet(ABC):
         self.__size = size
 
     @ abstractmethod
-    def explain_contribution(self, m, c, singleVariable=False):
+    def explain_contribution(self, m, c, singleVariable=False, delta=0.01):
         pass
 
-    def explain(self, singleVariable=False):
-        return self.explain_model(self.__model, singleVariable)
+    def explain(self, singleVariable=False, delta=0.01):
+        return self.explain_model(self.__model, singleVariable, delta)
 
-    def explain_model(self, model, singleVariable=False):
+    def explain_model(self, model, singleVariable=False, delta=0.01):
         m, c = self.get_contribution_from_model(
             self.__model, self.__size, self.__constantTerm)
-        return self.explain_contribution(m, c, singleVariable)
+        return self.explain_contribution(m, c, singleVariable, delta)
 
     def get_contribution_from_model(self, model, size, constantTerm=True):
         m = np.matmul(model.layers[1].weights[0], model.layers[2].weights[0])
