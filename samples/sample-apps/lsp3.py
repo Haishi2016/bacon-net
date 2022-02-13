@@ -1,5 +1,5 @@
-from bacon import baconNet, dataCreator
-from nets.lsp3 import lsp3
+from bacon.net import dataCreator
+from bacon.nets.lsp3 import lsp3
 import math
 import numpy as np
 

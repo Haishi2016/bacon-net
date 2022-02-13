@@ -1,4 +1,4 @@
-from bacon import baconNet, expression, term
+from bacon.net import baconNet, expression, term
 import tensorflow as tf
 
 import sys
@@ -6,8 +6,8 @@ sys.path.append("..")
 
 
 class lsp3(baconNet):
-    def __init__(self):
-        super().__init__(3, constantTerm=False)
+    def __init__(self, optimizer='adam', initializer='identity'):
+        super().__init__(3, constantTerm=False, optimizer=optimizer, initializer=initializer)
 
     def explain_contribution(self, m, c, singleVariable=False):
         if singleVariable:
@@ -22,6 +22,7 @@ class lsp3(baconNet):
             return expression(terms=[term(term="([x]+[y])/2", coefficient=1.0)])
         if abs(m[2][0]-1) < delta:
             return expression(terms=[term(term="[x]*[y]", coefficient=1.0)])
+        print(m)
         return expression(terms=[term(term="can't explain", coefficient=1.0)])
 
     def expand(self, a, b):

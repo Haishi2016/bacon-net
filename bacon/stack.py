@@ -1,5 +1,5 @@
-from nets.lsp3 import lsp3
-from nets.poly2 import poly2
+from bacon.nets.lsp3 import lsp3
+from bacon.nets.poly2 import poly2
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
@@ -7,24 +7,26 @@ import tensorflow as tf
 
 
 class baconStack():
-    def __createBacon(self, type):
+    def __createBacon(self, type, optimizer='adam', initializer='identity'):
         if type == "poly2":
-            return poly2()
+            return poly2(optimizer, initializer)
         elif type == "lsp3":
-            return lsp3()
+            return lsp3(optimizer, initializer)
         else:
             raise Exception("unsupported bacon type: " + type)
 
-    def __init__(self, size=0, bacons=None, baconType=None, baconNames=None):
+    def __init__(self, size=0, bacons=None, baconType=None, baconNames=None, optimizer='adam', initializer='identity'):
         self.__bacons = []
         if baconType != None and size > 0:
             for i in range(size):
-                self.__bacons.append(self.__createBacon(baconType))
+                self.__bacons.append(self.__createBacon(
+                    baconType, optimizer, initializer))
         if baconNames != None:
             if len(self.__bacons) > 0:
                 raise Exception("can't use both baconType and baconNames")
             for b in range(baconNames):
-                self.__bacons.append(self.__createBacon(b))
+                self.__bacons.append(
+                    self.__createBacon(b, optimizer, initializer))
         if bacons != None:
             if len(self.__bacons) > 0:
                 raise Exception(
@@ -45,7 +47,7 @@ class baconStack():
         self.__model = keras.Model(inputs=inputs, outputs=[
                                    x], name="bacon-stack")
         self.__model.compile(
-            optimizer='adam', loss='mean_squared_error', metrics=['mae'])
+            optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
 
     def fit(self, x, y):
         cols = len(x)
@@ -66,6 +68,16 @@ class baconStack():
             epochs=600, batch_size=10, verbose=0, callbacks=[callback]
         )
         return history
+
+    def fit2(self, x, y, maeTarget=0.01, maxTries=-1):
+        counter = 1
+        while True:
+            history = self.fit(x.copy(), y.copy())
+            mae = history.history['mae'][len(history.history['mae'])-1]
+            print(f"attempt {counter}, mae = {mae}")
+            if abs(mae) <= maeTarget or maxTries > 0 and counter >= maxTries:
+                return history, mae, counter
+            counter += 1
 
     def explain(self):
         baconIdx = 0

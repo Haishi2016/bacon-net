@@ -1,5 +1,5 @@
-from bacon import baconNet, dataCreator
-from nets.poly2 import poly2
+from bacon.net import dataCreator
+from bacon.nets.poly2 import poly2
 import math
 import numpy as np
 
