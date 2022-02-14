@@ -74,15 +74,26 @@ class baconStack():
         )
         return history
 
-    def fit2(self, x, y, maeTarget=0.01, maxTries=-1, patience=20):
+    def fit2(self, x, y, maeTarget=0.01, maxTries=-1, patience=20, verbose=False, weightShift='random'):
         counter = 1
         while True:
             history = self.fit(copy.deepcopy(x), copy.deepcopy(y), patience)
             mae = history.history['mae'][len(history.history['mae'])-1]
-            print(f"attempt {counter}, mae = {mae}")
+            if verbose:
+                print(f"attempt {counter}, mae = {mae}")
             if abs(mae) <= maeTarget or maxTries > 0 and counter >= maxTries:
                 return history, mae, counter
             counter += 1
+            # we went down the wrong path, shuffle the weights and try again
+            # TODO: would rotating weights work better?
+            if weightShift == 'random' or weightShift == 'roll':
+                model = self.get_model()
+                weights = model.get_weights()
+                if weightShift == 'random':
+                    weights = [np.random.permutation(w) for w in weights]
+                elif weightShift == 'roll':
+                    weights = [np.roll(w, 1) for w in weights]
+                model.set_weights(weights)
 
     def explain(self, delta=0.01):
         baconIdx = 0
