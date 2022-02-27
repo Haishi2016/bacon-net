@@ -5,6 +5,8 @@ from tensorflow.keras import layers
 import numpy as np
 import tensorflow as tf
 import copy
+import time
+from datetime import timedelta
 
 
 class baconStack():
@@ -74,7 +76,8 @@ class baconStack():
         )
         return history
 
-    def fit2(self, x, y, maeTarget=0.01, maxTries=-1, patience=20, verbose=False, weightShift='random'):
+    def fit2(self, x, y, maeTarget=0.01, maxTries=-1, patience=20, verbose=False, weightShift='random', inputShift='random'):
+        start_time = time.time()
         counter = 1
         while True:
             history = self.fit(copy.deepcopy(x), copy.deepcopy(y), patience)
@@ -82,18 +85,31 @@ class baconStack():
             if verbose:
                 print(f"attempt {counter}, mae = {mae}")
             if abs(mae) <= maeTarget or maxTries > 0 and counter >= maxTries:
-                return history, mae, counter
+                end_time = time.time()
+                ret = dict()
+                ret['history'] = history
+                ret['mae'] = mae
+                ret['attempts'] = counter
+                ret['duration'] = timedelta(seconds=end_time-start_time)
+                return ret
             counter += 1
-            # we went down the wrong path, shuffle the weights and try again
-            # TODO: would rotating weights work better?
-            if weightShift == 'random' or weightShift == 'roll':
+            if weightShift == 'random':
                 model = self.get_model()
                 weights = model.get_weights()
-                if weightShift == 'random':
-                    weights = [np.random.permutation(w) for w in weights]
-                elif weightShift == 'roll':
-                    weights = [np.roll(w, 1) for w in weights]
+                weights = [self.permutation(w, weightShift) for w in weights]
                 model.set_weights(weights)
+            if inputShift == 'random':
+                np.random.shuffle(x)
+
+    def permutation(self, weights, shift='random'):
+        # we went down the wrong path, shuffle the weights and try again
+        # TODO: better way to find a new path?
+        shape = weights.shape
+        if len(shape) >= 2 and shape[0] == shape[1]:
+            # return np.random.permutation(np.identity(shape[0]))
+            return np.random.permutation(weights)
+        else:
+            return np.random.permutation(weights)
 
     def explain(self, delta=0.01):
         baconIdx = 0
