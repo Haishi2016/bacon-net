@@ -1,5 +1,6 @@
 from bacon.nets.lsp3 import lsp3
 from bacon.nets.poly2 import poly2
+from bacon.nets.linear import linear
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
@@ -15,6 +16,8 @@ class baconStack():
             return poly2(optimizer, initializer)
         elif type == "lsp3":
             return lsp3(optimizer, initializer)
+        elif type == "linear":
+            return linear(optimizer, initializer)
         else:
             raise Exception("unsupported bacon type: " + type)
 
@@ -93,7 +96,7 @@ class baconStack():
                 ret['duration'] = timedelta(seconds=end_time-start_time)
                 return ret
             counter += 1
-            if weightShift == 'random':
+            if weightShift == 'random' or weightShift == 'random_identity':
                 model = self.get_model()
                 weights = model.get_weights()
                 weights = [self.permutation(w, weightShift) for w in weights]
@@ -106,8 +109,10 @@ class baconStack():
         # TODO: better way to find a new path?
         shape = weights.shape
         if len(shape) >= 2 and shape[0] == shape[1]:
-            # return np.random.permutation(np.identity(shape[0]))
-            return np.random.permutation(weights)
+            if shift == 'random':
+                return np.random.permutation(weights)
+            else:
+                return np.random.permutation(np.identity(shape[0]))
         else:
             return np.random.permutation(weights)
 
