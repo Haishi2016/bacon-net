@@ -26,7 +26,7 @@ stack2 = baconStack(size=paramCount-1, baconType="lsp3",
                     initializer='identity')
 
 x2, y2 = dataCreator.create(
-    500, 1, lambda x: np.maximum(np.maximum(np.minimum(np.maximum(np.minimum(np.maximum(x[0], x[1]), x[2]), x[3]), x[4]), x[5]), x[6]), params=paramCount)
+    100, 1, lambda x: np.maximum(np.maximum(np.minimum(np.maximum(np.minimum(np.maximum(x[0], x[1]), x[2]), x[3]), x[4]), x[5]), x[6]), params=paramCount)
 info = stack2.fit2(
     x2, y2, maeTarget=0.005, verbose=True, weightShift='random', inputShift='off')
 print(
