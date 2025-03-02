@@ -105,7 +105,9 @@ def generate_data(repeat_factor=100):
 
 # 🔥 Train Model with Debugging
 def train_model(model, X_train, Y_train, epochs=5000):
-    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-5)
+    # optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-5)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+
     criterion = nn.BCELoss()  # Use BCELoss instead of BCEWithLogitsLoss
 
     for epoch in range(epochs):
