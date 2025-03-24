@@ -6,12 +6,13 @@ import numpy as np
 from itertools import product
 import copy
 import random 
+from heapq import nlargest
+import itertools
 
-NUM_INPUT_VARS = 8  # 👈 Change this value to control number of inputs
+NUM_INPUT_VARS = 12  # 👈 Change this value to control number of inputs
 
 seen_permutations = set()
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = "cpu"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def generate_random_perturbation(logits, std=0.1):
     return logits + torch.randn_like(logits) * std
@@ -51,26 +52,38 @@ def evaluate_permutation(model_template, perm, X, Y, weight_mode, weight_value, 
     return loss.item()
 
 def sample_topk_permutations(num_inputs, k, model_template, X, Y, weight_mode, weight_value, weight_range, weight_choices):
-    all_perms = list(itertools.permutations(range(num_inputs)))
-    if k == 0 or k >= len(all_perms):
-        k = len(all_perms)
+    with torch.no_grad():
+        if hasattr(model_template.input_to_leaf, "logits"):
+            P = sinkhorn(model_template.input_to_leaf.logits, temperature=model_template.input_to_leaf.temperature)
+        else:
+            raise ValueError("Model does not have learnable logits for Sinkhorn.")
+
+    topk_candidates = set()
+    max_topk = k if k > 0 else 100  # Allow fallback for all if k=0
+
+    def greedy_match(P, num_choices_per_leaf):
+        top_inputs = [torch.topk(P[i], k=num_choices_per_leaf).indices.tolist() for i in range(num_inputs)]
+        for combo in itertools.product(*top_inputs):
+            if len(set(combo)) == num_inputs:
+                topk_candidates.add(tuple(combo))
+            if len(topk_candidates) >= max_topk:
+                break
+
+    greedy_match(P, num_choices_per_leaf=5)
+
+    if not topk_candidates:
+        argmax_perm = tuple(P.argmax(dim=1).tolist())
+        topk_candidates.add(argmax_perm)
+
+    print(f"🧠 Evaluating {len(topk_candidates)} promising permutations from soft alignment...")
 
     losses = []
-    print(f"🧠 Evaluating {k} permutations...")
-    counter = 0
-    for perm in all_perms:
-        perm_tensor = torch.tensor(perm).to(device)
-        if is_repeat_permutation(perm_tensor):
-            continue
+    for perm in topk_candidates:
         loss = evaluate_permutation(model_template, perm, X, Y, weight_mode, weight_value, weight_range, weight_choices)
         losses.append((perm, loss))
-        counter += 1
-        if counter >= k:
-            break
 
-    # Sort by loss
-    topk = sorted(losses, key=lambda x: x[1])[:k]
-    return [torch.tensor(p[0]) for p in topk]
+    topk_by_loss = sorted(losses, key=lambda x: x[1])
+    return [torch.tensor(p[0], device=device) for p in topk_by_loss]
 
 
 
