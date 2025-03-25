@@ -9,10 +9,11 @@ import random
 from heapq import nlargest
 import itertools
 
-NUM_INPUT_VARS = 12  # 👈 Change this value to control number of inputs
+NUM_INPUT_VARS = 11  # 👈 Change this value to control number of inputs
 
 seen_permutations = set()
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu"
 
 def generate_random_perturbation(logits, std=0.1):
     return logits + torch.randn_like(logits) * std
@@ -62,7 +63,8 @@ def sample_topk_permutations(num_inputs, k, model_template, X, Y, weight_mode, w
     max_topk = k if k > 0 else 100  # Allow fallback for all if k=0
 
     def greedy_match(P, num_choices_per_leaf):
-        top_inputs = [torch.topk(P[i], k=num_choices_per_leaf).indices.tolist() for i in range(num_inputs)]
+        num_choices_per_leaf = min(5, num_inputs)
+        top_inputs = [torch.topk(P[i], k=min(num_choices_per_leaf, P.shape[1])).indices.tolist() for i in range(num_inputs)]
         for combo in itertools.product(*top_inputs):
             if len(set(combo)) == num_inputs:
                 topk_candidates.add(tuple(combo))
@@ -256,7 +258,7 @@ class BinaryTreeLogicNet(nn.Module):
                 return f"{indent}{label}\n{left_sub}\n{right_sub}"
             return f"{indent}{node} [Unknown]"
 
-        print("Binary Tree Structure:")
+        print("\n🌲 Binary Tree Structure:\n")
         root = f"Node{self.num_layers}"
         print(format_tree(root))
 
@@ -298,45 +300,6 @@ def generate_data(num_vars=5, repeat_factor=100):
         }
     )
 
-
-def train_model(model, X_train, Y_train, epochs=12000, freeze_epoch=5000):
-    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-5)
-    criterion = nn.BCELoss()
-
-    for epoch in range(epochs):
-        if hasattr(model.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
-            model.input_to_leaf.temperature *= 0.9
-
-        optimizer.zero_grad()
-        try:
-            outputs = model(X_train)
-            if torch.isnan(outputs).any() or (outputs < 0).any() or (outputs > 1).any():
-                raise RuntimeError("❌ Invalid model outputs. Abandoning run.")
-            loss = criterion(outputs, Y_train)
-        except Exception as e:
-            print(e)
-            break  # or set a flag to skip retrying
-
-        loss = criterion(outputs, Y_train)
-
-        if torch.isnan(loss):
-            print(f"⚠️ NaN detected in loss at epoch {epoch}! Skipping update.")
-            continue
-
-        loss.backward()
-        optimizer.step()
-
-        if epoch == freeze_epoch:
-            print("🧊 Freezing permutation at epoch", epoch)
-            hard_perm = extract_hard_permutation(model)
-            model.input_to_leaf = FrozenInputToLeaf(hard_perm.to(device), model.original_input_size)
-
-        if epoch % 100 == 0:
-            print(f"Epoch {epoch}/{epochs} - Loss: {loss.item():.4f}")
-
-    return model
-
-
 def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
                                  weight_range=(0.5, 2.0), weight_choices=None,
                                  freeze_loss_threshold=0.005, freeze_patience=100, max_retries=10):
@@ -361,8 +324,8 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
         best_frozen_loss = float('inf')
         loss_history = []
         noise_increase = 1.05
-        noise_decrease = 0.95
-        min_noise = 0.01
+        noise_decrease = 0.9
+        min_noise = 0.0
         max_noise = 2.0
         for epoch in range(12000):
             if hasattr(model.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
@@ -401,7 +364,7 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
                 print(f"🧊 Low loss at epoch {epoch}, sampling top-k permutations...")
                 candidates = sample_topk_permutations(
                     model.original_input_size,
-                    k=100,  # or 0 for all
+                    k=1000,  # or 0 for all
                     model_template=model,
                     X=X_train,
                     Y=Y_train,
@@ -423,7 +386,7 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
                     temp_model = copy.deepcopy(model).to(device)
                     temp_model.input_to_leaf = FrozenInputToLeaf(perm_tensor, temp_model.original_input_size)
                     temp_loss = criterion(temp_model(X_train), Y_train)
-                    print(f"  🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
+                    print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
 
                     if temp_loss < best_loss:
                         best_loss = temp_loss
@@ -456,10 +419,8 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
                     break
 
             if epoch % 200 == 0:
-                print(f"Epoch {epoch} - Loss: {loss.item():.4f}")
-            if epoch % 1000 == 0:
-                print(f"Temp: {model.input_to_leaf.temperature:.4f} | Noise: {model.input_to_leaf.gumbel_noise_scale:.4f}")
-
+                print(f"   Epoch {epoch} - Temp: {model.input_to_leaf.temperature:.4f} - Noise: {model.input_to_leaf.gumbel_noise_scale:.4f} - Loss: {loss.item():.4f}")
+            
         if not frozen or frozen_abandoned:
             print("🚫 Training completed without freezing or freezing is abandoned. Abandoning this direction.")
             continue
@@ -493,7 +454,7 @@ def print_estimated_expression(model, expr_info):
 
 def extract_hard_permutation(model):
     if not hasattr(model.input_to_leaf, "logits"):
-        print("🔒 Permutation already frozen. Returning current hard mapping.")
+        print("🔒 Permutation is already frozen. Returning current hard mapping.")
         # Reverse engineer hard mapping from P_hard buffer
         P = model.input_to_leaf.P_hard.cpu().numpy()
         return torch.tensor(np.argmax(P, axis=1))
@@ -505,21 +466,22 @@ def extract_hard_permutation(model):
 
 # 🔥 Run Training & Visualization
 if __name__ == "__main__":
+    print(f"\n🧠 Number of variables: {NUM_INPUT_VARS}")
     model, loss, expr_info = train_and_select_best_model(weight_mode="fixed", weight_value=1.0, max_retries=100)
 
     if model is None:
         print("❌ No valid model found after retries.")
     else:
         model.print_tree_structure()
-        print(f"Final loss: {loss}")
+        print(f"\n🧠 Final loss: {loss}\n")
         print_estimated_expression(model, expr_info)
 
         hard_mapping = extract_hard_permutation(model)
         var_names = [chr(ord('A') + i) for i in range(expr_info["num_vars"])]
 
-        print("\n🧠 Hard Input-to-Leaf Assignment (based on argmax):")
+        print("\n🧠 Hard Input-to-Leaf Assignment (based on argmax):\n")
         for leaf_idx, input_idx in enumerate(hard_mapping):
-            print(f"Leaf {leaf_idx + 1} ← Input {input_idx + 1} ({var_names[input_idx]})")
+            print(f"   🍃 Leaf {leaf_idx + 1} ← Input {input_idx + 1} ({var_names[input_idx]})")
 
         print("\n📌 Ground truth expression structure:")
         print(expr_info["expression_text"])
