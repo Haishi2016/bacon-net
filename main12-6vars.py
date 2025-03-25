@@ -9,23 +9,18 @@ import random
 from heapq import nlargest
 import itertools
 
-NUM_INPUT_VARS = 11  # 👈 Change this value to control number of inputs
+NUM_INPUT_VARS = 12  # 👈 Change this value to control number of inputs
+NOISE_DECREASE_RATIO = 0.95 # Decrease noise if loss decreases
+NOISE_INCREASE_RATIO = 1.05 # Increase noise if loss increases or plateaus
+NOISE_MIN = 0.0 # Minimum noise scale for Gumbel noise. Set to 0 for no noise.
+NOISE_MAX = 2.0 # Maximum noise scale for Gumbel noise. Set to 0 for no noise.
+PERMUTATION_MAX = 1000 # Maximum number of permutations to sample from soft alignment. Set to 0 for all. Not recommend for vars >= 12.
+FREEZE_LOSS_THRESHOLD=0.01  # 0.05 works well for vars below 12. A higher value means the model is more eager to try out possible permutations to freeze.
+FROZEN_SELECTION_THRESHOLD=0.001 # threshold for selecting the frozen model.
 
 seen_permutations = set()
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = "cpu"
-
-def generate_random_perturbation(logits, std=0.1):
-    return logits + torch.randn_like(logits) * std
-
-def is_repeat_permutation(hard_perm):
-    perm_tuple = tuple(hard_perm.tolist())
-    return perm_tuple in seen_permutations
-
-def mark_permutation_seen(hard_perm):
-    #perm_tuple = tuple(hard_perm.tolist())
-    #seen_permutations.add(perm_tuple)
-    return
 
 def sample_gumbel(shape, device=None, eps=1e-20):
     if device is None:
@@ -264,6 +259,7 @@ class BinaryTreeLogicNet(nn.Module):
 
 
 def generate_data(num_vars=5, repeat_factor=100):
+    print("🧠 Generating data...")
     assert num_vars >= 2, "Need at least 2 variables for expression."
     data = []
     labels = []
@@ -323,10 +319,10 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
         patience_counter = 0
         best_frozen_loss = float('inf')
         loss_history = []
-        noise_increase = 1.05
-        noise_decrease = 0.9
-        min_noise = 0.0
-        max_noise = 2.0
+        noise_increase = NOISE_INCREASE_RATIO
+        noise_decrease = NOISE_DECREASE_RATIO
+        min_noise = NOISE_MIN
+        max_noise = NOISE_MAX
         for epoch in range(12000):
             if hasattr(model.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
                 model.input_to_leaf.temperature *= 0.8
@@ -364,7 +360,7 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
                 print(f"🧊 Low loss at epoch {epoch}, sampling top-k permutations...")
                 candidates = sample_topk_permutations(
                     model.original_input_size,
-                    k=1000,  # or 0 for all
+                    k=PERMUTATION_MAX,  # or 0 for all
                     model_template=model,
                     X=X_train,
                     Y=Y_train,
@@ -381,8 +377,6 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
 
                 for perm in candidates:
                     perm_tensor = perm.clone().detach()
-                    if is_repeat_permutation(perm_tensor):
-                        continue
                     temp_model = copy.deepcopy(model).to(device)
                     temp_model.input_to_leaf = FrozenInputToLeaf(perm_tensor, temp_model.original_input_size)
                     temp_loss = criterion(temp_model(X_train), Y_train)
@@ -395,7 +389,6 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
 
                 if best_model is not None and best_loss < freeze_loss_threshold:
                     print(f"✅ Freezing best permutation: {best_perm} with loss {best_loss:.4f}")
-                    mark_permutation_seen(best_perm.clone().detach())
                     return best_model, best_loss, expr_info
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
@@ -409,7 +402,7 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
                 else:
                     patience_counter += 1
 
-                if best_frozen_loss < 0.001:
+                if best_frozen_loss < FROZEN_SELECTION_THRESHOLD:
                         print(f"✅ Accepted: frozen model converged with loss {best_frozen_loss:.4f}")
                         return model, best_frozen_loss, expr_info
 
@@ -466,8 +459,17 @@ def extract_hard_permutation(model):
 
 # 🔥 Run Training & Visualization
 if __name__ == "__main__":
-    print(f"\n🧠 Number of variables: {NUM_INPUT_VARS}")
-    model, loss, expr_info = train_and_select_best_model(weight_mode="fixed", weight_value=1.0, max_retries=100)
+
+    print(f"\n           🔢 Number of variables: {NUM_INPUT_VARS}")
+    print(f"         📉 Noise decrease ration: {NOISE_DECREASE_RATIO}")
+    print(f"         📈 Noise increase ration: {NOISE_INCREASE_RATIO}")
+    print(f"                 🔇 Minimum noise: {NOISE_MIN}")
+    print(f"                 🔊 Maximum noise: {NOISE_MAX}")
+    print(f"🔢 Maximum permutation candidates: {PERMUTATION_MAX}")
+    print(f"         🧊 Freeze loss threshold: {FREEZE_LOSS_THRESHOLD}")
+    print(f"     🎯 Model selection threshold: {FROZEN_SELECTION_THRESHOLD}")
+
+    model, loss, expr_info = train_and_select_best_model(weight_mode="fixed", weight_value=1.0, max_retries=100, freeze_loss_threshold=FREEZE_LOSS_THRESHOLD)
 
     if model is None:
         print("❌ No valid model found after retries.")
