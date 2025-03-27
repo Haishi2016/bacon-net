@@ -9,13 +9,13 @@ import random
 from heapq import nlargest
 import itertools
 
-NUM_INPUT_VARS = 12  # 👈 Change this value to control number of inputs
+NUM_INPUT_VARS = 10  # 👈 Change this value to control number of inputs
 NOISE_DECREASE_RATIO = 0.95 # Decrease noise if loss decreases
 NOISE_INCREASE_RATIO = 1.05 # Increase noise if loss increases or plateaus
 NOISE_MIN = 0.0 # Minimum noise scale for Gumbel noise. Set to 0 for no noise.
 NOISE_MAX = 2.0 # Maximum noise scale for Gumbel noise. Set to 0 for no noise.
 PERMUTATION_MAX = 1000 # Maximum number of permutations to sample from soft alignment. Set to 0 for all. Not recommend for vars >= 12.
-FREEZE_LOSS_THRESHOLD=0.01  # 0.05 works well for vars below 12. A higher value means the model is more eager to try out possible permutations to freeze.
+FREEZE_LOSS_THRESHOLD=0.005  # 0.05 works well for vars below 12. A higher value means the model is more eager to try out possible permutations to freeze.
 FROZEN_SELECTION_THRESHOLD=0.001 # threshold for selecting the frozen model.
 
 seen_permutations = set()
@@ -85,22 +85,23 @@ def sample_topk_permutations(num_inputs, k, model_template, X, Y, weight_mode, w
 
 
 # 🔥 Generalized GCD Operator
-def generalized_gcd(w1, w2, lambd):
-    lambd = torch.sigmoid(lambd)  # Ensure lambda is between 0 and 1
-    epsilon = 1e-6  # Small value to prevent zero exponentiation errors
+def generalized_gcd(a, b, r):
+    epsilon = 1e-6  # To prevent division by zero
+    r = torch.sigmoid(r) * 10 - 5  # Map sigmoid to range ~[-5, 5] for stability
 
-    # Ensure non-negative values for exponentiation
-    w1_safe = torch.abs(w1) + epsilon
-    w2_safe = torch.abs(w2) + epsilon
+    a = torch.clamp(a, min=epsilon)
+    b = torch.clamp(b, min=epsilon)
 
-    #return (w1_safe ** lambd) * (w2_safe ** (1 - lambd)) + (1 - lambd) * torch.max(w1_safe, w2_safe)
-    #return lambd * torch.min(w1_safe, w2_safe) + (1 - lambd) * torch.max(w1_safe, w2_safe)
-    # # **New: Weighted soft min/max to avoid dead gradients**
-    # min_val = (w1_safe * w2_safe) ** (0.5 * lambd)  # Soft min
-    # max_val = torch.max(w1_safe, w2_safe) ** (1 - 0.5 * lambd)  # Soft max
+    # Avoid r = 0 case with Taylor approximation
+    is_near_zero = (r.abs() < 1e-2)
+    safe_r = r + (~is_near_zero).float() * 1e-6
 
-    # return lambd * min_val + (1 - lambd) * max_val
-    return lambd * torch.min(w1_safe, w2_safe) + (1 - lambd) * torch.max(w1_safe, w2_safe)
+    gcd = ((a ** safe_r) + (b ** safe_r)) / 2
+    gcd = gcd ** (1 / safe_r)
+
+    # Approximate geometric mean when r ≈ 0
+    geo_mean = torch.sqrt(a * b)
+    return torch.where(is_near_zero, geo_mean, gcd)
     
 def sinkhorn(log_alpha, n_iters=20, temperature=1.0):
     log_alpha = log_alpha / temperature
@@ -323,7 +324,8 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
         noise_decrease = NOISE_DECREASE_RATIO
         min_noise = NOISE_MIN
         max_noise = NOISE_MAX
-        for epoch in range(12000):
+        epoch = 0
+        while epoch < 12000:
             if hasattr(model.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
                 model.input_to_leaf.temperature *= 0.8
 
@@ -342,19 +344,20 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
 
 
             loss_history.append(loss.item())
-            if len(loss_history) > 5:
-                loss_history.pop(0)
-                diffs = np.diff(loss_history)
-                
-                if all(d < 0 for d in diffs):  # strictly decreasing
-                    model.input_to_leaf.gumbel_noise_scale = max(model.input_to_leaf.gumbel_noise_scale * noise_decrease, min_noise)
-                    # print(f"🔻 Stable improvement. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
-                elif all(abs(d) < 1e-4 for d in diffs):  # plateau
-                    model.input_to_leaf.gumbel_noise_scale = min(model.input_to_leaf.gumbel_noise_scale * noise_increase, max_noise)
-                    # print(f"🟰 Plateau. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
-                elif any(d > 0 for d in diffs):  # getting worse
-                    model.input_to_leaf.gumbel_noise_scale = min(model.input_to_leaf.gumbel_noise_scale * noise_increase, max_noise)
-                    # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
+            if not frozen:
+                if len(loss_history) > 5:
+                    loss_history.pop(0)
+                    diffs = np.diff(loss_history)
+                    
+                    if all(d < 0 for d in diffs):  # strictly decreasing
+                        model.input_to_leaf.gumbel_noise_scale = max(model.input_to_leaf.gumbel_noise_scale * noise_decrease, min_noise)
+                        # print(f"🔻 Stable improvement. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
+                    elif all(abs(d) < 1e-4 for d in diffs):  # plateau
+                        model.input_to_leaf.gumbel_noise_scale = min(model.input_to_leaf.gumbel_noise_scale * noise_increase, max_noise)
+                        # print(f"🟰 Plateau. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
+                    elif any(d > 0 for d in diffs):  # getting worse
+                        model.input_to_leaf.gumbel_noise_scale = min(model.input_to_leaf.gumbel_noise_scale * noise_increase, max_noise)
+                        # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
 
             if not frozen and loss.item() < freeze_loss_threshold:
                 print(f"🧊 Low loss at epoch {epoch}, sampling top-k permutations...")
@@ -389,7 +392,18 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
 
                 if best_model is not None and best_loss < freeze_loss_threshold:
                     print(f"✅ Freezing best permutation: {best_perm} with loss {best_loss:.4f}")
-                    return best_model, best_loss, expr_info
+                     # Freeze the current model in-place
+                    model.input_to_leaf = FrozenInputToLeaf(best_perm, model.original_input_size).to(device)
+
+                    # Re-initialize optimizer for frozen model
+                    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-5)
+
+                    # Mark frozen mode and reset patience
+                    frozen = True
+                    patience_counter = 0
+                    best_frozen_loss = float('inf')
+                    epoch = 0
+                    continue  # ✅ Continue training the frozen model
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
                     break
@@ -410,9 +424,13 @@ def train_and_select_best_model(weight_mode="trainable", weight_value=1.0,
                     print(f"🚨 Abandoning frozen model due to stagnation (loss: {loss.item():.4f})")
                     frozen_abandoned = True
                     break
+            epoch += 1
 
             if epoch % 200 == 0:
-                print(f"   Epoch {epoch} - Temp: {model.input_to_leaf.temperature:.4f} - Noise: {model.input_to_leaf.gumbel_noise_scale:.4f} - Loss: {loss.item():.4f}")
+                if frozen:
+                    print(f"   Epoch {epoch} - Loss: {loss.item():.4f}")
+                else:
+                    print(f"   Epoch {epoch} - Temp: {model.input_to_leaf.temperature:.4f} - Noise: {model.input_to_leaf.gumbel_noise_scale:.4f} - Loss: {loss.item():.4f}")
             
         if not frozen or frozen_abandoned:
             print("🚫 Training completed without freezing or freezing is abandoned. Abandoning this direction.")
