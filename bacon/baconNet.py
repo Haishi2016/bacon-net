@@ -2,10 +2,16 @@ import torch.nn as nn
 import torch
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 import logging
+import os
 class baconNet(nn.Module):
-    def __init__(self, input_size=10):
+    def __init__(self, input_size=10, freeze_loss_threshold=0.07):
         super(baconNet, self).__init__()
-        self.assembler = binaryTreeLogicNet(input_size, weight_mode="trainable", weight_value=1.0, weight_range=(0.5, 2.0), weight_choices=None)
+        self.assembler = binaryTreeLogicNet(input_size, 
+                                            freeze_loss_threshold=freeze_loss_threshold,
+                                            weight_mode="trainable", 
+                                            weight_value=1.0, 
+                                            weight_range=(0.5, 2.0), 
+                                            weight_choices=None)
     def forward(self, x):
         output = self.assembler(x)
         return output
@@ -23,22 +29,47 @@ class baconNet(nn.Module):
             predictions = (outputs > 0.5).float()  # Binarize the output to match the target labels (0 or 1)
             accuracy = (predictions == y).float().mean()
             return accuracy.item()
-    def find_best_model(self, x, y, attempts = 100, acceptance_threshold = 0.95):
+    def save_model(self, directory):
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, f"assembler.pth")
+        self.assembler.save_model(path)
+
+    def load_model(self, directory):
+        path = os.path.join(directory, f"assembler.pth")
+        self.assembler.load_model(path)
+
+    def find_best_model(self, x, y, attempts = 100, acceptance_threshold = 0.95, save_path = "."):
         best_accuracy = 0.0
         best_model = None
+        
+        assembler_path = os.path.join(save_path, "assembler.pth")
+        if os.path.exists(assembler_path):
+            try:
+                logging.info(f"📂 Found saved model at {assembler_path}, loading...")
+                self.load_model(save_path)
+                if self.assembler.is_frozen:
+                    acc = self.evaluate(x, y)
+                    logging.info(f"✅ Loaded model accuracy: {acc:.4f}")
+                    if acc >= acceptance_threshold:
+                        return self.assembler.state_dict(), acc
+            except Exception as e:
+                logging.warning(f"⚠️ Failed to load model from {assembler_path}: {e}")
+
         for attempt in range(attempts):
             logging.info(f"🔥 Attempting to find the best model... {attempt + 1}/{attempts}")
             try:
                 self.train_model(x, y, epochs=12000)
-                accuracy = self.evaluate(x, y)
-                if accuracy > best_accuracy:
-                    best_accuracy = accuracy
-                    best_model = self.assembler.state_dict()
-                    if best_accuracy >= acceptance_threshold:
-                        break
+                if self.assembler.is_frozen:
+                    accuracy = self.evaluate(x, y)
+                    if accuracy > best_accuracy:
+                        best_accuracy = accuracy
+                        best_model = self.assembler.state_dict()
+                        if best_accuracy >= acceptance_threshold:
+                            break
             except RuntimeError as e:
                 logging.error(f"🔥 Attempt {attempt + 1} failed with error: {e}")
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
-        
+        self.assembler.load_state_dict(best_model)
+        self.save_model(".")
         return best_model, best_accuracy
