@@ -38,6 +38,7 @@ class binaryTreeLogicNet(nn.Module):
         self.is_frozen = False
         self.freeze_loss_threshold = freeze_loss_threshold
         self.permutation_max = permutation_max
+        self.locked_perm = None  # For frozen models
         self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
         # Weights and Biases
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary tree
@@ -69,12 +70,13 @@ class binaryTreeLogicNet(nn.Module):
             'model_state_dict': self.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'is_frozen': self.is_frozen,
+            'locked_perm': self.locked_perm,
         }, file_name)
     def load_model(self, file_name):
-        checkpoint = torch.load(file_name)
+        checkpoint = torch.load(file_name, weights_only=True)
         state_dict = checkpoint['model_state_dict']
         self.is_frozen = checkpoint.get('is_frozen', False)
-
+        self.locked_perm = checkpoint.get('locked_perm', None)
         if self.is_frozen:
             # Frozen → use FrozenInputToLeaf
             P_hard = state_dict['input_to_leaf.P_hard']
@@ -188,6 +190,7 @@ class binaryTreeLogicNet(nn.Module):
 
                 if best_model is not None and best_loss < self.freeze_loss_threshold + 0.01:
                     print(f"✅ Freezing best permutation: {best_perm} with loss {best_loss:.4f}")
+                    self.locked_perm = best_perm.clone().detach()
                      # Freeze the current model in-place
                     self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size)
 
