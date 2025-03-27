@@ -8,6 +8,10 @@ import copy
 import random 
 from heapq import nlargest
 import itertools
+from ucimlrepo import fetch_ucirepo
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+
 
 NUM_INPUT_VARS = 10  # 👈 Change this value to control number of inputs
 NOISE_DECREASE_RATIO = 0.95 # Decrease noise if loss decreases
@@ -260,11 +264,24 @@ class BinaryTreeLogicNet(nn.Module):
 
 
 def generate_data(num_vars=5, repeat_factor=100):
-    print("🧠 Generating data...")
-    assert num_vars >= 2, "Need at least 2 variables for expression."
-    data = []
-    labels = []
-    base_cases = list(itertools.product([0, 1], repeat=num_vars))
+    breast_cancer = fetch_ucirepo(id=17)
+    X = breast_cancer.data.features.iloc[:, 0:10]  # mean values only
+    y = LabelEncoder().fit_transform(breast_cancer.data.targets.values.ravel())
+
+    # Train/test split
+    X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Standardize
+    scaler = MinMaxScaler()
+    X_train_np = scaler.fit_transform(X_train_np)
+    X_test_np = scaler.transform(X_test_np)
+
+    # Convert to PyTorch tensors
+    X_train = torch.tensor(X_train_np, dtype=torch.float32)
+    Y_train = torch.tensor(y_train_np.reshape(-1, 1), dtype=torch.float32)
+    X_test = torch.tensor(X_test_np, dtype=torch.float32)
+    Y_test = torch.tensor(y_test_np.reshape(-1, 1), dtype=torch.float32)
+
 
     # Step 1: generate stable ops per variable link
     ops = [random.choice(["and", "or"]) for _ in range(num_vars - 1)]
@@ -278,16 +295,9 @@ def generate_data(num_vars=5, repeat_factor=100):
         symbolic_expr = f"({symbolic_expr} {op} {var_names[i]})"
         eval_expr = f"({eval_expr} {op} x[{i}])"
 
-    # Step 3: evaluate the expression across the truth table
-    for _ in range(repeat_factor):
-        for x in base_cases:
-            y = int(eval(eval_expr))
-            data.append(list(x))
-            labels.append([y])
-
     return (
-        torch.tensor(data, dtype=torch.float32),
-        torch.tensor(labels, dtype=torch.float32),
+        torch.tensor(X_train, dtype=torch.float32),
+        torch.tensor(Y_train, dtype=torch.float32),
         {
             "expression_text": symbolic_expr,
             "eval_expr": eval_expr,

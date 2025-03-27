@@ -9,6 +9,10 @@ import random
 from heapq import nlargest
 import itertools
 
+from ucimlrepo import fetch_ucirepo
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+
 NUM_INPUT_VARS = 10  # 👈 Change this value to control number of inputs
 NOISE_DECREASE_RATIO = 0.95 # Decrease noise if loss decreases
 NOISE_INCREASE_RATIO = 1.05 # Increase noise if loss increases or plateaus
@@ -102,6 +106,7 @@ def generalized_gcd(a, b, r):
     # Approximate geometric mean when r ≈ 0
     geo_mean = torch.sqrt(a * b)
     return torch.where(is_near_zero, geo_mean, gcd)
+
     
 def sinkhorn(log_alpha, n_iters=20, temperature=1.0):
     log_alpha = log_alpha / temperature
@@ -260,37 +265,32 @@ class BinaryTreeLogicNet(nn.Module):
 
 
 def generate_data(num_vars=5, repeat_factor=100):
-    print("🧠 Generating data...")
-    assert num_vars >= 2, "Need at least 2 variables for expression."
-    data = []
-    labels = []
-    base_cases = list(itertools.product([0, 1], repeat=num_vars))
+    # Load and prepare real data
+    breast_cancer = fetch_ucirepo(id=17)
+    X = breast_cancer.data.features.iloc[:, 0:10]  # mean values only
+    y = LabelEncoder().fit_transform(breast_cancer.data.targets.values.ravel())
 
-    # Step 1: generate stable ops per variable link
+    # Train/test split
+    X_train_np, _, y_train_np, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Standardize
+    scaler = MinMaxScaler()
+    X_train_np = scaler.fit_transform(X_train_np)
+
+    # Convert to PyTorch tensors
+    X_train = torch.tensor(X_train_np, dtype=torch.float32)
+    Y_train = torch.tensor(y_train_np.reshape(-1, 1), dtype=torch.float32)
+
+   
     ops = [random.choice(["and", "or"]) for _ in range(num_vars - 1)]
-
-    # Step 2: generate variable names and build expression strings
     var_names = [chr(ord('A') + i) for i in range(num_vars)]
-    symbolic_expr = var_names[0]
-    eval_expr = "x[0]"
-    for i in range(1, num_vars):
-        op = ops[i - 1]
-        symbolic_expr = f"({symbolic_expr} {op} {var_names[i]})"
-        eval_expr = f"({eval_expr} {op} x[{i}])"
-
-    # Step 3: evaluate the expression across the truth table
-    for _ in range(repeat_factor):
-        for x in base_cases:
-            y = int(eval(eval_expr))
-            data.append(list(x))
-            labels.append([y])
-
+    
     return (
-        torch.tensor(data, dtype=torch.float32),
-        torch.tensor(labels, dtype=torch.float32),
+        torch.tensor(X_train, dtype=torch.float32),
+        torch.tensor(Y_train, dtype=torch.float32),
         {
-            "expression_text": symbolic_expr,
-            "eval_expr": eval_expr,
+            "expression_text": "dummy",
+            "eval_expr": "dummy",
             "ops": ops,
             "num_vars": num_vars,
             "var_names": var_names

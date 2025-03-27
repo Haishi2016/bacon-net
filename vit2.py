@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from timm.models.vision_transformer import VisionTransformer
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
 import os
 
 
@@ -25,7 +27,7 @@ class ViTMNISTClassifier:
         self.train_data = datasets.MNIST(root='./data', train=True, download=True, transform=self.transform)
         self.test_data = datasets.MNIST(root='./data', train=False, download=True, transform=self.transform)
         self.train_loader = DataLoader(self.train_data, batch_size=64, shuffle=True)
-        self.test_loader = DataLoader(self.test_data, batch_size=64)
+        self.test_loader = DataLoader(self.test_data, batch_size=64, shuffle=False)
 
         self.model = VisionTransformer(
             img_size=32,
@@ -84,13 +86,46 @@ class ViTMNISTClassifier:
         else:
             print(f"No saved model found at {self.model_path}")
 
+    def get_patch_embeddings(self, images):
+        """Get output of the transformer before classification head."""
+        self.model.eval()
+        with torch.no_grad():
+            return self.model.forward_features(images.to(self.device))  # Shape: [B, num_patches+1, embed_dim]
+
+    def visualize_tsne(self, num_batches=5):
+        """Run t-SNE on CLS token features and plot."""
+        print("🔍 Extracting CLS token features for t-SNE...")
+        self.model.eval()
+        features = []
+        labels = []
+
+        with torch.no_grad():
+            count = 0
+            for images, lbls in self.test_loader:
+                if count >= num_batches:
+                    break
+                out = self.get_patch_embeddings(images)  # [B, N+1, D]
+                cls_tokens = out[:, 0, :]  # Take CLS token
+                features.append(cls_tokens.cpu())
+                labels.append(lbls.cpu())
+                count += 1
+
+        features = torch.cat(features, dim=0).numpy()
+        labels = torch.cat(labels, dim=0).numpy()
+
+        print("🔄 Running t-SNE...")
+        tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+        reduced = tsne.fit_transform(features)
+
+        print("📊 Plotting...")
+        plt.figure(figsize=(10, 8))
+        scatter = plt.scatter(reduced[:, 0], reduced[:, 1], c=labels, cmap='tab10', s=15)
+        plt.legend(*scatter.legend_elements(), title="Digits")
+        plt.title("t-SNE Visualization of CLS Token Features (ViT on MNIST)")
+        plt.show()
+        
 if __name__ == "__main__":
     classifier = ViTMNISTClassifier()
-    # classifier.train(epochs=5)
-    # classifier.evaluate()
-    # classifier.save_model()
-
-    # print("\nReloading model and re-evaluating:")
-    # new_classifier = ViTMNISTClassifier()
     classifier.load_model()
     classifier.evaluate()
+    classifier.visualize_tsne()
