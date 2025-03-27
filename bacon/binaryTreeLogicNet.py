@@ -35,8 +35,10 @@ class binaryTreeLogicNet(nn.Module):
         self.noise_decrease = noise_decrease
         self.min_noise = min_noise
         self.max_noise = max_noise
+        self.is_frozen = False
         self.freeze_loss_threshold = freeze_loss_threshold
         self.permutation_max = permutation_max
+        self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
         # Weights and Biases
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary tree
         self.reinitialize(weight_mode, weight_value, weight_range, weight_choices)
@@ -62,6 +64,26 @@ class binaryTreeLogicNet(nn.Module):
             nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0.5)  
+    def save_model(self, file_name):
+        torch.save({
+            'model_state_dict': self.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'is_frozen': self.is_frozen,
+        }, file_name)
+    def load_model(self, file_name):
+        checkpoint = torch.load(file_name)
+        state_dict = checkpoint['model_state_dict']
+        self.is_frozen = checkpoint.get('is_frozen', False)
+
+        if self.is_frozen:
+            # Frozen → use FrozenInputToLeaf
+            P_hard = state_dict['input_to_leaf.P_hard']
+            self.input_to_leaf = frozenInputToLeaf(
+                hard_assignment=torch.argmax(P_hard, dim=1),
+                num_inputs=self.original_input_size
+            )
+        # Now load weights
+        self.load_state_dict(state_dict)
 
     def forward(self, x):
         # 🔹 Compute input-to-leaf values
@@ -105,21 +127,21 @@ class binaryTreeLogicNet(nn.Module):
     def train_model(self, x, y, epochs):
         self.reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices)
         loss_history = []
-        frozen = False
-        optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
+        self.is_frozen = False
+        self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
         criterion = nn.BCELoss()
         for epoch in range(epochs):
             if hasattr(self.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
                 self.input_to_leaf.temperature *= 0.8
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             outputs = self(x)
             if torch.isnan(outputs).any() or (outputs < 0).any() or (outputs > 1).any():
                 raise RuntimeError("Instability detected. Can't be trained further.")
             loss = criterion(outputs, y)
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
             loss_history.append(loss.item())
-            if not frozen:
+            if not self.is_frozen:
                 if len(loss_history) > 5:
                     loss_history.pop(0)
                     diffs = np.diff(loss_history)
@@ -134,7 +156,7 @@ class binaryTreeLogicNet(nn.Module):
                         self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * self.noise_increase, self.max_noise)
                         # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
             
-            if not frozen and loss.item() < self.freeze_loss_threshold:
+            if not self.is_frozen and loss.item() < self.freeze_loss_threshold:
                 print(f"🧊 Low loss at epoch {epoch}, sampling top-k permutations...")
                 candidates = self.sample_topk_permutations(
                     self.original_input_size,
@@ -170,18 +192,18 @@ class binaryTreeLogicNet(nn.Module):
                     self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size)
 
                     # Re-initialize optimizer for frozen model
-                    optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
+                    self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
 
                     # Mark frozen mode and reset patience
-                    frozen = True
+                    self.is_frozen = True
                     patience_counter = 0
                     best_frozen_loss = float('inf')
                     continue  # ✅ Continue training the frozen model
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
-                    frozen = False
+                    self.is_frozen = False
                     self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True)
-                    optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
+                    self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
                     
             if epoch % 200 == 0:
                 logging.info(f"   Epoch {epoch} - Loss: {loss.item():.4f}")
