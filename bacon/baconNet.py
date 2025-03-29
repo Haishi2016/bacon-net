@@ -74,6 +74,6 @@ class baconNet(nn.Module):
         self.save_model(".")
         return best_model, best_accuracy
     
-    def print_tree_structure(self):
-        self.assembler.print_tree_structure()
+    def print_tree_structure(self, labels=None):
+        self.assembler.print_tree_structure(labels)
         print(f"Permutation: {self.assembler.locked_perm}")
