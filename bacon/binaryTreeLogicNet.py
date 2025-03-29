@@ -271,12 +271,15 @@ class binaryTreeLogicNet(nn.Module):
         return [torch.tensor(p[0]) for p in topk_by_loss]
 
 
-    def print_tree_structure(self):
-        """ Prints the recursive left-heavy binary tree structure correctly. """
-        leaf_names = [f"Leaf {i+1}" for i in range(self.num_leaves)]
-        leaf_connections = {}
+    def print_tree_structure(self, labels=None):
+        """Prints the recursive left-heavy binary tree structure with optional custom labels for leaves."""
+        if labels is not None and len(labels) != self.num_leaves:
+            raise ValueError(f"Provided label count {len(labels)} does not match number of leaves {self.num_leaves}")
+
+        leaf_names = [labels[i] if labels else f"Leaf {i+1}" for i in range(self.num_leaves)]
         node_dict = {}
         node_labels = {}
+        weight_map = {}  # Maps (parent, child) → weight
 
         for i in range(self.num_layers):
             a_value = torch.sigmoid(self.biases[i]).item()
@@ -290,30 +293,31 @@ class binaryTreeLogicNet(nn.Module):
                 right = leaf_names[i + 1]
 
             parent = f"Node{i+1}"
-            label = f"{parent} (andness: {a_value:.3f})"
             node_dict[parent] = (left, right)
-            node_labels[parent] = label
+            node_labels[parent] = f"{parent} (andness: {a_value:.3f})"
+            weight_map[(parent, left)] = w[0]
+            weight_map[(parent, right)] = w[1]
 
-            # Track weights to leaves
-            if left.startswith("Leaf"):
-                leaf_connections[left] = w[0]
-            if right.startswith("Leaf"):
-                leaf_connections[right] = w[1]
-
-        def format_tree(node, depth=0):
+        def format_tree(node, parent=None, depth=0):
             indent = "  " * depth
-            if node.startswith("Leaf"):
-                w = leaf_connections.get(node, None)
-                return f"{indent}{node}" + (f" [weight: {w:.3f}]" if w is not None else "")
+            weight_str = ""
+            if parent is not None and (parent, node) in weight_map:
+                weight_str = f" [weight: {weight_map[(parent, node)]:.3f}]"
+
+            label = node_labels.get(node, node)
             if node in node_dict:
+                # Internal node
                 left, right = node_dict[node]
-                label = node_labels.get(node, node)
-                left_sub = format_tree(left, depth + 1)
-                right_sub = format_tree(right, depth + 1)
-                return f"{indent}{label}\n{left_sub}\n{right_sub}"
-            return f"{indent}{node} [Unknown]"
+                left_sub = format_tree(left, node, depth + 1)
+                right_sub = format_tree(right, node, depth + 1)
+                return f"{indent}{label}{weight_str}\n{left_sub}\n{right_sub}"
+            else:
+                # Leaf node
+                return f"{indent}{node}{weight_str}"
 
         print("\n🌲 Binary Tree Structure:\n")
         root = f"Node{self.num_layers}"
         print(format_tree(root))
+
+
 
