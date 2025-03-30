@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class inputToLeafSinkhorn(nn.Module):
-    def __init__(self, num_inputs, num_leaves, temperature=1.0, sinkhorn_iters=20, use_gumbel=True):
+    def __init__(self, num_inputs, num_leaves, temperature=3.0, sinkhorn_iters=20, use_gumbel=True):
         super().__init__()
         self.num_inputs = num_inputs
         self.num_leaves = num_leaves
@@ -19,11 +19,7 @@ class inputToLeafSinkhorn(nn.Module):
         else:
             P = self.sinkhorn(self.logits, temperature=self.temperature, n_iters=self.sinkhorn_iters)
         return torch.matmul(x, P.t())
-
-    def decrease_temperature(self, factor=0.98, noise_decay=0.98):
-        self.temperature *= factor
-        self.gumbel_noise_scale *= noise_decay
-
+   
     def sample_gumbel(self, shape, device=None, eps=1e-20):
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
