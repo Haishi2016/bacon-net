@@ -7,7 +7,27 @@ import numpy as np
 import itertools
 import copy
 import logging 
-import logging 
+import matplotlib.pyplot as plt
+import networkx as nx
+import torch
+from scipy.optimize import linear_sum_assignment
+
+def left_associative_layout(G, root):
+    pos = {}
+    def dfs(node, depth=0, y=0):
+        children = list(G.successors(node))
+        if not children:
+            pos[node] = (y, -depth)  # Leaf node: x by y order
+            return y + 1
+        else:
+            y = dfs(children[0], depth + 1, y)
+            y = dfs(children[1], depth + 1, y)
+            pos[node] = ((pos[children[0]][0] + pos[children[1]][0]) / 2, -depth)
+            return y
+    dfs(root)
+    return pos
+
+
 
 class binaryTreeLogicNet(nn.Module):
     def __init__(self, 
@@ -21,7 +41,7 @@ class binaryTreeLogicNet(nn.Module):
                  min_noise=0.0,
                  max_noise=2.0,
                  freeze_loss_threshold=0.07,
-                 permutation_max=100):
+                 permutation_max=10000):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
         self.num_leaves = input_size  # 🔹 Each input gets its own leaf initially
@@ -39,27 +59,54 @@ class binaryTreeLogicNet(nn.Module):
         self.freeze_loss_threshold = freeze_loss_threshold
         self.permutation_max = permutation_max
         self.locked_perm = None  # For frozen models
-        self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
+        
+        self.reset_optimizer()  # Initialize optimizer
         # Weights and Biases
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary tree
         self.reinitialize(weight_mode, weight_value, weight_range, weight_choices)
+    def reset_optimizer(self, leraning_rate=0.2):
+        """Reset the optimizer for the model."""
+        self.optimizer = optim.Adam(self.parameters(), lr=0.2, weight_decay=0.0)
     def reinitialize(self, weight_mode, weight_value, weight_range, weight_choices):
+        # Reset flags
+        self.is_frozen = False
+        self.locked_perm = None
+
+        # Reinitialize input-to-leaf layer
+        self.input_to_leaf = inputToLeafSinkhorn(
+            self.original_input_size,
+            self.num_leaves,
+            use_gumbel=True
+        )
+        self.input_to_leaf.gumbel_noise_scale = 1.0
+        self.input_to_leaf.temperature = 1.0
+
+        # Reset weights and biases
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
+
         for _ in range(self.num_layers):
             if weight_mode == "fixed":
                 self.weights.append(nn.Parameter(torch.tensor([weight_value, weight_value], dtype=torch.float32), requires_grad=False))
             elif weight_mode == "range":
-                self.weights.append(nn.Parameter(torch.rand(2) * (weight_range[1] - weight_range[0]) + weight_range[0]))
+                self.weights.append(nn.Parameter(
+                    torch.rand(2) * (weight_range[1] - weight_range[0]) + weight_range[0]
+                ))
             elif weight_mode == "discrete":
-                self.weights.append(nn.Parameter(torch.choice(self.weight_choices, (2,)), requires_grad=True))
+                self.weights.append(nn.Parameter(
+                    torch.choice(self.weight_choices, (2,)), requires_grad=True
+                ))
             else:  # "trainable"
-                # self.weights.append(nn.Parameter(torch.randn(2) * 0.1))
-                self.weights.append(nn.Parameter(torch.FloatTensor(2).uniform_(0.5, 1.5)))  # Avoid zero-centered values
-            self.biases.append(nn.Parameter(torch.rand(1) * 0.1))
+                self.weights.append(nn.Parameter(
+                    torch.FloatTensor(2).uniform_(0.5, 1.5)
+                ))
 
+            self.biases.append(nn.Parameter(torch.rand(1)))
+
+        # Reset output layer
         self.fc_out = nn.Linear(1, 1)
         self.apply(self.initialize_weights)
+
     def initialize_weights(self, m):
         if isinstance(m, nn.Linear):
             nn.init.xavier_uniform_(m.weight)
@@ -96,43 +143,81 @@ class binaryTreeLogicNet(nn.Module):
         for i in range(self.num_layers):
             w = self.weights[i]
             bias = self.biases[i]
+
+            w_soft = torch.softmax(w, dim=0)
+
             if i == 0:
                 left = node_outputs[0]
                 right = node_outputs[1]
             else:
                 left = node_outputs[-1]  # previous node
                 right = node_outputs[i + 1]  # next input
-            node_outputs.append(self.generalized_gcd(w[0] * left, w[1] * right, bias))
+            node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
             layer_outputs.append(node_outputs[-1])
 
         final_output = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
         return final_output
 
-    def generalized_gcd(self, a, b, r):
+    def generalized_gcd(self, a, b, r, w0, w1):
         epsilon = 1e-6  # To prevent division by zero
         r = torch.sigmoid(r) * 10 - 5  # Map sigmoid to range ~[-5, 5] for stability
-
+        
         a = torch.clamp(a, min=epsilon)
         b = torch.clamp(b, min=epsilon)
+
 
         # Avoid r = 0 case with Taylor approximation
         is_near_zero = (r.abs() < 1e-2)
         safe_r = r + (~is_near_zero).float() * 1e-6
 
-        gcd = ((a ** safe_r) + (b ** safe_r)) / 2
+
+        gcd = (w0*(a ** safe_r) + w1*(b ** safe_r))
         gcd = gcd ** (1 / safe_r)
+
+        # logging.info(f"a: {a.mean():.4f}, b: {b.mean():.4f}, r: {r.item():.4f}, w1: {w0.item():.4f}, w2: {w1.item():.4f}, gcd: {gcd.mean():.4f}")
 
         # Approximate geometric mean when r ≈ 0
         geo_mean = torch.sqrt(a * b)
         return torch.where(is_near_zero, geo_mean, gcd)
 
+    # def generalized_gcd(self, a, b, r, w0, w1):
+    #     """
+    #     Stable GCD aggregator using log-sum-exp trick.
+    #     r is used to control smoothness (andness/orness) via alpha.
+    #     w0 and w1 are weights for a and b respectively and assumed normalized.
+    #     """
+    #     epsilon = 1e-6
+    #     a = torch.clamp(a, min=epsilon)
+    #     b = torch.clamp(b, min=epsilon)
+
+    #     # Normalize weights
+    #     weights = torch.stack([w0, w1])
+    #     weights = torch.softmax(weights, dim=0)
+    #     w0_norm, w1_norm = weights[0], weights[1]
+
+    #     # Interpret r ∈ [0, 1] as a log-sum-exp coefficient α ∈ [–5, 5]
+    #     alpha = torch.sigmoid(r) * 10 - 5  # map sigmoid(r) ∈ (0,1) → (–5, 5)
+
+    #     # Log-sum-exp form
+    #     a_scaled = alpha * a
+    #     b_scaled = alpha * b
+
+    #     lse = (1.0 / alpha) * torch.log((w0_norm * torch.exp(a_scaled) + w1_norm * torch.exp(b_scaled)) + epsilon)
+
+    #     # Use mean if alpha ≈ 0
+    #     mean = w0_norm * a + w1_norm * b
+    #     is_near_zero = (alpha.abs() < 1e-2)
+    #     return torch.where(is_near_zero, mean, lse)
+
     def train_model(self, x, y, epochs):
         self.reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices)
         loss_history = []
-        self.is_frozen = False
-        self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
+        self.is_frozen = False        
+        self.reset_optimizer() 
         criterion = nn.BCELoss()
-        for epoch in range(epochs):
+        best_indexes = []
+        epoch = 0
+        while epoch < epochs:
             if hasattr(self.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
                 self.input_to_leaf.temperature *= 0.8
             self.optimizer.zero_grad()
@@ -142,6 +227,12 @@ class binaryTreeLogicNet(nn.Module):
             loss = criterion(outputs, y)
             loss.backward()
             self.optimizer.step()
+
+            # Normalize each weight vector (in-place)
+            with torch.no_grad():
+                for w in self.weights:
+                    w.data = torch.softmax(w.data, dim=0)
+                    
             loss_history.append(loss.item())
             if not self.is_frozen:
                 if len(loss_history) > 5:
@@ -153,77 +244,47 @@ class binaryTreeLogicNet(nn.Module):
                         # print(f"🔻 Stable improvement. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
                     elif all(abs(d) < 1e-4 for d in diffs):  # plateau
                         self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * self.noise_increase, self.max_noise)
+                        # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🟰 Plateau. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
                     elif any(d > 0 for d in diffs):  # getting worse
                         self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * self.noise_increase, self.max_noise)
+                        # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
             
             if not self.is_frozen and loss.item() < self.freeze_loss_threshold:
                 print(f"🧊 Low loss at epoch {epoch}, sampling top-k permutations...")
-                candidates = self.sample_topk_permutations(
-                    self.original_input_size,
-                    k=self.permutation_max,  # or 0 for all
+                best_model, best_perm, best_loss, best_index = self.sample_best_permutation(
                     model_template=self,
+                    topk=self.permutation_max,
                     X=x,
                     Y=y,
-                    weight_mode=self.weight_mode,
-                    weight_value=self.weight_value,
-                    weight_range=self.weight_range,
-                    weight_choices=self.weight_choices
-                )
-
-                best_loss = float('inf')
-                best_model = None
-                best_perm = None
-
-                for perm in candidates:
-                    perm_tensor = perm.clone().detach()
-                    temp_model = copy.deepcopy(self)
-                    temp_model.input_to_leaf = frozenInputToLeaf(perm_tensor, temp_model.original_input_size)
-                    temp_loss = criterion(temp_model(x), y)
-                    print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
-
-                    if temp_loss < best_loss:
-                        best_loss = temp_loss
-                        best_model = temp_model
-                        best_perm = perm
-
+                    noise_std=0.1)                                    
+                if best_model is not None:
+                    best_indexes.append(best_index)
                 if best_model is not None and best_loss < self.freeze_loss_threshold + 0.01:
                     print(f"✅ Freezing best permutation: {best_perm} with loss {best_loss:.4f}")
-                    self.locked_perm = best_perm.clone().detach()
+                    self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
                      # Freeze the current model in-place
                     self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size)
 
-                    # Re-initialize optimizer for frozen model
-                    self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
-
+                    # Re-initialize optimizer for frozen model                    
+                    self.reset_optimizer(leraning_rate=0.05)  # Lower learning rate for frozen model
                     # Mark frozen mode and reset patience
                     self.is_frozen = True
                     patience_counter = 0
+                    epoch = 0
                     best_frozen_loss = float('inf')
                     continue  # ✅ Continue training the frozen model
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
                     self.is_frozen = False
                     self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True)
-                    self.optimizer = optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-5)
+                    self.reset_optimizer() 
                     
             if epoch % 200 == 0:
                 logging.info(f"   Epoch {epoch} - Loss: {loss.item():.4f}")
-          
-
-    def evaluate_permutation(self, model_template, perm, X, Y, weight_mode, weight_value, weight_range, weight_choices):
-        # Create a fresh model with the given permutation frozen
-        model = binaryTreeLogicNet(X.shape[1], weight_mode, weight_value, weight_range, weight_choices)
-        X, Y = X, Y
-        model.input_to_leaf = frozenInputToLeaf(torch.tensor(perm), X.shape[1])
-        model.eval()
-        with torch.no_grad():
-            outputs = model(X)
-            if torch.isnan(outputs).any() or (outputs < 0).any() or (outputs > 1).any():
-                return float("inf")  # Disqualify
-            loss = nn.BCELoss()(outputs, Y)
-        return loss.item()
+            epoch += 1
+        print(f"Indexes of best models: {best_indexes}")
 
     def sinkhorn(self, log_alpha, n_iters=20, temperature=1.0):
         log_alpha = log_alpha / temperature
@@ -235,40 +296,58 @@ class binaryTreeLogicNet(nn.Module):
 
         return A
 
-    def sample_topk_permutations(self, num_inputs, k, model_template, X, Y, weight_mode, weight_value, weight_range, weight_choices):
+    def sample_best_permutation(self, model_template, topk, X, Y, noise_std=0.1):
+        criterion = nn.BCELoss()
         with torch.no_grad():
             if hasattr(model_template.input_to_leaf, "logits"):
-                P = self.sinkhorn(model_template.input_to_leaf.logits, temperature=model_template.input_to_leaf.temperature)
+                P = self.sinkhorn(
+                    model_template.input_to_leaf.logits,
+                    temperature=model_template.input_to_leaf.temperature
+                )
             else:
                 raise ValueError("Model does not have learnable logits for Sinkhorn.")
 
-        topk_candidates = set()
-        max_topk = k if k > 0 else 100  # Allow fallback for all if k=0
+            P_np = P.cpu().numpy()
+            perms = set()
+            best_loss = float("inf")
+            best_perm = None
+            best_model = None
+            best_index = None
+            for index in range(topk * 2):  # Allow duplicates, just filter later
+                if len(perms) == 0:
+                    noisy_P = P_np  # baseline, no noise
+                else:
+                    noise = np.random.normal(loc=0.0, scale=noise_std, size=P_np.shape)
+                    noisy_P = P_np + noise
+                row_ind, col_ind = linear_sum_assignment(-noisy_P)  # maximize confidence
+                perm = tuple(col_ind[row_ind.argsort()])  # sort by leaf index
+                if perm in perms:
+                    continue
+                perms.add(perm)
 
-        def greedy_match(P, num_choices_per_leaf):
-            num_choices_per_leaf = min(5, num_inputs)
-            top_inputs = [torch.topk(P[i], k=min(num_choices_per_leaf, P.shape[1])).indices.tolist() for i in range(num_inputs)]
-            for combo in itertools.product(*top_inputs):
-                if len(set(combo)) == num_inputs:
-                    topk_candidates.add(tuple(combo))
-                if len(topk_candidates) >= max_topk:
+                perm_tensor = torch.tensor(perm, dtype=torch.long).clone().detach()
+                temp_model = copy.deepcopy(model_template)
+                temp_model.input_to_leaf = frozenInputToLeaf(perm_tensor, temp_model.original_input_size)
+                temp_loss = criterion(temp_model(X), Y)
+                print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
+
+                if temp_loss > 0.2 and best_index is None:
+                    print(f"   🚫 Perm {perm} group rejected due to high loss.")
+                    return None, None, 1, -1
+                if temp_loss < best_loss:
+                    best_loss = temp_loss
+                    best_model = temp_model
+                    best_perm = perm       
+                    best_index = index             
+                    
+                if len(perms) >= topk:
                     break
 
-        greedy_match(P, num_choices_per_leaf=5)
+            if best_perm is None:
+                return None, None, 1, -1
 
-        if not topk_candidates:
-            argmax_perm = tuple(P.argmax(dim=1).tolist())
-            topk_candidates.add(argmax_perm)
-
-        print(f"🧠 Evaluating {len(topk_candidates)} promising permutations from soft alignment...")
-
-        losses = []
-        for perm in topk_candidates:
-            loss = self.evaluate_permutation(model_template, perm, X, Y, weight_mode, weight_value, weight_range, weight_choices)
-            losses.append((perm, loss))
-
-        topk_by_loss = sorted(losses, key=lambda x: x[1])
-        return [torch.tensor(p[0]) for p in topk_by_loss]
+            print(f"✅ Best permutation selected: {best_perm} (Loss: {best_loss:.4f})")
+            return best_model, best_perm, best_loss, best_index
 
 
     def print_tree_structure(self, labels=None):
@@ -320,4 +399,86 @@ class binaryTreeLogicNet(nn.Module):
         print(format_tree(root))
 
 
+    def hierarchy_pos(self, G, root=None, width=1.0, vert_gap=0.2, vert_loc=0, xcenter=0.5):
+        # Source: Joel's answer on StackOverflow
+        def _hierarchy_pos(G, root, width=1.0, vert_gap=0.2, vert_loc=0, xcenter=0.5, pos=None, parent=None):
+            if pos is None:
+                pos = {root: (xcenter, vert_loc)}
+            else:
+                pos[root] = (xcenter, vert_loc)
+            neighbors = list(G.neighbors(root))
+            if parent is not None:
+                neighbors = [n for n in neighbors if n != parent]
+            if len(neighbors) != 0:
+                dx = width / len(neighbors)
+                nextx = xcenter - width/2 - dx/2
+                for neighbor in neighbors:
+                    nextx += dx
+                    pos = _hierarchy_pos(G, neighbor, width=dx, vert_gap=vert_gap,
+                                        vert_loc=vert_loc - vert_gap, xcenter=nextx, pos=pos, parent=root)
+            return pos
+        return _hierarchy_pos(G, root, width, vert_gap, vert_loc, xcenter)
 
+    def visualize_tree_structure(self, labels=None):
+        if labels is not None and len(labels) != self.num_leaves:
+            raise ValueError("Label count does not match number of leaves")
+
+        leaf_names = [labels[i] if labels else f"Leaf {i+1}" for i in range(self.num_leaves)]
+        node_dict = {}
+        node_labels = {}
+        weight_map = {}
+        leaf_nodes = set()
+
+        # Build the tree structure and assign labels
+        for i in range(self.num_layers):
+            a = torch.sigmoid(self.biases[i]).item()
+            w = self.weights[i].detach().cpu().numpy()
+
+            left = f"Node{i}" if i > 0 else leaf_names[0]
+            right = leaf_names[i + 1]
+            parent = f"Node{i+1}"
+
+            node_dict[parent] = (left, right)
+            node_labels[parent] = f"{a:.2f}"
+
+            weight_map[(parent, left)] = w[0]
+            weight_map[(parent, right)] = w[1]
+
+            # Keep track of all possible leaf nodes
+            if left in leaf_names:
+                leaf_nodes.add(left)
+            if right in leaf_names:
+                leaf_nodes.add(right)
+
+        # Add labels for leaf nodes
+        for leaf in leaf_nodes:
+            if leaf not in node_labels:
+                node_labels[leaf] = leaf
+
+        # Build the graph
+        G = nx.DiGraph()
+        def add_edges(node):
+            if node in node_dict:
+                l, r = node_dict[node]
+                G.add_edge(node, l, weight=weight_map.get((node, l), 1.0))
+                G.add_edge(node, r, weight=weight_map.get((node, r), 1.0))
+                add_edges(l)
+                add_edges(r)
+            else:
+                G.add_node(node)
+
+        root = f"Node{self.num_layers}"
+        add_edges(root)
+
+        # Use the left-associative layout
+        pos = left_associative_layout(G, root)
+        edge_labels = {e: f"{w:.2f}" for e, w in nx.get_edge_attributes(G, "weight").items()}
+
+        # Draw
+        plt.figure(figsize=(14, 8))
+        nx.draw(G, pos, with_labels=True, labels=node_labels, node_color='lightblue', node_size=2000, font_size=9)
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red')
+        plt.title("BACON Tree Structure (Left-Associative)")
+        plt.axis("off")
+        plt.tight_layout()
+        plt.show()

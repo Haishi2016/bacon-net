@@ -3,13 +3,14 @@ import torch
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 import logging
 import os
+
 class baconNet(nn.Module):
-    def __init__(self, input_size=10, freeze_loss_threshold=0.07):
+    def __init__(self, input_size=30, freeze_loss_threshold=0.07):
         super(baconNet, self).__init__()
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
                                             weight_mode="trainable", 
-                                            weight_value=1.0, 
+                                            weight_value=1.0,                                             
                                             weight_range=(0.5, 2.0), 
                                             weight_choices=None)
     def forward(self, x):
@@ -38,17 +39,16 @@ class baconNet(nn.Module):
         path = os.path.join(directory, f"assembler.pth")
         self.assembler.load_model(path)
 
-    def find_best_model(self, x, y, attempts = 100, acceptance_threshold = 0.95, save_path = "."):
+    def find_best_model(self, x, y, x_test, y_test, attempts = 100, acceptance_threshold = 0.95, save_path = "."):
         best_accuracy = 0.0
-        best_model = None
-        
+        best_model = None        
         assembler_path = os.path.join(save_path, "assembler.pth")
         if os.path.exists(assembler_path):
             try:
                 logging.info(f"📂 Found saved model at {assembler_path}, loading...")
                 self.load_model(save_path)
                 if self.assembler.is_frozen:
-                    acc = self.evaluate(x, y)
+                    acc = self.evaluate(x_test, y_test)
                     logging.info(f"✅ Loaded model accuracy: {acc:.4f}")
                     if acc >= acceptance_threshold:
                         return self.assembler.state_dict(), acc
@@ -57,10 +57,13 @@ class baconNet(nn.Module):
 
         for attempt in range(attempts):
             logging.info(f"🔥 Attempting to find the best model... {attempt + 1}/{attempts}")
+
+            torch.manual_seed(torch.initial_seed() + attempt)
+
             try:
                 self.train_model(x, y, epochs=12000)
-                if self.assembler.is_frozen:
-                    accuracy = self.evaluate(x, y)
+                if self.assembler.is_frozen:                   
+                    accuracy = self.evaluate(x_test, y_test)
                     if accuracy > best_accuracy:
                         best_accuracy = accuracy
                         best_model = self.assembler.state_dict()
@@ -76,4 +79,8 @@ class baconNet(nn.Module):
     
     def print_tree_structure(self, labels=None):
         self.assembler.print_tree_structure(labels)
+        print(f"Permutation: {self.assembler.locked_perm}")
+    
+    def visualize_tree_structure(self, labels=None):
+        self.assembler.visualize_tree_structure(labels)
         print(f"Permutation: {self.assembler.locked_perm}")
