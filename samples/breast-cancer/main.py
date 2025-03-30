@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO,
                     format='%(message)s')
 
 breast_cancer = fetch_ucirepo(id=17)
-X = breast_cancer.data.features.iloc[:, 0:10]  # mean values only
+X = breast_cancer.data.features.iloc[:, 0:30]  # mean values only
 y = LabelEncoder().fit_transform(breast_cancer.data.targets.values.ravel())
 
 # Train/test split
@@ -29,6 +29,6 @@ Y_train = torch.tensor(y_train_np.reshape(-1, 1), dtype=torch.float32)
 X_test = torch.tensor(X_test_np, dtype=torch.float32)
 Y_test = torch.tensor(y_test_np.reshape(-1, 1), dtype=torch.float32)
 bacon = baconNet()
-(best_model, best_accuracy) = bacon.find_best_model(X_test, Y_test, attempts=100, acceptance_threshold=0.95)
+(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.95)
 print(f"Best accuracy: {best_accuracy * 100:.2f}%")
-bacon.print_tree_structure(X.columns.tolist())
+bacon.visualize_tree_structure(X.columns.tolist())
