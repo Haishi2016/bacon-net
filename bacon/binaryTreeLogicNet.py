@@ -158,102 +158,102 @@ class binaryTreeLogicNet(nn.Module):
         final_output = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
         return final_output
     
-    # def r(self, a):
-    #     if not torch.is_tensor(a):
-    #         a = torch.tensor(a, dtype=torch.float32)
-    #     delta = 0.5 - a
-    #     numerator = (0.25 +
-    #                  1.65811 * delta +
-    #                  2.15388 * delta ** 2 + 
-    #                  8.2844 * delta ** 3 +
-    #                  6.16764 * delta ** 4) 
-    #     denominator = a * ( 1- a)
-    #     epsilon = 1e-6
-    #     denominator = torch.where(denominator.abs() < 1e-6, torch.full_like(denominator, epsilon), denominator)  # Avoid division by zero
-    #     return numerator / denominator
+    def r(self, a):
+        if not torch.is_tensor(a):
+            a = torch.tensor(a, dtype=torch.float32)
+        delta = 0.5 - a
+        numerator = (0.25 +
+                     1.65811 * delta +
+                     2.15388 * delta ** 2 + 
+                     8.2844 * delta ** 3 +
+                     6.16764 * delta ** 4) 
+        denominator = a * ( 1- a)
+        epsilon = 1e-6
+        denominator = torch.where(denominator.abs() < 1e-6, torch.full_like(denominator, epsilon), denominator)  # Avoid division by zero
+        return numerator / denominator
     
-    # def F(self, x,y,a, w0, w1):
-    #     epsilon = 1e-6  # To prevent division by zero
-    #     # x = torch.clamp(x, min=epsilon)
-    #     # y = torch.clamp(y, min=epsilon)
+    def F(self, x,y,a, w0, w1):
+        epsilon = 1e-6  # To prevent division by zero
+        # x = torch.clamp(x, min=epsilon)
+        # y = torch.clamp(y, min=epsilon)
 
-    #     if isinstance(a, torch.Tensor):
-    #         scalar_a = a.item()
-    #     else:
-    #         scalar_a = a
-    #     scalar_a = max(min(scalar_a, 2.0), -1.0)
-    #     # if a == 2, return 1 of x==y==1, otherwise 0
-    #     if abs(scalar_a - 2) < epsilon:
-    #         result = torch.where((x == 1) & (y == 1), torch.ones_like(x), torch.zeros_like(x))
-    #         if torch.isnan(result).any():
-    #             print(f"[TRACE] Rule 0 result has NaN: {torch.isnan(result).any()}")
-    #         return result
+        if isinstance(a, torch.Tensor):
+            scalar_a = a.item()
+        else:
+            scalar_a = a
+        scalar_a = max(min(scalar_a, 2.0), -1.0)
+        # if a == 2, return 1 of x==y==1, otherwise 0
+        if abs(scalar_a - 2) < epsilon:
+            result = torch.where(abs(x-1) < epsilon and abs(y-1) < epsilon, torch.ones_like(x), torch.zeros_like(x))
+            if torch.isnan(result).any():
+                print(f"[TRACE] Rule 0 result has NaN: {torch.isnan(result).any()}")
+            return result
 
-    #     # if 1.25 < a < 2, return (xy)^(sqrt(3/(2-a))-1)
-    #     elif 1.25 < scalar_a < 2:
-    #         result = (x * y) ** torch.sqrt(3/(2-scalar_a)-1)
-    #         if torch.isnan(result).any():
-    #             print(f"[TRACE] Rule 1 result has NaN: {torch.isnan(result).any()}")
+        # if 1.25 < a < 2, return (xy)^(sqrt(3/(2-a))-1)
+        elif 1.25 < scalar_a < 2:
+            result = (x * y) ** torch.sqrt(3/(2-scalar_a)-1)
+            if torch.isnan(result).any():
+                print(f"[TRACE] Rule 1 result has NaN: {torch.isnan(result).any()}")
             
-    #         return result
+            return result
         
-    #     # if a == 1.25, return xy
-    #     elif abs(scalar_a - 1.25) < epsilon:
-    #         result = x * y
-    #         if torch.isnan(result).any():
-    #             print(f"[TRACE] Rule 2 result has NaN: {torch.isnan(result).any()}")
-    #         return result
+        # if a == 1.25, return xy
+        elif abs(scalar_a - 1.25) < epsilon:
+            result = x * y
+            if torch.isnan(result).any():
+                print(f"[TRACE] Rule 2 result has NaN: {torch.isnan(result).any()}")
+            return result
 
-    #     # if 1 < a < 1.25 return 4((1.25-a)min(x,y)+(a-1)xy)
-    #     elif 1 < scalar_a < 1.25:
-    #         result = 4 * ((1.25-scalar_a) * torch.min(x,y) + (scalar_a-1) * x * y)
-    #         if torch.isnan(result).any():
-    #             print(f"[TRACE] Rule 3 result has NaN: {torch.isnan(result).any()}")
-    #         return result
+        # if 1 < a < 1.25 return 4((1.25-a)min(x,y)+(a-1)xy)
+        elif 1 < scalar_a < 1.25:
+            result = 4 * ((1.25-scalar_a) * torch.min(x,y) + (scalar_a-1) * x * y)
+            if torch.isnan(result).any():
+                print(f"[TRACE] Rule 3 result has NaN: {torch.isnan(result).any()}")
+            return result
      
-    #     # a == 1 return min(x,y)
-    #     elif abs(scalar_a - 1) < epsilon:
-    #         result = torch.min(x,y)
-    #         if torch.isnan(result).any():
-    #             print(f"[TRACE] Rule 4 result has NaN: {torch.isnan(result).any()}")
-    #         return result
+        # a == 1 return min(x,y)
+        elif abs(scalar_a - 1) < epsilon:
+            result = torch.min(x,y)
+            if torch.isnan(result).any():
+                print(f"[TRACE] Rule 4 result has NaN: {torch.isnan(result).any()}")
+            return result
         
-    #     # 3/4 < a < 1 return (0.5x^r(a) + 0.5y^r(a))^(1/r(a))
-    #     elif 0.75 < scalar_a < 1:
-    #         ra = self.r(scalar_a)
-    #         result = self.power_r(x, y, ra, torch.tensor(0.5), torch.tensor(0.5))
-    #         if torch.isnan(result).any():
-    #             result = torch.where(torch.isnan(result), torch.tensor(float('inf'), device=result.device), result)
-    #             print(f"[TRACE] Rule 5 result has NaN: {torch.isnan(result).any()} ra={ra} scalar_a={scalar_a} x={x} y={y}")
-    #         return result
+        # 3/4 < a < 1 return (0.5x^r(a) + 0.5y^r(a))^(1/r(a))
+        elif 0.75 < scalar_a < 1:
+            ra = self.r(scalar_a)
+            result = self.power_r(x, y, ra, w0, w1)
+            if torch.isnan(result).any():
+                result = torch.where(torch.isnan(result), torch.tensor(float('inf'), device=result.device), result)
+                print(f"[TRACE] Rule 5 result has NaN: {torch.isnan(result).any()} ra={ra} scalar_a={scalar_a} x={x} y={y}")
+            return result
 
-    #     # 1/2 < a < 3/4 return (3-4a)(0.5x+0.5y) + (4a-2)(0.5x^R+0.5y^R)^1/R
-    #     elif 0.5 < scalar_a < 0.75:
-    #         R = self.r(0.75)
-    #         result = (3-4*scalar_a)*(0.5*x+0.5*y) + (4*a-2)*self.power_r(x, y, R, torch.tensor(0.5), torch.tensor(0.5))
-    #         if torch.isnan(result).any():
-    #             result = torch.where(torch.isnan(result), torch.tensor(float('inf'), device=result.device), result)
-    #             print(f"[TRACE] Rule 6 result has NaN: {torch.isnan(result).any()} R={R} scalar_a={scalar_a} x={x} y={y}")
-    #         return result
+        # 1/2 < a < 3/4 return (3-4a)(0.5x+0.5y) + (4a-2)(0.5x^R+0.5y^R)^1/R
+        elif 0.5 < scalar_a < 0.75:
+            R = self.r(0.75)
+            result = (3-4*scalar_a)*(w0*x+w1*y) + (4*a-2)*self.power_r(x, y, R, w0, w1)
+            if torch.isnan(result).any():
+                result = torch.where(torch.isnan(result), torch.tensor(float('inf'), device=result.device), result)
+                print(f"[TRACE] Rule 6 result has NaN: {torch.isnan(result).any()} R={R} scalar_a={scalar_a} x={x} y={y}")
+            return result
            
-    #     # a == 0.5 return 0.5x+0.5y
-    #     elif abs(scalar_a - 0.5) < epsilon:
-    #         result = 0.5*x + 0.5*y
-    #         if torch.isnan(result).any():
-    #             print(f"[TRACE] Rule 7 result has NaN: {torch.isnan(result).any()}")
-    #         return result
+        # a == 0.5 return 0.5x+0.5y
+        elif abs(scalar_a - 0.5) < epsilon:
+            result = w0*x + w1*y
+            if torch.isnan(result).any():
+                print(f"[TRACE] Rule 7 result has NaN: {torch.isnan(result).any()}")
+            return result
 
-    #     # -1 <= a < 0.5 return 1-F(1-x,1-y,1-a)
-    #     elif -1 <= scalar_a < 0.5:
-    #         result = 1 - self.F(1-x, 1-y, 1-scalar_a, w0, w1)
-    #         if torch.isnan(result).any():
-    #             print(f"[TRACE] Rule 8 result has NaN: {torch.isnan(result).any()}")
-    #         return result
+        # -1 <= a < 0.5 return 1-F(1-x,1-y,1-a)
+        elif -1 <= scalar_a < 0.5:
+            result = 1 - self.F(1-x, 1-y, 1-scalar_a, w0, w1)
+            if torch.isnan(result).any():
+                print(f"[TRACE] Rule 8 result has NaN: {torch.isnan(result).any()}")
+            return result
         
-    #     raise ValueError(f"Invalid value for a: {scalar_a}. Must be in [-1, 2].")
+        raise ValueError(f"Invalid value for a: {scalar_a}. Must be in [-1, 2].")
 
-    # def generalized_gcd(self, a, b, r, w0, w1):
-    #     return self.F(a, b, r, w0, w1)
+    def generalized_gcd(self, a, b, r, w0, w1):
+        return self.F(a, b, r, w0, w1)
     # def generalized_gcd(self, a, b, r, w0, w1):
     #     epsilon = 1e-6  # To prevent division by zero
     #     r = torch.sigmoid(r) * 10 - 5  # Map sigmoid to range ~[-5, 5] for stability
@@ -276,7 +276,7 @@ class binaryTreeLogicNet(nn.Module):
     #     geo_mean = torch.sqrt(a * b)
     #     return torch.where(is_near_zero, geo_mean, gcd)
 
-    def generalized_gcd(self, a, b, r, w0, w1):
+    def power_r(self, a, b, r, w0, w1):
         """
         Stable GCD aggregator using log-sum-exp trick.
         r is used to control smoothness (andness/orness) via alpha.
