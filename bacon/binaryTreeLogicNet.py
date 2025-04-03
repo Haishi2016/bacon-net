@@ -447,79 +447,55 @@ class binaryTreeLogicNet(nn.Module):
 
 
     def print_tree_structure(self, labels=None):
-        """Prints the recursive left-heavy binary tree structure with optional custom labels for leaves."""
+        """Print a left-associative logic tree showing weights and biases."""
         if labels is not None and len(labels) != self.num_leaves:
-            raise ValueError(f"Provided label count {len(labels)} does not match number of leaves {self.num_leaves}")
+            raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {self.num_leaves}")
 
-        leaf_names = [labels[i] if labels else f"Leaf {i+1}" for i in range(self.num_leaves)]
-        node_dict = {}
-        node_labels = {}
-        weight_map = {}  # Maps (parent, child) → weight
+        if labels:
+            if self.locked_perm is not None:
+                leaf_names = [labels[i] for i in self.locked_perm.tolist()]
+            else:
+                leaf_names = labels
+        else:
+            leaf_names = [f"feature{i+1}" for i in range(self.num_leaves)]
 
+        max_label_length = max(len(name) for name in leaf_names)
+        label_width = max_label_length + 2
+
+        def fmt_label(name):
+            return f"[{name}]".rjust(label_width + 2)
+
+        print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
+
+        previous_w = None
+        weights = [w.detach().cpu().numpy() for w in self.weights]
+        a = [b.item() for b in self.biases]
+        indent = 2
         for i in range(self.num_layers):
-            a_value = torch.sigmoid(self.biases[i]).item()
-            w = self.weights[i].detach().cpu().numpy()
-
             if i == 0:
-                left = leaf_names[0]
-                right = leaf_names[1]
+                print(fmt_label(leaf_names[0]) + f"─{weights[0][0]:.2f}".rjust(5) + "────┐")
+                new_leaf = leaf_names[1]
             else:
-                left = f"Node{i}"
-                right = leaf_names[i + 1]
-
-            parent = f"Node{i+1}"
-            node_dict[parent] = (left, right)
-            node_labels[parent] = f"{parent} (andness: {a_value:.3f})"
-            weight_map[(parent, left)] = w[0]
-            weight_map[(parent, right)] = w[1]
-
-        def format_tree(node, parent=None, depth=0):
-            indent = "  " * depth
-            weight_str = ""
-            if parent is not None and (parent, node) in weight_map:
-                weight_str = f" [weight: {weight_map[(parent, node)]:.3f}]"
-
-            label = node_labels.get(node, node)
-            if node in node_dict:
-                # Internal node
-                left, right = node_dict[node]
-                left_sub = format_tree(left, node, depth + 1)
-                right_sub = format_tree(right, node, depth + 1)
-                return f"{indent}{label}{weight_str}\n{left_sub}\n{right_sub}"
+                new_leaf = leaf_names[i + 1]
+            if i < self.num_layers - 1:
+                print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"[a={a[i]:.2f}]" + f"─{weights[i+1][0]:.2f}".rjust(5) + "────┐")
             else:
-                # Leaf node
-                return f"{indent}{node}{weight_str}"
+                print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"[a={a[i]:.2f}]──OUTPUT")
+            indent += 15
 
-        print("\n🌲 Binary Tree Structure:\n")
-        root = f"Node{self.num_layers}"
-        print(format_tree(root))
-
-
-    def hierarchy_pos(self, G, root=None, width=1.0, vert_gap=0.2, vert_loc=0, xcenter=0.5):
-        # Source: Joel's answer on StackOverflow
-        def _hierarchy_pos(G, root, width=1.0, vert_gap=0.2, vert_loc=0, xcenter=0.5, pos=None, parent=None):
-            if pos is None:
-                pos = {root: (xcenter, vert_loc)}
-            else:
-                pos[root] = (xcenter, vert_loc)
-            neighbors = list(G.neighbors(root))
-            if parent is not None:
-                neighbors = [n for n in neighbors if n != parent]
-            if len(neighbors) != 0:
-                dx = width / len(neighbors)
-                nextx = xcenter - width/2 - dx/2
-                for neighbor in neighbors:
-                    nextx += dx
-                    pos = _hierarchy_pos(G, neighbor, width=dx, vert_gap=vert_gap,
-                                        vert_loc=vert_loc - vert_gap, xcenter=nextx, pos=pos, parent=root)
-            return pos
-        return _hierarchy_pos(G, root, width, vert_gap, vert_loc, xcenter)
 
     def visualize_tree_structure(self, labels=None):
         if labels is not None and len(labels) != self.num_leaves:
             raise ValueError("Label count does not match number of leaves")
 
-        leaf_names = [labels[i] if labels else f"Leaf {i+1}" for i in range(self.num_leaves)]
+        if labels:
+            if self.locked_perm is not None:
+                leaf_names = [labels[i] for i in self.locked_perm.tolist()]
+            else:
+                leaf_names = labels
+        else:
+            leaf_names = [f"Leaf {i+1}" for i in range(self.num_leaves)]
+
         node_dict = {}
         node_labels = {}
         weight_map = {}
@@ -527,7 +503,7 @@ class binaryTreeLogicNet(nn.Module):
 
         # Build the tree structure and assign labels
         for i in range(self.num_layers):
-            a = torch.sigmoid(self.biases[i]).item()
+            a = self.biases[i].item()
             w = self.weights[i].detach().cpu().numpy()
 
             left = f"Node{i}" if i > 0 else leaf_names[0]
@@ -542,7 +518,7 @@ class binaryTreeLogicNet(nn.Module):
 
             # Keep track of all possible leaf nodes
             if left in leaf_names:
-                leaf_nodes.add(left)
+                leaf_nodes.add(left)    
             if right in leaf_names:
                 leaf_nodes.add(right)
 

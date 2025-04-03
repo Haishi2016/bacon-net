@@ -46,8 +46,10 @@ def generate_data(num_vars=5, repeat_factor=100):
         }
     )
 
-x, y,  expr_info = generate_data(10, repeat_factor=100)
+x, y,  expr_info = generate_data(3, repeat_factor=100)
 print(f"Expression: {expr_info['expression_text']}")
-bacon = baconNet(input_size=10)
+bacon = baconNet(input_size=3, freeze_loss_threshold=0.001)
 (best_model, best_accuracy) = bacon.find_best_model(x, y, x, y, acceptance_threshold=0.95, attempts=100)
 print(f"Best accuracy: {best_accuracy * 100:.2f}%")
+bacon.print_tree_structure(expr_info['var_names'])
+bacon.visualize_tree_structure(expr_info['var_names'])
