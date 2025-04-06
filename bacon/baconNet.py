@@ -84,3 +84,5 @@ class baconNet(nn.Module):
     def visualize_tree_structure(self, labels=None):
         self.assembler.visualize_tree_structure(labels)
         print(f"Permutation: {self.assembler.locked_perm}")
+    def prune_features(self, features):
+        return self.assembler.prune_features(features=features)    
