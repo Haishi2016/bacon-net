@@ -12,7 +12,12 @@ logging.basicConfig(level=logging.INFO,
                     format='%(message)s')
 
 breast_cancer = fetch_ucirepo(id=17)
-X = breast_cancer.data.features.iloc[:, 0:30]  # mean values only
+X_full = breast_cancer.data.features
+y = breast_cancer.data.targets
+
+# Select only the top 5 features discovered via BACON
+selected_features = ['radius2', 'radius3', 'texture3', 'concave_points1', 'smoothness3']
+X = X_full[selected_features]
 y = LabelEncoder().fit_transform(breast_cancer.data.targets.values.ravel())
 
 # Train/test split
@@ -28,29 +33,8 @@ X_train = torch.tensor(X_train_np, dtype=torch.float32)
 Y_train = torch.tensor(y_train_np.reshape(-1, 1), dtype=torch.float32)
 X_test = torch.tensor(X_test_np, dtype=torch.float32)
 Y_test = torch.tensor(y_test_np.reshape(-1, 1), dtype=torch.float32)
-bacon = baconNet(input_size=30, freeze_loss_threshold=0.080)
+bacon = baconNet(input_size=5, freeze_loss_threshold=0.080)
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.95)
 print(f"Best accuracy: {best_accuracy * 100:.2f}%")
 bacon.print_tree_structure(X.columns.tolist())
 bacon.visualize_tree_structure(X.columns.tolist())
-
-accuracies = []
-
-for i in range(1, 30):
-    func_eval = bacon.prune_features(i)
-    kept_indices = bacon.assembler.locked_perm[i:].tolist()
-    X_test_pruned = X_test[:, kept_indices]
-    with torch.no_grad():
-        pruned_output = func_eval(X_test_pruned)
-        pruned_accuracy = (pruned_output.round() == Y_test).float().mean().item()
-        accuracies.append(pruned_accuracy)
-        print(f"✅ Accuracy after pruning {i} feature(s): {pruned_accuracy * 100:.2f}%")
-
-plt.figure(figsize=(10, 5))
-plt.plot(range(1, len(accuracies) + 1), [a * 100 for a in accuracies], marker='o')
-plt.title("Accuracy vs. Number of Features Pruned")
-plt.xlabel("Number of Features Pruned from Left")
-plt.ylabel("Accuracy (%)")
-plt.grid(True)
-plt.tight_layout()
-plt.show()

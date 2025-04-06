@@ -137,6 +137,10 @@ class binaryTreeLogicNet(nn.Module):
     def forward(self, x):
         # 🔹 Compute input-to-leaf values
         leaf_values = self.input_to_leaf(x)
+
+        if torch.isnan(leaf_values).any():
+            raise ValueError("[DEBUG] NaNs detected in leaf_values!")
+
         node_outputs = list(leaf_values.T)  
         layer_outputs = []  
 
@@ -179,6 +183,11 @@ class binaryTreeLogicNet(nn.Module):
         x = torch.clamp(x, min=epsilon)
         y = torch.clamp(y, min=epsilon)
 
+        if not isinstance(a, torch.Tensor):
+            a = torch.tensor(a, dtype=torch.float32)
+
+        # a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
+        a = torch.nan_to_num(a, nan=0.5, posinf=2.0-epsilon, neginf=-1.0+epsilon)
         a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
 
         # if a == 2, return 1 of x==y==1, otherwise 0
@@ -189,7 +198,7 @@ class binaryTreeLogicNet(nn.Module):
             return result
 
         # if 1.25 < a < 2, return (xy)^(sqrt(3/(2-a))-1)
-        elif 1.25 < a < 2:
+        elif torch.logical_and(a > 1.25, a < 2):
             result = (x * y) ** torch.sqrt(3 / (2 - a) - 1)
             if torch.isnan(result).any():
                 print(f"[TRACE] Rule 1 result has NaN: {torch.isnan(result).any()}")
@@ -204,7 +213,7 @@ class binaryTreeLogicNet(nn.Module):
             return result
 
         # if 1 < a < 1.25 return 4((1.25-a)min(x,y)+(a-1)xy)
-        elif 1 < a < 1.25:
+        elif torch.logical_and(a > 1, a < 1.25): 
             result = 4 * ((1.25-a) * torch.min(x,y) + (a-1) * x * y)
             if torch.isnan(result).any():
                 print(f"[TRACE] Rule 3 result has NaN: {torch.isnan(result).any()}")
@@ -218,7 +227,7 @@ class binaryTreeLogicNet(nn.Module):
             return result
         
         # 3/4 < a < 1 return (0.5x^r(a) + 0.5y^r(a))^(1/r(a))
-        elif 0.75 < a < 1:
+        elif torch.logical_and(a > 0.75, a < 1):
             ra = self.r(a)
             result = self.power_r(x, y, ra, w0, w1)
             if torch.isnan(result).any():
@@ -227,7 +236,7 @@ class binaryTreeLogicNet(nn.Module):
             return result
 
         # 1/2 < a < 3/4 return (3-4a)(0.5x+0.5y) + (4a-2)(0.5x^R+0.5y^R)^1/R
-        elif 0.5 < a < 0.75:
+        elif torch.logical_and(a > 0.5, a < 0.75):
             R = self.r(0.75)
             result = (3-4*a)*(w0*x+w1*y) + (4*a-2)*self.power_r(x, y, R, w0, w1)
             if torch.isnan(result).any():
@@ -243,15 +252,19 @@ class binaryTreeLogicNet(nn.Module):
             return result
 
         # -1 <= a < 0.5 return 1-F(1-x,1-y,1-a)
-        elif -1 <= a < 0.5:
+        elif torch.logical_and(a >= -1, a < 0.5):
             result = 1 - self.F(1-x, 1-y, 1-a, w0, w1)
             if torch.isnan(result).any():
                 print(f"[TRACE] Rule 8 result has NaN: {torch.isnan(result).any()}")
             return result
         
-        raise ValueError(f"Invalid value for a: {a}. Must be in [-1, 2].")
+        # raise ValueError(f"Invalid value for a: {a}. Must be in [-1, 2].")
 
     def generalized_gcd(self, a, b, r, w0, w1):
+        if a is None or b is None:
+            raise ValueError(f"[ERROR] One of the inputs to generalized_gcd is None! a={a}, b={b}")
+        if torch.isnan(a).any() or torch.isnan(b).any():
+            raise ValueError(f"[ERROR] NaN input to generalized_gcd: a={a}, b={b}")
         return self.F(a, b, r, w0, w1)
     # def generalized_gcd(self, a, b, r, w0, w1):
     #     epsilon = 1e-6  # To prevent division by zero
@@ -327,6 +340,8 @@ class binaryTreeLogicNet(nn.Module):
             with torch.no_grad():
                 for w in self.weights:
                     w.data = torch.softmax(w.data, dim=0)
+                for b in self.biases:
+                    b.data = b.data.clamp(-1.0, 2.0)
                     
             loss_history.append(loss.item())
             if not self.is_frozen:
@@ -414,6 +429,7 @@ class binaryTreeLogicNet(nn.Module):
                 else:
                     noise = np.random.normal(loc=0.0, scale=noise_std, size=P_np.shape)
                     noisy_P = P_np + noise
+                noisy_P = np.nan_to_num(noisy_P, nan=0.0, posinf=1e6, neginf=-1e6)
                 row_ind, col_ind = linear_sum_assignment(-noisy_P)  # maximize confidence
                 perm = tuple(col_ind[row_ind.argsort()])  # sort by leaf index
                 if perm in perms:
@@ -447,7 +463,7 @@ class binaryTreeLogicNet(nn.Module):
 
     def print_tree_structure(self, labels=None):
         """Print a left-associative logic tree showing weights and biases."""
-        if labels is not None and len(labels) != self.num_leaves:
+        if labels is not None and len(labels) < self.num_leaves:
             raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {self.num_leaves}")
 
         if labels:
@@ -483,8 +499,46 @@ class binaryTreeLogicNet(nn.Module):
             indent += 15
 
 
+
+    def prune_features(self, features):
+        if not self.is_frozen:
+            raise RuntimeError("Model is not frozen. Can't prune features.")
+        if features >= self.num_leaves:
+            raise ValueError(f"Cannot prune more features than leaves. {features} > {self.num_leaves}")
+
+        pruned_weights = self.weights[features - 1:]  # start from the first remaining aggregator
+        pruned_biases = self.biases[features - 1:]
+
+        def pruned_forward(x):
+            node_outputs = list(x.T)
+            layer_outputs = []
+
+            for i in range(len(pruned_weights)):
+                w = pruned_weights[i]
+                a = pruned_biases[i]
+
+                w_soft = torch.softmax(w, dim=0)
+                if i == 0:
+                    # Special case: apply remaining aggregator to (0, x0)
+                    left = torch.zeros_like(node_outputs[0])
+                    right = node_outputs[0]
+                else:
+                    # Normal aggregator behavior
+                    left = node_outputs[-1]
+                    right = node_outputs[i]
+                a_scaled = torch.sigmoid(a) * 3 - 1
+                z = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+                node_outputs.append(z)
+                layer_outputs.append(z)
+            final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
+            return final
+
+        return pruned_forward
+
+     
+
     def visualize_tree_structure(self, labels=None):
-        if labels is not None and len(labels) != self.num_leaves:
+        if labels is not None and len(labels) < self.num_leaves:
             raise ValueError("Label count does not match number of leaves")
 
         if labels:
