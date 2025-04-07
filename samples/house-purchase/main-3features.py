@@ -2,47 +2,26 @@ import sys
 sys.path.append('../../')
 from sklearn.datasets import fetch_california_housing
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import MinMaxScaler
 import torch
 from bacon.baconNet import baconNet
 import logging
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
+
 from sklearn.datasets import fetch_openml
-from scipy.stats import pearsonr
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 df = pd.read_csv('../../../realtor-data.csv')
 
-df = df.sample(n=10000, random_state=12)
+df = df.sample(n=10000, random_state=42)
 
-features = ['price', 'bed', 'bath', 'house_size', 'zip_code', 'acre_lot']
+features = ['bed', 'bath', 'house_size']
 
 # df = df[df["city"].str.lower() == "aguada"]
 df = df[features].dropna()
-
-
-# df = df[['house_size', 'zip_code']].dropna()
-
-# # Ensure zip_code is numeric
-# df['zip_code'] = pd.to_numeric(df['zip_code'], errors='coerce')
-# df = df.dropna()
-
-# # Calculate Pearson correlation
-# corr, _ = pearsonr(df['zip_code'], df['house_size'])
-# print(f"📊 Pearson correlation between zip_code and house_size: {corr:.4f}")
-
-# # Scatter plot with regression line
-# plt.figure(figsize=(10, 5))
-# sns.regplot(x='zip_code', y='house_size', data=df, scatter_kws={'alpha': 0.3}, line_kws={'color': 'red'})
-# plt.title('Correlation Between Zip Code and House Size')
-# plt.xlabel('Zip Code (as numeric)')
-# plt.ylabel('House Size (sq ft)')
-# plt.tight_layout()
-# plt.show()
 
 def purchasing_condition(row):
     return (
@@ -60,7 +39,7 @@ y = df['Buy']
 X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Standardize the features
-scaler = RobustScaler()
+scaler = MinMaxScaler()
 X_train_np = scaler.fit_transform(X_train_np)
 X_test_np = scaler.transform(X_test_np)
 
@@ -71,8 +50,8 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32)
 Y_test = torch.tensor(y_test_np.values.reshape(-1, 1), dtype=torch.float32)
 
 # Initialize and train the BACON model
-bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.060)
-(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.95)
+bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.130)
+(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90)
 print(f"Best accuracy: {best_accuracy * 100:.2f}%")
 
 # Visualize the BACON model's tree structure
