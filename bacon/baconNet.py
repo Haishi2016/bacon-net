@@ -23,6 +23,12 @@ class baconNet(nn.Module):
                 # We'll raise the error now as there's only one binaryTreeLogicNet
             raise e
         return output
+    def inference(self, x):
+        self.eval()  # Set the model to evaluation mode
+        with torch.no_grad():
+            outputs = self.forward(x)
+            predictions = (outputs > 0.5).float()
+            return predictions
     def evaluate(self, x, y):
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():

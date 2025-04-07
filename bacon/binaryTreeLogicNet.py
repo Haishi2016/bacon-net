@@ -157,7 +157,11 @@ class binaryTreeLogicNet(nn.Module):
                 left = node_outputs[-1]  # previous node
                 right = node_outputs[i + 1]  # next input
             a_scaled = torch.sigmoid(bias) * 3 - 1
-            node_outputs.append(self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1]))
+            nres = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+            # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
+            if torch.isnan(nres).any():
+                nres = torch.where(torch.isnan(nres), a_scaled, nres)
+            node_outputs.append(nres)
             # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
             layer_outputs.append(node_outputs[-1])
 
