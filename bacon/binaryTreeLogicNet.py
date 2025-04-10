@@ -184,8 +184,12 @@ class binaryTreeLogicNet(nn.Module):
     
     def F(self, x,y,a, w0, w1):
         epsilon = 1e-6  # To prevent division by zero
-        x = torch.clamp(x, min=epsilon)
-        y = torch.clamp(y, min=epsilon)
+
+        x = torch.where(torch.isnan(x), torch.tensor(epsilon, device=x.device), x)
+        y = torch.where(torch.isnan(y), torch.tensor(epsilon, device=y.device), y)
+
+        x = torch.clamp(x, min=epsilon, max=1-epsilon)
+        y = torch.clamp(y, min=epsilon, max=1-epsilon)
 
         if not isinstance(a, torch.Tensor):
             a = torch.tensor(a, dtype=torch.float32)
