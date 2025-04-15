@@ -195,7 +195,7 @@ class binaryTreeLogicNet(nn.Module):
             a = torch.tensor(a, dtype=torch.float32)
 
         # a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
-        a = torch.nan_to_num(a, nan=0.5, posinf=2.0-epsilon, neginf=-1.0+epsilon)
+        a = torch.nan_to_num(a, nan=-1.0, posinf=2.0-epsilon, neginf=-1.0+epsilon)
         a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
 
         # if a == 2, return 1 of x==y==1, otherwise 0
@@ -450,7 +450,7 @@ class binaryTreeLogicNet(nn.Module):
                 temp_loss = criterion(temp_model(X), Y)
                 print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
 
-                if temp_loss > 0.2 and best_index is None:
+                if temp_loss > 0.3 and best_index is None:
                     print(f"   🚫 Perm {perm} group rejected due to high loss.")
                     return None, None, 1, -1
                 if temp_loss < best_loss:
