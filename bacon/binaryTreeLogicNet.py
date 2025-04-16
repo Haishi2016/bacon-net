@@ -40,6 +40,7 @@ class binaryTreeLogicNet(nn.Module):
                  noise_decrease=0.95,
                  min_noise=0.0,
                  max_noise=2.0,
+                 lock_loss_tolerance=0.04,
                  freeze_loss_threshold=0.07,
                  permutation_max=10000):
         super(binaryTreeLogicNet, self).__init__()
@@ -55,6 +56,7 @@ class binaryTreeLogicNet(nn.Module):
         self.noise_decrease = noise_decrease
         self.min_noise = min_noise
         self.max_noise = max_noise
+        self.lock_loss_tolerance = lock_loss_tolerance
         self.is_frozen = False
         self.freeze_loss_threshold = freeze_loss_threshold
         self.permutation_max = permutation_max
@@ -379,7 +381,7 @@ class binaryTreeLogicNet(nn.Module):
                     noise_std=0.1)                                    
                 if best_model is not None:
                     best_indexes.append(best_index)
-                if best_model is not None and best_loss < self.freeze_loss_threshold + 0.01:
+                if best_model is not None and best_loss < self.freeze_loss_threshold + self.lock_loss_tolerance:
                     print(f"✅ Freezing best permutation: {best_perm} with loss {best_loss:.4f}")
                     self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
                      # Freeze the current model in-place
