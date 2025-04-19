@@ -73,7 +73,8 @@ dos_attacks = [
 # Binary labels
 def is_dos(label):
     # return 1.0 if label in dos_attacks else 0.0
-    return 1.0 if label == 'neptune' else 0.0
+    # return 1.0 if label == 'neptune' else 0.0
+    return 0.0 if label == "normal" else 1.0
 
 train_df['target'] = train_df['label'].apply(is_dos)
 test_df['target'] = test_df['label'].apply(is_dos)
