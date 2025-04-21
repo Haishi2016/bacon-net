@@ -5,7 +5,7 @@ import logging
 import os
 
 class baconNet(nn.Module):
-    def __init__(self, input_size, freeze_loss_threshold=0.07, lock_loss_tolerance=0.01):
+    def __init__(self, input_size, freeze_loss_threshold=0.07, lock_loss_tolerance=0.01, tree_layout="left"):
         super(baconNet, self).__init__()
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
@@ -13,6 +13,7 @@ class baconNet(nn.Module):
                                             weight_value=1.0,                                             
                                             weight_range=(0.5, 2.0), 
                                             lock_loss_tolerance=lock_loss_tolerance,
+                                            tree_layout=tree_layout,
                                             weight_choices=None)
     def forward(self, x):
         output = self.assembler(x)

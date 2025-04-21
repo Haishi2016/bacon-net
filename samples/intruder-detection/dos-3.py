@@ -1,13 +1,9 @@
-import copy
 import pandas as pd
 from sklearn.preprocessing import RobustScaler
 import sys
-
 sys.path.append('../../')
 import torch
 from bacon.baconNet import baconNet
-from bacon.frozonInputToLeaf import frozenInputToLeaf
-
 import logging
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
@@ -69,6 +65,11 @@ test_df = pd.read_csv('../../../KDDTest+.txt', header=None)
 train_df.columns = feature_names
 test_df.columns = feature_names
 
+print(train_df['dst_bytes'].describe())
+filtered = train_df[train_df['dst_bytes']!=0].copy()
+print(filtered.describe())
+
+
 # Define attack types
 dos_attacks = [
     'back', 'land', 'neptune', 'pod', 'smurf', 'teardrop',
@@ -78,9 +79,9 @@ dos_attacks = [
 # Binary labels
 def is_dos(label):
     # return 1.0 if label in dos_attacks else 0.0
-    return 1.0 if label == 'neptune' else 0.0
-    #return 0.0 if label == "normal" else 1.0
-
+    # return 1.0 if label == 'neptune' else 0.0
+    return 0.0 if label == 'normal' else 1.0
+    
 train_df['target'] = train_df['label'].apply(is_dos)
 test_df['target'] = test_df['label'].apply(is_dos)
 
@@ -132,7 +133,6 @@ print(f"✅ Best accuracy: {best_accuracy * 100:.2f}%")
 
 filtered_features = [f for f in feature_names if f not in drop_cols]
 
-
 # Visualize the BACON model's tree structure
 bacon.print_tree_structure(filtered_features)
 bacon.visualize_tree_structure(filtered_features)
@@ -157,44 +157,3 @@ plt.ylabel("Accuracy (%)")
 plt.grid(True)
 plt.tight_layout()
 plt.show()
-
-disjunction_threshold = -1  # Tune this to control aggressiveness
-accuracies = []
-
-# Try pruning based on disjunction magnitude
-func_eval = bacon.assembler.prune_by_disjunction(disjunction_threshold)
-
-with torch.no_grad():
-    pruned_output = func_eval(X_test_tensor)  # no need to change inputs
-    pruned_accuracy = (pruned_output.round() == Y_test_tensor).float().mean().item()
-    accuracies.append(pruned_accuracy)
-    print(f"✅ Accuracy after disjunction pruning (a > {disjunction_threshold}): {pruned_accuracy * 100:.2f}%")
-
-n = 27
-
-func_eval_input = bacon.prune_features(n)
-kept_indices = bacon.assembler.locked_perm[n:].tolist()
-X_test_pruned = X_test_tensor[:, kept_indices]
-
-with torch.no_grad():
-    pruned_output = func_eval_input(X_test_pruned)
-    pruned_accuracy = (pruned_output.round() == Y_test_tensor).float().mean().item()
-    print(f"✅ Accuracy after pruning {n} feature(s): {pruned_accuracy * 100:.2f}%")
-
-# # Create a shallow copy of the frozen model
-# bacon_small = copy.deepcopy(bacon)
-# bacon_small.assembler.num_leaves = len(kept_indices)
-# bacon_small.assembler.weights = bacon.assembler.weights[n:]
-# bacon_small.assembler.biases = bacon.assembler.biases[n:]
-# bacon_small.assembler.fc_out = copy.deepcopy(bacon.assembler.fc_out)
-# bacon_small.assembler.locked_perm = bacon.assembler.locked_perm[n:]
-# bacon_small.assembler.input_to_leaf = frozenInputToLeaf(torch.arange(len(kept_indices)), len(kept_indices))
-# bacon_small.assembler.is_frozen = True
-
-# func_eval_combined = bacon_small.assembler.prune_by_disjunction()
-
-# with torch.no_grad():
-#     pruned_output = func_eval_combined(X_test_pruned)
-#     pruned_accuracy = (pruned_output.round() == Y_test_tensor).float().mean().item()
-#     print(f"🎯 Combined pruning (inputs + disjunctions) accuracy: {pruned_accuracy:.2%}")
-
