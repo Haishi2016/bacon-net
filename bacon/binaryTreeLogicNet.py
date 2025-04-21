@@ -42,16 +42,19 @@ class binaryTreeLogicNet(nn.Module):
                  max_noise=2.0,
                  lock_loss_tolerance=0.04,
                  freeze_loss_threshold=0.07,
-                 permutation_max=10000):
+                 permutation_max=10000,
+                 tree_layout="left",
+                 device=None):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
         self.num_leaves = input_size  # 🔹 Each input gets its own leaf initially
         self.weight_mode = weight_mode
         self.weight_value = weight_value
         self.weight_range = weight_range
-        self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32) if weight_choices else None
+        self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32, device=self.device) if weight_choices else None
         # 🔹 Fully Connected Input-to-Leaf Mapping
-        self.input_to_leaf = inputToLeafSinkhorn(input_size, self.num_leaves, use_gumbel=True)
+        self.input_to_leaf = inputToLeafSinkhorn(input_size, self.num_leaves, use_gumbel=True).to(self.device)  
         self.noise_increase = noise_increase
         self.noise_decrease = noise_decrease
         self.min_noise = min_noise
@@ -61,8 +64,8 @@ class binaryTreeLogicNet(nn.Module):
         self.freeze_loss_threshold = freeze_loss_threshold
         self.permutation_max = permutation_max
         self.locked_perm = None  # For frozen models
-        
         self.reset_optimizer()  # Initialize optimizer
+        self.tree_layout = tree_layout  # Layout for visualization
         # Weights and Biases
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary tree
         self.reinitialize(weight_mode, weight_value, weight_range, weight_choices)
@@ -106,8 +109,9 @@ class binaryTreeLogicNet(nn.Module):
             self.biases.append(nn.Parameter(torch.rand(1) * 3 - 1))
 
         # Reset output layer
-        self.fc_out = nn.Linear(1, 1)
+        self.fc_out = nn.Linear(1, 1).to(self.device)
         self.apply(self.initialize_weights)
+        self.to(self.device)  # Move model to the specified device
 
     def initialize_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -135,6 +139,26 @@ class binaryTreeLogicNet(nn.Module):
             )
         # Now load weights
         self.load_state_dict(state_dict)
+        self.to(self.device)
+
+    def build_balanced_tree(self, node_outputs, weights, biases):
+        def combine(start, end, depth=0):
+            if start == end:
+                return node_outputs[start]
+            mid = (start + end) // 2
+            left = combine(start, mid, depth + 1)
+            right = combine(mid + 1, end, depth + 1)
+
+            idx = combine.node_index
+            w_soft = torch.softmax(weights[idx], dim=0)
+            a_scaled = torch.sigmoid(biases[idx]) * 3 - 1
+            out = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+
+            combine.node_index += 1
+            return out
+
+        combine.node_index = 0
+        return combine(0, len(node_outputs) - 1)
 
     def forward(self, x):
         # 🔹 Compute input-to-leaf values
@@ -144,30 +168,34 @@ class binaryTreeLogicNet(nn.Module):
             raise ValueError("[DEBUG] NaNs detected in leaf_values!")
 
         node_outputs = list(leaf_values.T)  
-        layer_outputs = []  
+        if self.tree_layout == "balanced":
+            final = self.build_balanced_tree(node_outputs, self.weights, self.biases)
+        else:
+            layer_outputs = []  
 
-        for i in range(self.num_layers):
-            w = self.weights[i]
-            bias = self.biases[i]
+            for i in range(self.num_layers):
+                w = self.weights[i]
+                bias = self.biases[i]
 
-            w_soft = torch.softmax(w, dim=0)
+                w_soft = torch.softmax(w, dim=0)
 
-            if i == 0:
-                left = node_outputs[0]
-                right = node_outputs[1]
-            else:
-                left = node_outputs[-1]  # previous node
-                right = node_outputs[i + 1]  # next input
-            a_scaled = torch.sigmoid(bias) * 3 - 1
-            nres = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
-            # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
-            if torch.isnan(nres).any():
-                nres = torch.where(torch.isnan(nres), a_scaled, nres)
-            node_outputs.append(nres)
-            # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
-            layer_outputs.append(node_outputs[-1])
+                if i == 0:
+                    left = node_outputs[0]
+                    right = node_outputs[1]
+                else:
+                    left = node_outputs[-1]  # previous node
+                    right = node_outputs[i + 1]  # next input
+                a_scaled = torch.sigmoid(bias) * 3 - 1
+                nres = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+                # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
+                if torch.isnan(nres).any():
+                    nres = torch.where(torch.isnan(nres), a_scaled, nres)
+                node_outputs.append(nres)
+                # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
+                layer_outputs.append(node_outputs[-1])
+                final = node_outputs[-1]
 
-        final_output = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
+        final_output = torch.sigmoid(self.fc_out(final.unsqueeze(1)))
         return final_output
     
     def r(self, a):
@@ -545,7 +573,50 @@ class binaryTreeLogicNet(nn.Module):
 
         return pruned_forward
 
-     
+    def prune_by_disjunction(self, threshold=-1.0):
+        if not self.is_frozen:
+            raise RuntimeError("Model must be frozen before pruning.")
+
+        kept_weights = []
+        kept_biases = []
+        removed_indexes = []
+
+        for i, b in enumerate(self.biases):
+            a_scaled = torch.sigmoid(b).item() * 3 - 1
+            if a_scaled > threshold:
+                kept_weights.append(self.weights[i])
+                kept_biases.append(b)
+            else:
+                removed_indexes.append(i)
+
+        print(f"🔍 Pruned {len(removed_indexes)} disjunctive nodes (a > {threshold})")
+
+        def pruned_forward(x):
+            node_outputs = list(x.T)
+            layer_outputs = []
+
+            for i in range(len(kept_weights)):
+                w = kept_weights[i]
+                a = kept_biases[i]
+                w_soft = torch.softmax(w, dim=0)
+
+                if i == 0:
+                    left = torch.zeros_like(node_outputs[0])
+                    right = node_outputs[0]
+                else:
+                    left = node_outputs[-1]
+                    right = node_outputs[i]
+
+                a_scaled = torch.sigmoid(a) * 3 - 1
+                z = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+                node_outputs.append(z)
+                layer_outputs.append(z)
+
+            final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
+            return final
+
+        return pruned_forward
+
 
     def visualize_tree_structure(self, labels=None):
         if labels is not None and len(labels) < self.num_leaves:

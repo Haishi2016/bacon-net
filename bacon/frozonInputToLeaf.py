@@ -9,4 +9,4 @@ class frozenInputToLeaf(nn.Module):
             self.P_hard[leaf_idx, input_idx] = 1.0
 
     def forward(self, x):
-        return torch.matmul(x, self.P_hard.t())  # Ensure correct device
+        return torch.matmul(x, self.P_hard.t().to(x.device))  # Ensure correct device
