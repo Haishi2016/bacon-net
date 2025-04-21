@@ -4,30 +4,11 @@ from bacon.inputToLeafSinkhorn import inputToLeafSinkhorn
 from bacon.frozonInputToLeaf import frozenInputToLeaf
 import torch.optim as optim
 import numpy as np
-import itertools
 import copy
 import logging 
-import matplotlib.pyplot as plt
-import networkx as nx
+
 import torch
 from scipy.optimize import linear_sum_assignment
-
-def left_associative_layout(G, root):
-    pos = {}
-    def dfs(node, depth=0, y=0):
-        children = list(G.successors(node))
-        if not children:
-            pos[node] = (y, -depth)  # Leaf node: x by y order
-            return y + 1
-        else:
-            y = dfs(children[0], depth + 1, y)
-            y = dfs(children[1], depth + 1, y)
-            pos[node] = ((pos[children[0]][0] + pos[children[1]][0]) / 2, -depth)
-            return y
-    dfs(root)
-    return pos
-
-
 
 class binaryTreeLogicNet(nn.Module):
     def __init__(self, 
@@ -426,7 +407,7 @@ class binaryTreeLogicNet(nn.Module):
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
                     self.is_frozen = False
-                    self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True)
+                    self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True).to(self.device)
                     self.reset_optimizer() 
                     
             if epoch % 200 == 0:
@@ -497,47 +478,7 @@ class binaryTreeLogicNet(nn.Module):
 
             print(f"✅ Best permutation selected: {best_perm} (Loss: {best_loss:.4f})")
             return best_model, best_perm, best_loss, best_index
-
-
-    def print_tree_structure(self, labels=None):
-        """Print a left-associative logic tree showing weights and biases."""
-        if labels is not None and len(labels) < self.num_leaves:
-            raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {self.num_leaves}")
-
-        if labels:
-            if self.locked_perm is not None:
-                leaf_names = [labels[i] for i in self.locked_perm.tolist()]
-            else:
-                leaf_names = labels
-        else:
-            leaf_names = [f"feature{i+1}" for i in range(self.num_leaves)]
-
-        max_label_length = max(len(name) for name in leaf_names)
-        label_width = max_label_length + 2
-
-        def fmt_label(name):
-            return f"[{name}]".rjust(label_width + 2)
-
-        print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
-
-        previous_w = None
-        weights = [w.detach().cpu().numpy() for w in self.weights]
-        a = [b.item() for b in self.biases]
-        indent = 2
-        for i in range(self.num_layers):
-            if i == 0:
-                print(fmt_label(leaf_names[0]) + f"─{weights[0][0]:.2f}".rjust(5) + "────┐")
-                new_leaf = leaf_names[1]
-            else:
-                new_leaf = leaf_names[i + 1]
-            if i < self.num_layers - 1:
-                print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"[a={a[i]:.2f}]" + f"─{weights[i+1][0]:.2f}".rjust(5) + "────┐")
-            else:
-                print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"[a={a[i]:.2f}]──OUTPUT")
-            indent += 15
-
-
-
+        
     def prune_features(self, features):
         if not self.is_frozen:
             raise RuntimeError("Model is not frozen. Can't prune features.")
@@ -616,75 +557,3 @@ class binaryTreeLogicNet(nn.Module):
             return final
 
         return pruned_forward
-
-
-    def visualize_tree_structure(self, labels=None):
-        if labels is not None and len(labels) < self.num_leaves:
-            raise ValueError("Label count does not match number of leaves")
-
-        if labels:
-            if self.locked_perm is not None:
-                leaf_names = [labels[i] for i in self.locked_perm.tolist()]
-            else:
-                leaf_names = labels
-        else:
-            leaf_names = [f"Leaf {i+1}" for i in range(self.num_leaves)]
-
-        node_dict = {}
-        node_labels = {}
-        weight_map = {}
-        leaf_nodes = set()
-
-        # Build the tree structure and assign labels
-        for i in range(self.num_layers):
-            a = self.biases[i].item()
-            w = self.weights[i].detach().cpu().numpy()
-
-            left = f"Node{i}" if i > 0 else leaf_names[0]
-            right = leaf_names[i + 1]
-            parent = f"Node{i+1}"
-
-            node_dict[parent] = (left, right)
-            node_labels[parent] = f"{a:.2f}"
-
-            weight_map[(parent, left)] = w[0]
-            weight_map[(parent, right)] = w[1]
-
-            # Keep track of all possible leaf nodes
-            if left in leaf_names:
-                leaf_nodes.add(left)    
-            if right in leaf_names:
-                leaf_nodes.add(right)
-
-        # Add labels for leaf nodes
-        for leaf in leaf_nodes:
-            if leaf not in node_labels:
-                node_labels[leaf] = leaf
-
-        # Build the graph
-        G = nx.DiGraph()
-        def add_edges(node):
-            if node in node_dict:
-                l, r = node_dict[node]
-                G.add_edge(node, l, weight=weight_map.get((node, l), 1.0))
-                G.add_edge(node, r, weight=weight_map.get((node, r), 1.0))
-                add_edges(l)
-                add_edges(r)
-            else:
-                G.add_node(node)
-
-        root = f"Node{self.num_layers}"
-        add_edges(root)
-
-        # Use the left-associative layout
-        pos = left_associative_layout(G, root)
-        edge_labels = {e: f"{w:.2f}" for e, w in nx.get_edge_attributes(G, "weight").items()}
-
-        # Draw
-        plt.figure(figsize=(14, 8))
-        nx.draw(G, pos, with_labels=True, labels=node_labels, node_color='lightblue', node_size=2000, font_size=9)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red')
-        plt.title("BACON Tree Structure (Left-Associative)")
-        plt.axis("off")
-        plt.tight_layout()
-        plt.show()
