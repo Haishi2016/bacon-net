@@ -1,3 +1,0 @@
-recursive-include images *.png
-recursive-include samples *.ipynb
-recursive-include src *.py

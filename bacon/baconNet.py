@@ -47,7 +47,7 @@ class baconNet(nn.Module):
         path = os.path.join(directory, f"assembler.pth")
         self.assembler.load_model(path)
 
-    def find_best_model(self, x, y, x_test, y_test, attempts = 100, acceptance_threshold = 0.95, save_path = "."):
+    def find_best_model(self, x, y, x_test, y_test, attempts = 100, acceptance_threshold = 0.95, save_path = ".", max_epochs = 12000, save_model = True):
         best_accuracy = 0.0
         best_model = None        
         assembler_path = os.path.join(save_path, "assembler.pth")
@@ -69,7 +69,7 @@ class baconNet(nn.Module):
             torch.manual_seed(torch.initial_seed() + attempt)
 
             try:
-                self.train_model(x, y, epochs=12000)
+                self.train_model(x, y, epochs=max_epochs)
                 if self.assembler.is_frozen:                   
                     accuracy = self.evaluate(x_test, y_test)
                     if accuracy > best_accuracy:
@@ -82,7 +82,9 @@ class baconNet(nn.Module):
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
         self.assembler.load_state_dict(best_model)
-        self.save_model(".")
+        if save_model:
+            logging.info(f"✅ Saving the best model with accuracy {best_accuracy:.4f} to {save_path}")
+            self.save_model(".")
         return best_model, best_accuracy
     
     def print_tree_structure(self, labels=None):
