@@ -120,7 +120,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
         else:
             new_leaf = leaf_names[i + 1]
         if classic_boolean:
-            if a[i] >= 0.5:
+            if a[i] >= 0.25:
                 operator = "[ AND ]"
             else:
                 operator = "[ O R ]"
