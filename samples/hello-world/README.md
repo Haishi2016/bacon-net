@@ -56,6 +56,6 @@ The following are some settings that worked in earlier tests:
 
 | input_size | max_epoch | freeze_loss_threshold |
 |--------|--------|--------|
-| 3 | 2000 | 0.001 |
-| 5 | 8000 | 0.001 |
-| 7 | 10000 | 0.003 |
+| 3 | 2000 | 0.01 |
+| 5 | 2000 | 0.03 |
+| 7 | 2000 | 0.08 |
