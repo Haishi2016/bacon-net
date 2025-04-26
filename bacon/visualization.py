@@ -89,6 +89,8 @@ def visualize_tree_structure(model, labels=None):
     plt.show()
 
 def print_tree_structure(model, labels=None, classic_boolean=False):
+    # print(f" FC_OUT Weight: {model.fc_out.weight.item():.2f}")
+    # print(f" FC_OUT Bias: {model.fc_out.bias.item():.2f}")
     """Print a left-associative logic tree showing weights and biases."""
     if labels is not None and len(labels) < model.num_leaves:
         raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {model.num_leaves}")
@@ -120,7 +122,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
         else:
             new_leaf = leaf_names[i + 1]
         if classic_boolean:
-            if a[i] >= 0.25:
+            if a[i] >= 0.5:
                 operator = "[ AND ]"
             else:
                 operator = "[ O R ]"

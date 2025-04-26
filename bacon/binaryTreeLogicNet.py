@@ -89,8 +89,17 @@ class binaryTreeLogicNet(nn.Module):
 
             self.biases.append(nn.Parameter(torch.rand(1) * 3 - 1))
 
-        # Reset output layer
-        self.fc_out = nn.Linear(1, 1).to(self.device)
+        # # Reset output layer
+        # self.fc_out = nn.Linear(1, 1, bias=False).to(self.device)
+        # with torch.no_grad():
+        #     self.fc_out.weight.fill_(1.0)
+        #     self.fc_out.bias.fill_(0.0)
+
+        # # Freeze the layer
+        # # for param in self.fc_out.parameters():
+        # #    param.requires_grad = False
+        # self.fc_out.bias.requires_grad = False
+        # self.fc_out.weight.requires_grad = True
         self.apply(self.initialize_weights)
         self.to(self.device)  # Move model to the specified device
 
@@ -176,8 +185,14 @@ class binaryTreeLogicNet(nn.Module):
                 layer_outputs.append(node_outputs[-1])
                 final = node_outputs[-1]
 
-        final_output = torch.sigmoid(self.fc_out(final.unsqueeze(1)))
-        return final_output
+        # final_output = torch.sigmoid(self.fc_out(final.unsqueeze(1)))
+        # return final_output
+        return final.unsqueeze(1)  # Add batch dimension
+        #  probs = torch.sigmoid(logits)
+        # return (probs > 0.5).float()
+        # return final.unsqueeze(1)  # Remove the extra dimension
+        # return torch.sigmoid(final.unsqueeze(1))  # Remove the extra dimension
+        # return torch.relu(final.unsqueeze(1))  # Remove the extra dimensi
     
     def r(self, a):
         if not torch.is_tensor(a):
@@ -351,7 +366,7 @@ class binaryTreeLogicNet(nn.Module):
             outputs = self(x)
             if torch.isnan(outputs).any() or (outputs < 0).any() or (outputs > 1).any():
                 raise RuntimeError("Instability detected. Can't be trained further.")
-            loss = criterion(outputs, y)
+            loss = criterion(outputs, y) * 1000
             loss.backward()
             self.optimizer.step()
 
@@ -403,6 +418,18 @@ class binaryTreeLogicNet(nn.Module):
                     patience_counter = 0
                     epoch = 0
                     best_frozen_loss = float('inf')
+
+                    # self.fc_out = nn.Linear(1, 1).to(self.device)
+                    # with torch.no_grad():
+                    #     self.fc_out.weight.fill_(1.0)
+                    #     self.fc_out.bias.fill_(0.0)
+
+                    # # Freeze the layer
+                    # # for param in self.fc_out.parameters():
+                    # #    param.requires_grad = False
+                    # self.fc_out.bias.requires_grad = False
+                    # self.fc_out.weight.requires_grad = False
+                    
                     continue  # ✅ Continue training the frozen model
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
@@ -461,7 +488,7 @@ class binaryTreeLogicNet(nn.Module):
                 temp_loss = criterion(temp_model(X), Y)
                 print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
 
-                if temp_loss > 0.3 and best_index is None:
+                if temp_loss > 0.9 and best_index is None:
                     print(f"   🚫 Perm {perm} group rejected due to high loss.")
                     return None, None, 1, -1
                 if temp_loss < best_loss:
@@ -509,8 +536,9 @@ class binaryTreeLogicNet(nn.Module):
                 z = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
                 node_outputs.append(z)
                 layer_outputs.append(z)
-            final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
-            return final
+            # final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
+            # return final
+            return layer_outputs[-1].unsqueeze(1)  # Remove the extra dimension
 
         return pruned_forward
 
@@ -555,5 +583,6 @@ class binaryTreeLogicNet(nn.Module):
 
             final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
             return final
+            #  return layer_outputs[-1].unsqueeze(1)
 
         return pruned_forward
