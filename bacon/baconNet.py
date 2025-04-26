@@ -29,12 +29,16 @@ class baconNet(nn.Module):
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
+            # probs = torch.sigmoid(outputs)       # Convert to probabilities
+            # predictions = (probs > 0.5).float() 
             predictions = (outputs > 0.5).float()
             return predictions
     def evaluate(self, x, y):
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
+            # probs = torch.sigmoid(outputs)       # Convert to probabilities
+            # predictions = (probs > 0.5).float() 
             predictions = (outputs > 0.5).float()  # Binarize the output to match the target labels (0 or 1)
             accuracy = (predictions == y).float().mean()
             return accuracy.item()
@@ -72,6 +76,7 @@ class baconNet(nn.Module):
                 self.train_model(x, y, epochs=max_epochs)
                 if self.assembler.is_frozen:                   
                     accuracy = self.evaluate(x_test, y_test)
+                    logging.info(f"✅ Attempt {attempt + 1} accuracy: {accuracy:.4f}")
                     if accuracy > best_accuracy:
                         best_accuracy = accuracy
                         best_model = self.assembler.state_dict()
