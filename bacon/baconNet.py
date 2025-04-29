@@ -25,21 +25,26 @@ class baconNet(nn.Module):
                 # We'll raise the error now as there's only one binaryTreeLogicNet
             raise e
         return output
-    def inference(self, x):
+    def inference(self, x, threshold=0.5):
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
             # probs = torch.sigmoid(outputs)       # Convert to probabilities
             # predictions = (probs > 0.5).float() 
-            predictions = (outputs > 0.5).float()
+            predictions = (outputs > threshold).float()
             return predictions
-    def evaluate(self, x, y):
+    def inference_raw(self, x):
+        self.eval()  # Set the model to evaluation mode
+        with torch.no_grad():
+            outputs = self.forward(x)
+            return outputs
+    def evaluate(self, x, y, threshold=0.5):
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
             # probs = torch.sigmoid(outputs)       # Convert to probabilities
             # predictions = (probs > 0.5).float() 
-            predictions = (outputs > 0.5).float()  # Binarize the output to match the target labels (0 or 1)
+            predictions = (outputs > threshold).float()  # Binarize the output to match the target labels (0 or 1)
             accuracy = (predictions == y).float().mean()
             return accuracy.item()
     def save_model(self, directory):
