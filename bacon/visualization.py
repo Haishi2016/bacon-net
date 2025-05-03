@@ -312,7 +312,7 @@ def plot_feature_sensitivity(model, X_tensor, feature_name, feature_names):
     plt.tight_layout()
     plt.show()
 
-def plot_multi_feature_or_sensitivity(model, X_tensor, feature_names_or, all_feature_names):
+def plot_multi_feature_sensitivity(model, X_tensor, feature_names_or, all_feature_names, is_or=True):
     """
     Plots model output sorted by the logical OR across multiple input features.
 
@@ -333,7 +333,10 @@ def plot_multi_feature_or_sensitivity(model, X_tensor, feature_names_or, all_fea
     selected_features = X_tensor[:, indices].cpu().numpy()
 
     # Compute OR across columns (row-wise)
-    or_mask = np.any(selected_features > 0, axis=1).astype(int)  # shape [N]
+    if is_or:
+        or_mask = np.any(selected_features > 0, axis=1).astype(int)  # shape [N]
+    else:
+        or_mask = np.all(selected_features > 0, axis=1).astype(int)
 
     # Use OR mask plus row sum as sort key for tie-breaking
     feature_sum = selected_features.sum(axis=1)
@@ -360,3 +363,75 @@ def plot_multi_feature_or_sensitivity(model, X_tensor, feature_names_or, all_fea
     plt.tight_layout()
     plt.show()
 
+def plot_multi_feature_as_1(model, X_tensor, feature_names_or, all_feature_names):
+    """
+    Plots model output sorted by the logical OR across multiple input features.
+
+    Args:
+        model: Trained model.
+        X_tensor (torch.Tensor): Input features [N, D].
+        feature_names_or (list of str): Feature names to compute OR across.
+        all_feature_names (list of str): All feature column names for mapping to tensor indices.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    assert all(fn in all_feature_names for fn in feature_names_or), \
+        "Some OR feature names not found in all_feature_names."
+
+    # Get indices
+    indices = [all_feature_names.index(fn) for fn in feature_names_or]
+    selected_features = X_tensor[:, indices].cpu().numpy()
+
+    # Compute OR across columns (row-wise)
+    mask_1 = np.all(selected_features == 1, axis=1).astype(int)  # shape [N]
+
+    # Use OR mask plus row sum as sort key for tie-breaking
+    feature_sum = selected_features.sum(axis=1)
+    sort_key = mask_1 + feature_sum
+
+    # Get predictions
+    model.eval()
+    with torch.no_grad():
+        outputs = model.inference_raw(X_tensor).cpu().numpy().flatten()
+
+    # Sort
+    sorted_idx = np.argsort(sort_key)
+    sorted_or_score = sort_key[sorted_idx]
+    sorted_outputs = outputs[sorted_idx]
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    feature_label = " ∨ ".join(feature_names_or)
+    plt.plot(sorted_or_score, sorted_outputs, marker='o', linestyle='-')
+    plt.xlabel(f"OR({feature_label})")
+    plt.ylabel("Model Output (Score)")
+    plt.title(f"Model Response vs. OR({feature_label})")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_feature_correlation(X_tensor, feature_name1, feature_name2, feature_names):
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # Check feature names
+    assert feature_name1 in feature_names, f"Feature '{feature_name1}' not found."
+    assert feature_name2 in feature_names, f"Feature '{feature_name2}' not found."
+
+    idx1 = feature_names.index(feature_name1)
+    idx2 = feature_names.index(feature_name2)
+
+    feature1 = X_tensor[:, idx1].cpu().numpy()
+    feature2 = X_tensor[:, idx2].cpu().numpy()
+
+    # Plot
+    plt.figure(figsize=(7, 5))
+    plt.scatter(feature1, feature2, alpha=0.6, edgecolors='k')
+    plt.xlabel(feature_name1)
+    plt.ylabel(feature_name2)
+    plt.title(f"Correlation between {feature_name1} and {feature_name2}")
+    plt.grid(True, linestyle='--', linewidth=0.5)
+    plt.tight_layout()
+    plt.show()
