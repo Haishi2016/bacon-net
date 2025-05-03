@@ -33,6 +33,10 @@ from bacon.utils import generate_classic_boolean_data
 
   Discover classic Boolean expression from synthetic data. 
 
+* [**Iris flower classification**](./samples/iris-flowers/README.md)
+
+  Classify Iris flower types by training one-vs-rest models to distinguish each species—Setosa, Versicolor, and Virginica—from the others based on measured petal and sepal features.
+
 ## Resources
 
 * [BACON Documentation](./docs/build/index.html)
