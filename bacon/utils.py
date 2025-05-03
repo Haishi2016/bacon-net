@@ -3,22 +3,22 @@ import random
 import torch
 from sklearn.utils import resample
 import pandas as pd
-from sklearn.preprocessing import RobustScaler
 import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
+import logging
 
 def generate_classic_boolean_data(num_vars=5, repeat_factor=100, device=None):
-    print("🧠 Generating data...")
+    logging.info("🧠 Generating data...")
     assert num_vars >= 2, "Need at least 2 variables for expression."
     data = []
     labels = []
     base_cases = list(itertools.product([0, 1], repeat=num_vars))
 
-    # Step 1: generate stable ops per variable link
+    # generate stable ops per variable link
     ops = [random.choice(["and", "or"]) for _ in range(num_vars - 1)]
 
-    # Step 2: generate variable names and build expression strings
+    # generate variable names and build expression strings
     var_names = [chr(ord('A') + i) for i in range(num_vars)]
     symbolic_expr = var_names[0]
     eval_expr = "x[0]"
@@ -27,7 +27,7 @@ def generate_classic_boolean_data(num_vars=5, repeat_factor=100, device=None):
         symbolic_expr = f"({symbolic_expr} {op} {var_names[i]})"
         eval_expr = f"({eval_expr} {op} x[{i}])"
 
-    # Step 3: evaluate the expression across the truth table
+    # evaluate the expression across the truth table
     for _ in range(repeat_factor):
         for x in base_cases:
             y = int(eval(eval_expr))

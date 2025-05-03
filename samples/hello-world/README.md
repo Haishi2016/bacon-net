@@ -33,7 +33,7 @@ The following is the output of a sample run that discovers the ```((A or B) and 
    Epoch 1400 - Loss: 0.0000
    Epoch 1600 - Loss: 0.0000
    Epoch 1800 - Loss: 0.0000
-Indexes of best models: [0]
+🧾 Indexes of best models: [0]
 🏆 Best accuracy: 100.00%
 
 🧠 Logical Aggregation Tree (Left-Associative):

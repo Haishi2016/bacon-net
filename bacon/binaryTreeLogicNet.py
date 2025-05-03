@@ -19,6 +19,7 @@ class binaryTreeLogicNet(nn.Module):
                  weight_choices=None,
                  noise_increase=1.05,
                  noise_decrease=0.95,
+                 loss_amplifier=1000.0,
                  min_noise=0.0,
                  max_noise=2.0,
                  lock_loss_tolerance=0.04,
@@ -32,6 +33,7 @@ class binaryTreeLogicNet(nn.Module):
         self.weight_mode = weight_mode
         self.weight_value = weight_value
         self.weight_range = weight_range
+        self.loss_amplifier = loss_amplifier
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32, device=self.device) if weight_choices else None
         # 🔹 Fully Connected Input-to-Leaf Mapping
@@ -367,7 +369,7 @@ class binaryTreeLogicNet(nn.Module):
             outputs = self(x)
             if torch.isnan(outputs).any() or (outputs < 0).any() or (outputs > 1).any():
                 raise RuntimeError("Instability detected. Can't be trained further.")
-            loss = criterion(outputs, y) * 1000
+            loss = criterion(outputs, y) * self.loss_amplifier
             loss.backward()
             self.optimizer.step()
 
@@ -411,7 +413,6 @@ class binaryTreeLogicNet(nn.Module):
                     self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
                      # Freeze the current model in-place
                     self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size)
-
                     # Re-initialize optimizer for frozen model                    
                     self.reset_optimizer(learning_rate=0.02)  # Lower learning rate for frozen model
                     # Mark frozen mode and reset patience
@@ -441,7 +442,7 @@ class binaryTreeLogicNet(nn.Module):
             if epoch % 200 == 0:
                 logging.info(f"   Epoch {epoch} - Loss: {loss.item():.4f}")
             epoch += 1
-        print(f"Indexes of best models: {best_indexes}")
+        logging.info(f"🧾 Indexes of best models: {best_indexes}")
 
     def sinkhorn(self, log_alpha, n_iters=20, temperature=1.0):
         log_alpha = log_alpha / temperature

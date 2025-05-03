@@ -29,9 +29,10 @@ X_np = scaler.fit_transform(X)
 X_tensor = torch.tensor(X_np, dtype=torch.float32)
 
 # Train one-vs-rest classifiers
-target_class = 0  # Setosa
+target_class = 1  # Setosa
 
 print(f"\n🔍 Training BACON to detect class '{class_names[target_class]}' vs others")
+print(f"\n⚠️ THIS WILL NOT CONVERGE AS THERE'S NO CLEAR LOGIC TO DISTINGUISH Versicolor FROM OHTERS\n")
 
 y_binary = (y_encoded == target_class).astype(np.float32)
 y_tensor = torch.tensor(y_binary.reshape(-1, 1), dtype=torch.float32)
@@ -46,17 +47,14 @@ Y_train = torch.tensor(y_train_np.reshape(-1, 1), dtype=torch.float32).to(device
 X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 Y_test = torch.tensor(y_test_np.reshape(-1, 1), dtype=torch.float32).to(device)
 
-X_train = 1 - X_train  # Invert the features
-X_test = 1 - X_test    # Invert the features
-
 # Train BACON
 bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.4)
 best_model, best_accuracy = bacon.find_best_model(
     X_train, Y_train, X_test, Y_test, 
-    attempts=100, 
+    attempts=5, 
     acceptance_threshold=0.90, 
     max_epochs=3000, 
-    save_path="assembler-setosa.pth")
+    save_path="assembler-versicolor.pth")
 print(f"✅ Best accuracy for '{class_names[target_class]}' vs rest: {best_accuracy * 100:.2f}%")
 
 # Explainability
