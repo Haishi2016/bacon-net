@@ -261,7 +261,7 @@ class binaryTreeLogicNet(nn.Module):
             return result
         
         # 3/4 < a < 1 return (0.5x^r(a) + 0.5y^r(a))^(1/r(a))
-        elif torch.logical_and(a > 0.75, a < 1):
+        elif torch.logical_and(a >= 0.75, a < 1):
             ra = self.r(a)
             result = self.power_r(x, y, ra, w0, w1)
             if torch.isnan(result).any():
@@ -292,8 +292,8 @@ class binaryTreeLogicNet(nn.Module):
             if torch.isnan(result).any():
                 print(f"[TRACE] Rule 8 result has NaN: {torch.isnan(result).any()}")
             return result
-        
-        # raise ValueError(f"Invalid value for a: {a}. Must be in [-1, 2].")
+        else:
+            raise ValueError(f"Invalid value for a: {a}. Must be in [-1, 2].")
 
     def generalized_gcd(self, a, b, r, w0, w1):
         if a is None or b is None:
