@@ -47,6 +47,10 @@ def generate_classic_boolean_data(num_vars=5, repeat_factor=100, device=None):
 
 
 def balance_classes(train_df, target_col='target', random_state=42, replication_factor=1):
+    counts_str = train_df[target_col].value_counts().to_string()
+    indented_counts = '\n'.join('   ' + line for line in counts_str.split('\n'))
+    logging.info(f"🔻 Class distribution before balancing and replication (×{replication_factor}):\n{indented_counts}")
+
     # Get class distribution
     class_counts = train_df[target_col].value_counts()
     if len(class_counts) != 2:
@@ -76,7 +80,9 @@ def balance_classes(train_df, target_col='target', random_state=42, replication_
         df_balanced = pd.concat([df_balanced] * replication_factor, ignore_index=True)
         df_balanced = df_balanced.sample(frac=1, random_state=random_state).reset_index(drop=True)
 
-    print(f"[INFO] Class distribution after balancing and replication (×{replication_factor}):\n{df_balanced[target_col].value_counts()}")
+    counts_str = df_balanced[target_col].value_counts().to_string()
+    indented_counts = '\n'.join('   ' + line for line in counts_str.split('\n'))
+    logging.info(f"⚖️ Class distribution after balancing and replication (×{replication_factor}):\n{indented_counts}")
     return df_balanced
 
 
