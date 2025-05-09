@@ -226,9 +226,8 @@ class binaryTreeLogicNet(nn.Module):
             # a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
             a = torch.nan_to_num(a, nan=-1.0, posinf=2.0-epsilon, neginf=-1.0+epsilon)
             a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
-
             # if a == 2, return 1 of x==y==1, otherwise 0
-            if torch.abs(a - 2) < epsilon:
+            if torch.any(torch.abs(a - 2) < epsilon):
                 cond = torch.logical_and(torch.abs(x - 1) < epsilon, torch.abs(y - 1) < epsilon)
                 result = torch.where(cond, torch.ones_like(x), torch.zeros_like(x))
                 if torch.isnan(result).any():
@@ -253,7 +252,7 @@ class binaryTreeLogicNet(nn.Module):
                 return result
             
             # a == 0.5 return 0.5x+0.5y
-            elif torch.abs(a - 0.5) < epsilon:
+            elif torch.any(torch.abs(a - 0.5) < epsilon):
                 result = w0*x + w1*y
                 if torch.isnan(result).any():
                     print(f"[TRACE] Rule 7 result has NaN: {torch.isnan(result).any()}")
