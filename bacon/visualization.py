@@ -116,7 +116,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
 
     previous_w = None
     weights = [w.detach().cpu().numpy() for w in model.weights]
-    a = [b.item() for b in model.biases]
+    a = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
     indent = 2
     for i in range(model.num_layers):
         if i == 0:
@@ -130,7 +130,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
             else:
                 operator = "[ O R ]"
         else:
-            operator = f"[a={a[i]:.5f}]"
+            operator = f"[a={a[i]:.8f}]"
         if i < model.num_layers - 1:
             print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1][0]:.2f}".rjust(5) + "────┐")
         else:
@@ -284,7 +284,17 @@ def plot_precision_vs_threshold(model, X_val, Y_val, steps=1000):
     plt.tight_layout()
     plt.show()
 
-def plot_feature_sensitivity(model, X_tensor, feature_name, feature_names):
+def plot_feature_sensitivity(model, X_tensor, X_tensor_extended, feature_name, feature_names):
+    """
+    Plots model output vs. a single feature value, sorted by that feature.
+    Also overlays the feature value itself for comparison.
+
+    Args:
+        model: Trained model with .inference_raw().
+        X_tensor (torch.Tensor): Input features [N, D].
+        feature_name (str): Name of the feature to analyze.
+        feature_names (list of str): All feature names, matching X_tensor columns.
+    """
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -292,7 +302,7 @@ def plot_feature_sensitivity(model, X_tensor, feature_name, feature_names):
     feature_index = feature_names.index(feature_name)
 
     # Get feature values and predictions
-    feature_values = X_tensor[:, feature_index].cpu().numpy()
+    feature_values = X_tensor_extended[:, feature_index].cpu().numpy()
     model.eval()
     with torch.no_grad():
         outputs = model.inference_raw(X_tensor).cpu().numpy().flatten()
@@ -302,66 +312,91 @@ def plot_feature_sensitivity(model, X_tensor, feature_name, feature_names):
     sorted_feature = feature_values[sorted_idx]
     sorted_outputs = outputs[sorted_idx]
 
-    # Plot
+    # Plot both feature value and model output
     plt.figure(figsize=(8, 5))
-    plt.plot(sorted_feature, sorted_outputs, marker='o', linestyle='-')
+    plt.plot(sorted_feature, sorted_outputs, label="Model Output", linestyle='-', marker='.')
+    # plt.plot(sorted_feature, sorted_feature, label="Raw Feature", linestyle='--', alpha=0.6)
+    # plt.fill_between(sorted_feature, sorted_feature, sorted_outputs, color='gray', alpha=0.2, label="Difference")
+
     plt.xlabel(feature_name)
-    plt.ylabel("Model Output (Score)")
+    plt.ylabel("Score")
     plt.title(f"Model Response vs. {feature_name}")
+    plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
+
 def plot_multi_feature_sensitivity(model, X_tensor, feature_names_or, all_feature_names, is_or=True):
     """
-    Plots model output sorted by the logical OR across multiple input features.
+    Plots model output vs. soft logical AND/OR of selected features,
+    sorted by the first selected feature. Also shows difference.
 
     Args:
-        model: Trained model.
+        model: Trained model with .inference_raw().
         X_tensor (torch.Tensor): Input features [N, D].
-        feature_names_or (list of str): Feature names to compute OR across.
-        all_feature_names (list of str): All feature column names for mapping to tensor indices.
+        feature_names_or (list of str): Feature names to compute logic over.
+        all_feature_names (list of str): All feature column names.
+        is_or (bool): Use soft-OR if True, soft-AND if False.
     """
     import matplotlib.pyplot as plt
     import numpy as np
 
     assert all(fn in all_feature_names for fn in feature_names_or), \
-        "Some OR feature names not found in all_feature_names."
+        "Some feature names not found in all_feature_names."
 
-    # Get indices
+    # Get feature indices and extract selected feature values
     indices = [all_feature_names.index(fn) for fn in feature_names_or]
     selected_features = X_tensor[:, indices].cpu().numpy()
 
-    # Compute OR across columns (row-wise)
+    # Compute soft AND or soft OR
     if is_or:
-        or_mask = np.any(selected_features > 0, axis=1).astype(int)  # shape [N]
+        soft_logic = np.max(selected_features, axis=1)  # soft OR
     else:
-        or_mask = np.all(selected_features > 0, axis=1).astype(int)
+        soft_logic = np.min(selected_features, axis=1)          # soft AND
 
-    # Use OR mask plus row sum as sort key for tie-breaking
-    feature_sum = selected_features.sum(axis=1)
-    sort_key = or_mask + feature_sum
+    primary_feature = selected_features[:, 0]
+    combined_logic = soft_logic
 
-    # Get predictions
+    # Lexicographic sort: first by combined logic, then by primary feature
+    sort_idx = np.lexsort((combined_logic, primary_feature))
+
+
+    # Get model predictions
     model.eval()
     with torch.no_grad():
-        outputs = model.inference_raw(X_tensor).cpu().numpy().flatten()
+        model_output = model.inference_raw(X_tensor).cpu().numpy().flatten()
 
-    # Sort
-    sorted_idx = np.argsort(sort_key)
-    sorted_or_score = sort_key[sorted_idx]
-    sorted_outputs = outputs[sorted_idx]
+    # Compute difference
+    diff = model_output - soft_logic
 
     # Plot
-    plt.figure(figsize=(8, 5))
-    feature_label = " ∨ ".join(feature_names_or)
-    plt.plot(sorted_or_score, sorted_outputs, marker='o', linestyle='-')
-    plt.xlabel(f"OR({feature_label})")
-    plt.ylabel("Model Output (Score)")
-    plt.title(f"Model Response vs. OR({feature_label})")
+    plt.figure(figsize=(10, 6))
+    # plt.plot(primary_feature[sort_idx], soft_logic[sort_idx], label="Soft Logic", linestyle='--')
+    # plt.plot(primary_feature[sort_idx], model_output[sort_idx], label="Model Output", linestyle='-')
+
+    # Model Output
+    plt.scatter(primary_feature[sort_idx], model_output[sort_idx], s=8, label="Model Output", alpha=0.7)
+
+    # Soft Logic
+    plt.scatter(primary_feature[sort_idx], soft_logic[sort_idx], s=8, label="Soft Logic", alpha=0.7)
+
+
+    plt.fill_between(primary_feature[sort_idx],
+                     soft_logic[sort_idx], model_output[sort_idx],
+                     color='gray', alpha=0.2, label="Difference")
+
+    logic_type = "OR" if is_or else "AND"
+    feature_label = f"{logic_type}({', '.join(feature_names_or)})"
+
+    plt.xlabel(f"{feature_names_or[0]} (sorted)")
+    plt.ylabel("Score")
+    plt.title(f"Model Output vs. Soft {logic_type}")
+    plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
 
 def plot_multi_feature_as_1(model, X_tensor, feature_names_or, all_feature_names):
     """

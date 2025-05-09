@@ -68,11 +68,15 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 # 200 - 95.43%
 # 195 - 96.49%
 # 140 - 94.55%
-bacon = baconNet(input_size=30, freeze_loss_threshold=90, loss_amplifier=1000)
+bacon = baconNet(input_size=30, freeze_loss_threshold=88, loss_amplifier=1000)
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90)
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)
 Y_all = torch.cat([Y_train, Y_test], dim=0)
+
+# col_idx = df.columns.get_loc('concave_points3')
+# X_all[:, col_idx] = 0.8
+
 
 # X_normalized = normalize_features(X_all, feature_names)
 # X_tensor_normalized = torch.tensor(X_normalized.values, dtype=torch.float32).to(device)
@@ -103,8 +107,8 @@ plt.tight_layout()
 plt.show()
 
 
-plot_sorted_predictions_with_labels(bacon, X_all, Y_all, threshold=0.5)
-plot_sorted_predictions_with_errors(bacon, X_all, Y_all, threshold=0.5)
+plot_sorted_predictions_with_labels(bacon, X_all, Y_all, threshold=0.39)
+plot_sorted_predictions_with_errors(bacon, X_all, Y_all, threshold=0.39)
 plot_precision_vs_threshold(bacon, X_all, Y_all)
 
 best_threshold, best_score = find_best_threshold(bacon, X_all, Y_all, metric='recall')
@@ -119,7 +123,36 @@ best_threshold, best_score = find_best_threshold(bacon, X_all, Y_all, metric='ac
 print(f"Best threshold for accuracy: {best_threshold:.2f}, Best score: {best_score:.4f}")
 print_metrics(bacon, X_all, Y_all, threshold=best_threshold)
 
-plot_feature_sensitivity(bacon, X_all, 'symmetry1', feature_names)
-plot_feature_sensitivity(bacon, X_all, 'concave_points3', feature_names)
-plot_feature_sensitivity(bacon, X_all, 'smoothness3', feature_names)
-plot_multi_feature_sensitivity(bacon, X_all, ['smoothness3', 'texture1', 'texture3', 'radius2', 'symmetry2', 'area1', 'concavity3', 'fractal_dimension3', 'perimeter1'], feature_names, is_or=True)
+plot_feature_sensitivity(bacon, X_all, X_all, 'compactness3', feature_names)
+plot_feature_sensitivity(bacon, X_all, X_all, 'concave_points1', feature_names)
+plot_feature_sensitivity(bacon, X_all, X_all,'area3', feature_names)
+
+idx1 = feature_names.index("concave_points1")
+idx2 = feature_names.index("area3")
+idx3 = feature_names.index("texture1")
+idx4 = feature_names.index("radius2")
+idx5 = feature_names.index("symmetry3")
+
+# Extract columns
+cp1 = X_all[:, idx1]
+area3 = X_all[:, idx2]
+texture1 = X_all[:, idx3]
+raius2 = X_all[:, idx4]
+symmetry3 = X_all[:, idx5]
+
+# Compute texture3 as the sum of radius2 and symmetry3
+
+indices = [idx2, idx3, idx4, idx5]
+selected = X_all[:, indices]   
+
+# Compute max(area3, texture1)
+max_area_texture = torch.min(selected, dim=1).values # shape: [N]
+
+# Compute min(concave_points1, max(...))
+X_combined = torch.min(cp1, area3)  # shape: [N]
+
+
+X_all_extended = torch.cat([X_all, X_combined.unsqueeze(1)], dim=1)
+feature_names.append("combined")
+# plot_multi_feature_sensitivity(bacon, X_all, ['concave_points1', 'texture3', 'concavity3'], feature_names, is_or=False)
+plot_feature_sensitivity(bacon, X_all, X_all_extended, 'combined', feature_names)
