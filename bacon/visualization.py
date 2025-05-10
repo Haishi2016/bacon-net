@@ -38,8 +38,8 @@ def visualize_tree_structure(model, labels=None):
 
     # Build the tree structure and assign labels
     for i in range(model.num_layers):
-        a = model.biases[i].item()
-        w = model.weights[i].detach().cpu().numpy()
+        a = (torch.sigmoid(model.biases[i])*3-1).item()
+        w = model.weights[i].detach().cpu().numpy().item()
 
         left = f"Node{i}" if i > 0 else leaf_names[0]
         right = leaf_names[i + 1]
@@ -48,8 +48,8 @@ def visualize_tree_structure(model, labels=None):
         node_dict[parent] = (left, right)
         node_labels[parent] = f"{a:.2f}"
 
-        weight_map[(parent, left)] = w[0]
-        weight_map[(parent, right)] = w[1]
+        weight_map[(parent, left)] = w
+        weight_map[(parent, right)] = 1-w
 
         # Keep track of all possible leaf nodes
         if left in leaf_names:
@@ -115,12 +115,13 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
     print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
 
     previous_w = None
-    weights = [w.detach().cpu().numpy() for w in model.weights]
+    weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
+    print(weights)
     a = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
     indent = 2
     for i in range(model.num_layers):
         if i == 0:
-            print(fmt_label(leaf_names[0]) + f"─{weights[0][0]:.2f}".rjust(5) + "────┐")
+            print(fmt_label(leaf_names[0]) + f"─{weights[0]:.2f}".rjust(5) + "────┐")
             new_leaf = leaf_names[1]
         else:
             new_leaf = leaf_names[i + 1]
@@ -132,9 +133,9 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
         else:
             operator = f"[a={a[i]:.8f}]"
         if i < model.num_layers - 1:
-            print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1][0]:.2f}".rjust(5) + "────┐")
+            print(fmt_label(new_leaf) + f"─{1-weights[i]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1]:.2f}".rjust(5) + "────┐")
         else:
-            print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
+            print(fmt_label(new_leaf) + f"─{1-weights[i]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
         indent += 15
 
 def plot_sorted_predictions_with_labels(model, X_test, Y_test, threshold=0.5):

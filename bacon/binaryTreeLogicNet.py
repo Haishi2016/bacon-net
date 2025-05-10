@@ -15,7 +15,7 @@ class binaryTreeLogicNet(nn.Module):
                  input_size, 
                  weight_mode="trainable", 
                  weight_value=1.0, 
-                 weight_range=(0.5, 2.0), 
+                 weight_range=(0.0, 1.0), 
                  weight_choices=None,
                  noise_increase=1.05,
                  noise_decrease=0.95,
@@ -36,7 +36,6 @@ class binaryTreeLogicNet(nn.Module):
         self.loss_amplifier = loss_amplifier
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32, device=self.device) if weight_choices else None
-        # 🔹 Fully Connected Input-to-Leaf Mapping
         self.input_to_leaf = inputToLeafSinkhorn(input_size, self.num_leaves, use_gumbel=True).to(self.device)  
         self.noise_increase = noise_increase
         self.noise_decrease = noise_decrease
@@ -49,18 +48,14 @@ class binaryTreeLogicNet(nn.Module):
         self.locked_perm = None  # For frozen models
         self.reset_optimizer()  # Initialize optimizer
         self.tree_layout = tree_layout  # Layout for visualization
-        # Weights and Biases
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary tree
         self.reinitialize(weight_mode, weight_value, weight_range, weight_choices)
     def reset_optimizer(self, learning_rate=0.2):
         """Reset the optimizer for the model."""
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate, weight_decay=0.0)
     def reinitialize(self, weight_mode, weight_value, weight_range, weight_choices):
-        # Reset flags
         self.is_frozen = False
         self.locked_perm = None
-
-        # Reinitialize input-to-leaf layer
         self.input_to_leaf = inputToLeafSinkhorn(
             self.original_input_size,
             self.num_leaves,
@@ -68,8 +63,6 @@ class binaryTreeLogicNet(nn.Module):
         )
         self.input_to_leaf.gumbel_noise_scale = 1.0
         self.input_to_leaf.temperature = 1.0
-
-        # Reset weights and biases
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
 
@@ -85,25 +78,11 @@ class binaryTreeLogicNet(nn.Module):
                     torch.choice(self.weight_choices, (2,)), requires_grad=True
                 ))
             else:  # "trainable"
-                self.weights.append(nn.Parameter(
-                    torch.FloatTensor(2).uniform_(0.5, 1.5)
-                ))
+                self.weights.append(nn.Parameter(torch.rand(1))) 
 
             self.biases.append(nn.Parameter(torch.rand(1) * 3 - 1))
-
-        # # Reset output layer
-        # self.fc_out = nn.Linear(1, 1, bias=False).to(self.device)
-        # with torch.no_grad():
-        #     self.fc_out.weight.fill_(1.0)
-        #     self.fc_out.bias.fill_(0.0)
-
-        # # Freeze the layer
-        # # for param in self.fc_out.parameters():
-        # #    param.requires_grad = False
-        # self.fc_out.bias.requires_grad = False
-        # self.fc_out.weight.requires_grad = True
         self.apply(self.initialize_weights)
-        self.to(self.device)  # Move model to the specified device
+        self.to(self.device) 
 
     def initialize_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -142,9 +121,9 @@ class binaryTreeLogicNet(nn.Module):
             right = combine(mid + 1, end, depth + 1)
 
             idx = combine.node_index
-            w_soft = torch.softmax(weights[idx], dim=0)
-            a_scaled = torch.sigmoid(biases[idx]) * 3 - 1
-            out = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+            a_scaled = biases[idx]
+            w = weights[idx]
+            out = self.generalized_gcd(left, right, a_scaled, w, 1-w)
 
             combine.node_index += 1
             return out
@@ -169,7 +148,8 @@ class binaryTreeLogicNet(nn.Module):
                 w = self.weights[i]
                 bias = self.biases[i]
 
-                w_soft = torch.softmax(w, dim=0)
+                a = bias
+                w = self.weights[i]
 
                 if i == 0:
                     left = node_outputs[0]
@@ -177,38 +157,16 @@ class binaryTreeLogicNet(nn.Module):
                 else:
                     left = node_outputs[-1]  # previous node
                     right = node_outputs[i + 1]  # next input
-                a_scaled = torch.sigmoid(bias) * 3 - 1
-                nres = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+                nres = self.generalized_gcd(left, right, a, w, 1-w)
                 # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
                 if torch.isnan(nres).any():
-                    nres = torch.where(torch.isnan(nres), a_scaled, nres)
+                    nres = torch.where(torch.isnan(nres), bias, nres)
                 node_outputs.append(nres)
                 # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
                 layer_outputs.append(node_outputs[-1])
                 final = node_outputs[-1]
 
-        # final_output = torch.sigmoid(self.fc_out(final.unsqueeze(1)))
-        # return final_output
         return final.unsqueeze(1)  # Add batch dimension
-        #  probs = torch.sigmoid(logits)
-        # return (probs > 0.5).float()
-        # return final.unsqueeze(1)  # Remove the extra dimension
-        # return torch.sigmoid(final.unsqueeze(1))  # Remove the extra dimension
-        # return torch.relu(final.unsqueeze(1))  # Remove the extra dimensi
-    
-    def r(self, a):
-        if not torch.is_tensor(a):
-            a = torch.tensor(a, dtype=torch.float32)
-        delta = 0.5 - a
-        numerator = (0.25 +
-                     1.65811 * delta +
-                     2.15388 * delta ** 2 + 
-                     8.2844 * delta ** 3 +
-                     6.16764 * delta ** 4) 
-        denominator = a * ( 1- a)
-        epsilon = 1e-6
-        denominator = torch.where(denominator.abs() < 1e-6, torch.full_like(denominator, epsilon), denominator)  # Avoid division by zero
-        return numerator / denominator
     
     def F(self, x,y,a, w0, w1):
         try:
@@ -224,8 +182,8 @@ class binaryTreeLogicNet(nn.Module):
                 a = torch.tensor(a, dtype=torch.float32)
 
             # a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
-            a = torch.nan_to_num(a, nan=-1.0, posinf=2.0-epsilon, neginf=-1.0+epsilon)
-            a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
+            # a = torch.nan_to_num(a, nan=-1.0, posinf=2.0-epsilon, neginf=-1.0+epsilon)
+            # a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
             # if a == 2, return 1 of x==y==1, otherwise 0
             if torch.any(torch.abs(a - 2) < epsilon):
                 cond = torch.logical_and(torch.abs(x - 1) < epsilon, torch.abs(y - 1) < epsilon)
@@ -244,11 +202,10 @@ class binaryTreeLogicNet(nn.Module):
             
             # 1/2 < a < 3/4 return (3-4a)(0.5x+0.5y) + (4a-2)(0.5x^R+0.5y^R)^1/R
             elif torch.logical_and(a > 0.5, a < 0.75):
-                R = self.r(0.75)
                 result = (3-4*a)*(w0*x+w1*y) + (4*a-2)*(x ** (2*w0) * y ** (2*w1)) ** (torch.sqrt(3 / (2 - a)) - 1)
                 if torch.isnan(result).any():
                     result = torch.where(torch.isnan(result), torch.tensor(float('inf'), device=result.device), result)
-                    print(f"[TRACE] Rule 6 result has NaN: {torch.isnan(result).any()} R={R} scalar_a={a} x={x} y={y}")
+                    print(f"[TRACE] Rule 6 result has NaN: {torch.isnan(result).any()} scalar_a={a} x={x} y={y}")
                 return result
             
             # a == 0.5 return 0.5x+0.5y
@@ -278,57 +235,7 @@ class binaryTreeLogicNet(nn.Module):
         if torch.isnan(a).any() or torch.isnan(b).any():
             raise ValueError(f"[ERROR] NaN input to generalized_gcd: a={a}, b={b}")
         return self.F(a, b, r, w0, w1)
-    # def generalized_gcd(self, a, b, r, w0, w1):
-    #     epsilon = 1e-6  # To prevent division by zero
-    #     r = torch.sigmoid(r) * 10 - 5  # Map sigmoid to range ~[-5, 5] for stability
-        
-    #     a = torch.clamp(a, min=epsilon)
-    #     b = torch.clamp(b, min=epsilon)
-
-
-    #     # Avoid r = 0 case with Taylor approximation
-    #     is_near_zero = (r.abs() < 1e-2)
-    #     safe_r = r + (~is_near_zero).float() * 1e-6
-
-
-    #     gcd = (w0*(a ** safe_r) + w1*(b ** safe_r))
-    #     gcd = gcd ** (1 / safe_r)
-
-    #     # logging.info(f"a: {a.mean():.4f}, b: {b.mean():.4f}, r: {r.item():.4f}, w1: {w0.item():.4f}, w2: {w1.item():.4f}, gcd: {gcd.mean():.4f}")
-
-    #     # Approximate geometric mean when r ≈ 0
-    #     geo_mean = torch.sqrt(a * b)
-    #     return torch.where(is_near_zero, geo_mean, gcd)
-
-    def power_r(self, a, b, r, w0, w1):
-        """
-        Stable GCD aggregator using log-sum-exp trick.
-        r is used to control smoothness (andness/orness) via alpha.
-        w0 and w1 are weights for a and b respectively and assumed normalized.
-        """
-        epsilon = 1e-6
-        a = torch.clamp(a, min=epsilon)
-        b = torch.clamp(b, min=epsilon)
-
-        # Normalize weights
-        weights = torch.stack([w0, w1])
-        weights = torch.softmax(weights, dim=0)
-        w0_norm, w1_norm = weights[0], weights[1]
-
-        # Interpret r ∈ [0, 1] as a log-sum-exp coefficient α ∈ [–5, 5]
-        alpha = torch.sigmoid(r) * 10 - 5  # map sigmoid(r) ∈ (0,1) → (–5, 5)
-
-        # Log-sum-exp form
-        a_scaled = alpha * a
-        b_scaled = alpha * b
-
-        lse = (1.0 / alpha) * torch.log((w0_norm * torch.exp(a_scaled) + w1_norm * torch.exp(b_scaled)) + epsilon)
-
-        # Use mean if alpha ≈ 0
-        mean = w0_norm * a + w1_norm * b
-        is_near_zero = (alpha.abs() < 1e-2)
-        return torch.where(is_near_zero, mean, lse)
-
+    
     def train_model(self, x, y, epochs):
         self.reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices)
         loss_history = []
@@ -340,11 +247,7 @@ class binaryTreeLogicNet(nn.Module):
         while epoch < epochs:
             if hasattr(self.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
                 self.input_to_leaf.temperature *= 0.8
-            for w in self.weights:
-                w_log = torch.log_softmax(w, dim=0)
-                w.data.copy_(w_log.exp())
-            for b in self.biases:
-                b.data.clamp_(-1.0, 2.0)
+           
             self.optimizer.zero_grad()
             outputs = self(x)
             if torch.isnan(outputs).any() or (outputs < 0).any() or (outputs > 1).any():
@@ -353,16 +256,14 @@ class binaryTreeLogicNet(nn.Module):
             loss.backward()
             self.optimizer.step()
 
-            # Normalize each weight vector (in-place)
+            with torch.no_grad():
+                for w in self.weights:
+                    w.clamp_(0.0, 1.0)
+            with torch.no_grad():
+                for b in self.biases:
+                    b.clamp_(-1.0, 2.0)
 
-            # with torch.no_grad():
-            #     for w in self.weights:
-            #         w.data = torch.softmax(w.data, dim=0)
-            #     for b in self.biases:
-            #         b.data = b.data.clamp(-1.0, 2.0)
-            for b in self.biases:
-                b.data.clamp_(-1.0, 2.0)
-
+                    
             loss_history.append(loss.item())
             if not self.is_frozen:
                 if len(loss_history) > 5:
@@ -403,18 +304,6 @@ class binaryTreeLogicNet(nn.Module):
                     patience_counter = 0
                     epoch = 0
                     best_frozen_loss = float('inf')
-
-                    # self.fc_out = nn.Linear(1, 1).to(self.device)
-                    # with torch.no_grad():
-                    #     self.fc_out.weight.fill_(1.0)
-                    #     self.fc_out.bias.fill_(0.0)
-
-                    # # Freeze the layer
-                    # # for param in self.fc_out.parameters():
-                    # #    param.requires_grad = False
-                    # self.fc_out.bias.requires_grad = False
-                    # self.fc_out.weight.requires_grad = False
-                    
                     continue  # ✅ Continue training the frozen model
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
@@ -508,7 +397,7 @@ class binaryTreeLogicNet(nn.Module):
                 w = pruned_weights[i]
                 a = pruned_biases[i]
 
-                w_soft = torch.softmax(w, dim=0)
+                # w_soft = torch.softmax(w, dim=0)
                 if i == 0:
                     # Special case: apply remaining aggregator to (0, x0)
                     left = torch.zeros_like(node_outputs[0])
@@ -517,9 +406,7 @@ class binaryTreeLogicNet(nn.Module):
                     # Normal aggregator behavior
                     left = node_outputs[-1]
                     right = node_outputs[i]
-                a_scaled = torch.sigmoid(a) * 3 - 1
-                # a_scaled = a.clamp(-1.0, 2.0)
-                z = self.generalized_gcd(left, right, a_scaled, w_soft[0], w_soft[1])
+                z = self.generalized_gcd(left, right, a, w, 1-w)
                 node_outputs.append(z)
                 layer_outputs.append(z)
             # final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
@@ -554,8 +441,7 @@ class binaryTreeLogicNet(nn.Module):
             for i in range(len(kept_weights)):
                 w = kept_weights[i]
                 a = kept_biases[i]
-                # w_soft = torch.softmax(w, dim=0)
-
+              
                 if i == 0:
                     left = torch.zeros_like(node_outputs[0])
                     right = node_outputs[0]
@@ -563,14 +449,10 @@ class binaryTreeLogicNet(nn.Module):
                     left = node_outputs[-1]
                     right = node_outputs[i]
 
-                # a_scaled = torch.sigmoid(a) * 3 - 1
-                # a_scaled = a.clamp(-1.0, 2.0)
-                z = self.generalized_gcd(left, right, a, w[0], w[1])
+                z = self.generalized_gcd(left, right, a, w, 1-w)
                 node_outputs.append(z)
                 layer_outputs.append(z)
 
-            # final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
-            # return final
             return layer_outputs[-1].unsqueeze(1)
 
         return pruned_forward
