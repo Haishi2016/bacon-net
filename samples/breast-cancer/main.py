@@ -68,7 +68,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 # 200 - 95.43%
 # 195 - 96.49%
 # 140 - 94.55%
-bacon = baconNet(input_size=30, freeze_loss_threshold=95, loss_amplifier=1000.)
+bacon = baconNet(input_size=30, freeze_loss_threshold=82, loss_amplifier=1000.)
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90, max_epochs=12000)
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)

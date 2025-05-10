@@ -148,8 +148,8 @@ class binaryTreeLogicNet(nn.Module):
                 w = self.weights[i]
                 bias = self.biases[i]
 
-                a = bias
-                w = self.weights[i]
+                a = torch.sigmoid(bias) * 3-1
+                w = torch.sigmoid(self.weights[i])
 
                 if i == 0:
                     left = node_outputs[0]
@@ -252,17 +252,26 @@ class binaryTreeLogicNet(nn.Module):
             outputs = self(x)
             if torch.isnan(outputs).any() or (outputs < 0).any() or (outputs > 1).any():
                 raise RuntimeError("Instability detected. Can't be trained further.")
-            loss = criterion(outputs, y) * self.loss_amplifier
+            
+
+            loss = criterion(outputs, y)
+
+
+            lam = 1e-4
+            depth_weight_penalty = 0.0
+            N = len(self.weights)
+
+            for i, w in enumerate(self.weights):
+                # Deeper in list = shallower in tree → reverse the index
+                depth_from_root = N - i  # or just: importance = i + 1
+                penalty_strength = lam * depth_from_root  # linear
+                depth_weight_penalty += penalty_strength * ((w - 0.5) ** 2).mean()
+
+            loss += depth_weight_penalty
+
+            loss = loss * self.loss_amplifier  # Amplify the loss for better training
             loss.backward()
             self.optimizer.step()
-
-            with torch.no_grad():
-                for w in self.weights:
-                    w.clamp_(0.0, 1.0)
-            with torch.no_grad():
-                for b in self.biases:
-                    b.clamp_(-1.0, 2.0)
-
                     
             loss_history.append(loss.item())
             if not self.is_frozen:
@@ -394,8 +403,8 @@ class binaryTreeLogicNet(nn.Module):
             layer_outputs = []
             epsilon = 1e-6
             for i in range(len(pruned_weights)):
-                w = pruned_weights[i]
-                a = pruned_biases[i]
+                w = torch.sigmoid(pruned_weights[i])
+                a = torch.sigmoid(pruned_biases[i])*3-1
 
                 # w_soft = torch.softmax(w, dim=0)
                 if i == 0:
@@ -439,8 +448,8 @@ class binaryTreeLogicNet(nn.Module):
             layer_outputs = []
             epsilon = 1e-6
             for i in range(len(kept_weights)):
-                w = kept_weights[i]
-                a = kept_biases[i]
+                w = torch.sigmoid(kept_weights[i])
+                a = torch.sigmoid(kept_biases[i])*3-1
               
                 if i == 0:
                     left = torch.zeros_like(node_outputs[0])
