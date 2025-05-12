@@ -4,6 +4,8 @@ import torch
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import pandas as pd
+import seaborn as sns
+
 def left_associative_layout(G, root):
     pos = {}
     def dfs(node, depth=0, y=0):
@@ -38,8 +40,8 @@ def visualize_tree_structure(model, labels=None):
 
     # Build the tree structure and assign labels
     for i in range(model.num_layers):
-        a = model.biases[i].item()
-        w = model.weights[i].detach().cpu().numpy()
+        a = (torch.sigmoid(model.biases[i])*3-1).item()
+        w = model.weights[i].detach().cpu().numpy().item()
 
         left = f"Node{i}" if i > 0 else leaf_names[0]
         right = leaf_names[i + 1]
@@ -48,8 +50,8 @@ def visualize_tree_structure(model, labels=None):
         node_dict[parent] = (left, right)
         node_labels[parent] = f"{a:.2f}"
 
-        weight_map[(parent, left)] = w[0]
-        weight_map[(parent, right)] = w[1]
+        weight_map[(parent, left)] = w
+        weight_map[(parent, right)] = 1-w
 
         # Keep track of all possible leaf nodes
         if left in leaf_names:
@@ -115,12 +117,13 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
     print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
 
     previous_w = None
-    weights = [w.detach().cpu().numpy() for w in model.weights]
+    weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
+    print(weights)
     a = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
     indent = 2
     for i in range(model.num_layers):
         if i == 0:
-            print(fmt_label(leaf_names[0]) + f"─{weights[0][0]:.2f}".rjust(5) + "────┐")
+            print(fmt_label(leaf_names[0]) + f"─{weights[0]:.2f}".rjust(5) + "────┐")
             new_leaf = leaf_names[1]
         else:
             new_leaf = leaf_names[i + 1]
@@ -132,10 +135,47 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
         else:
             operator = f"[a={a[i]:.8f}]"
         if i < model.num_layers - 1:
-            print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1][0]:.2f}".rjust(5) + "────┐")
+            print(fmt_label(new_leaf) + f"─{1-weights[i]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1]:.2f}".rjust(5) + "────┐")
         else:
-            print(fmt_label(new_leaf) + f"─{weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
+            print(fmt_label(new_leaf) + f"─{1-weights[i]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
         indent += 15
+            
+def print_table_structure(model, labels=None):
+    """
+    Print the left-associative logic tree as a flat table showing features, weights, and biases at each layer.
+    """
+    if labels is not None and len(labels) < model.num_leaves:
+        raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {model.num_leaves}")
+
+    if labels:
+        if model.locked_perm is not None:
+            leaf_names = [labels[i] for i in model.locked_perm.tolist()]
+        else:
+            leaf_names = labels
+    else:
+        leaf_names = [f"feature{i+1}" for i in range(model.num_leaves)]
+
+    print("\n📋 Logical Aggregation Table (Left-Associative):\n")
+    print(f"{'Layer':<6} {'Left Feature':<20} {'Right Feature':<20} {'w (left)':<10} {'a (bias)':<10} {'1-w (right)':<12}")
+    print("-" * 80)
+
+    weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
+    biases = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
+
+    for i in range(model.num_layers):
+        if i == 0:
+            left_feature = leaf_names[0]
+        else:
+            left_feature = f"Node{i}"
+
+        right_feature = leaf_names[i + 1]
+        w = weights[i]
+        a = biases[i]
+        print(f"{i+1:<6} {left_feature:<20} {right_feature:<20} {w:.4f}     {a:.4f}     {1 - w:.4f}")
+
+    print("-" * 80)
+    print("Note: 'w' applies to left input, '1-w' applies to right input.\n")
+
 
 def plot_sorted_predictions_with_labels(model, X_test, Y_test, threshold=0.5):
     model.eval()
@@ -238,10 +278,6 @@ def plot_sorted_predictions_with_errors(model, X_test, Y_test, threshold=0.5, co
     plt.tight_layout()
     plt.show()
 
-
-
-
-
 def print_metrics(model, X, Y_true, threshold=0.5):
     model.eval()
     with torch.no_grad():
@@ -315,16 +351,59 @@ def plot_feature_sensitivity(model, X_tensor, X_tensor_extended, feature_name, f
     # Plot both feature value and model output
     plt.figure(figsize=(8, 5))
     plt.plot(sorted_feature, sorted_outputs, label="Model Output", linestyle='-', marker='.')
-    # plt.plot(sorted_feature, sorted_feature, label="Raw Feature", linestyle='--', alpha=0.6)
+    plt.plot(sorted_feature, sorted_feature, label="Raw Feature", linestyle='--', alpha=0.6)
     # plt.fill_between(sorted_feature, sorted_feature, sorted_outputs, color='gray', alpha=0.2, label="Difference")
 
     plt.xlabel(feature_name)
     plt.ylabel("Score")
     plt.title(f"Model Response vs. {feature_name}")
-    plt.legend()
+    # plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+def plot_feature_sensitivity_synthetic(model, X_tensor, feature_name, feature_names_extended, baseline='mean', steps=100):
+    """
+    Sweep synthetic feature values from 0 to 1 while fixing other features.
+    For extended features outside the model, use X_tensor_extended for feature value, but X_tensor for inference.
+
+    Args:
+        model: Trained model with .inference_raw().
+        X_tensor (torch.Tensor): Real model input features [N, D].
+        X_tensor_extended (torch.Tensor): Extended features [N, D+X].
+        feature_name (str): Feature to analyze (from extended feature list).
+        feature_names_extended (list of str): All columns in X_tensor_extended.
+        baseline (str): 'mean' or 'median'.
+    """
+    assert feature_name in feature_names_extended, f"Feature '{feature_name}' not found in extended feature list."
+    feature_index = feature_names_extended.index(feature_name)
+
+    # Use mean/median from real model input (safe baseline)
+    if baseline == 'mean':
+        baseline_input = X_tensor.mean(dim=0, keepdim=True).repeat(steps, 1)
+    else:
+        baseline_input = X_tensor.median(dim=0, keepdim=True).values.repeat(steps, 1)
+
+    # Use the feature from extended tensor for plotting (synthetic sweep from 0 to 1)
+    synthetic_feature_values = torch.linspace(0, 1, steps).unsqueeze(1).to(X_tensor.device)
+    baseline_input[:, feature_index] = synthetic_feature_values.flatten()
+    # Get model output (input is baseline_input, feature is only for plotting)
+    model.eval()
+    with torch.no_grad():
+        outputs = model.inference_raw(baseline_input).cpu().numpy().flatten()
+
+    # Plot using synthetic feature values
+    plt.figure(figsize=(8, 5))
+    plt.plot(synthetic_feature_values.cpu().numpy(), outputs, label="Model Output", linestyle='-', marker='.')
+    plt.plot(synthetic_feature_values.cpu().numpy(), synthetic_feature_values.cpu().numpy(), label="Synthetic Feature", linestyle='--', alpha=0.6)
+    plt.xlabel(f"{feature_name} (synthetic 0 → 1)")
+    plt.ylabel("Model Output")
+    plt.title(f"Model Sensitivity to {feature_name} (Synthetic Sweep)")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 
 
 def plot_multi_feature_sensitivity(model, X_tensor, feature_names_or, all_feature_names, is_or=True):
@@ -467,6 +546,72 @@ def plot_feature_correlation(X_tensor, feature_name1, feature_name2, feature_nam
     plt.xlabel(feature_name1)
     plt.ylabel(feature_name2)
     plt.title(f"Correlation between {feature_name1} and {feature_name2}")
+    plt.grid(True, linestyle='--', linewidth=0.5)
+    plt.tight_layout()
+    plt.show()
+
+def plot_all_feature_correlations(X_tensor, feature_names, method="pearson"):
+    """
+    Plot a heatmap of pairwise feature correlations using constrained layout to avoid label cutoff.
+    """
+    X_np = X_tensor.cpu().numpy()
+    df = pd.DataFrame(X_np, columns=feature_names)
+    corr_matrix = df.corr(method=method)
+
+    # Use constrained_layout for automatic margin handling
+    fig, ax = plt.subplots(figsize=(14, 12), constrained_layout=True)
+    sns.heatmap(corr_matrix, annot=False, fmt=".2f", cmap="coolwarm", square=True,
+                xticklabels=feature_names, yticklabels=feature_names, cbar_kws={"shrink": 0.75}, ax=ax)
+
+    ax.set_title(f"{method.capitalize()} Correlation Matrix of Features", fontsize=16)
+    plt.xticks(rotation=90)
+    plt.yticks(rotation=0)
+    plt.show()
+
+def overlay_sorted_predictions_and_feature(model, X_test, Y_test, feature_name, feature_names, threshold=0.5):
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    model.eval()
+    with torch.no_grad():
+        outputs = model.inference_raw(X_test).cpu().numpy().flatten()
+
+    true_labels = Y_test.cpu().numpy().flatten()
+    feature_values = X_test[:, feature_names.index(feature_name)].cpu().numpy()
+
+    # Sort by predicted scores (to match plot_sorted_predictions_with_labels)
+    # sorted_indices = np.argsort(outputs)
+    # sorted_outputs = outputs[sorted_indices]
+    # sorted_labels = true_labels[sorted_indices]
+    # sorted_feature_values = feature_values[sorted_indices]
+    sorted_indices = np.argsort(feature_values)
+    sorted_feature_values = feature_values[sorted_indices]
+    sorted_outputs = outputs[sorted_indices]
+    sorted_labels = true_labels[sorted_indices]
+
+
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # Plot predictions
+    for i, (score, label) in enumerate(zip(sorted_outputs, sorted_labels)):
+        color = 'red' if label == 1 else 'blue'
+        ax1.plot(i, score, marker='o', color=color, alpha=0.6)
+
+    ax1.axhline(y=threshold, color='green', linestyle='dotted', label=f'Threshold = {threshold}')
+    ax1.set_xlabel("Sample Index (sorted by predicted score)")
+    ax1.set_ylabel("Predicted Score", color='black')
+    ax1.tick_params(axis='y', labelcolor='black')
+
+    # Plot feature value on secondary axis
+    ax2 = ax1.twinx()
+    ax2.plot(range(len(sorted_feature_values)), sorted_feature_values, label=f"{feature_name} value", color='purple', linestyle='--', alpha=0.6)
+    ax2.set_ylabel(f"{feature_name}", color='purple')
+    ax2.tick_params(axis='y', labelcolor='purple')
+
+    # Titles and legends
+    plt.title(f"Overlay: Sorted Prediction Scores & {feature_name}")
+    ax1.legend(loc='upper left')
+    ax2.legend(loc='upper right')
     plt.grid(True, linestyle='--', linewidth=0.5)
     plt.tight_layout()
     plt.show()
