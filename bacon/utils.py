@@ -122,6 +122,57 @@ def find_best_threshold(model, X_val, Y_val, metric='accuracy', steps=1000):
 
     return best_threshold, best_score
 
+def analyze_bacon_tree_conjunctive_disjunctive(model, balanced_threshold=(0.35, 0.65), compound_drop_threshold=0.1):
+    """
+    Analyze a BACON model's left-associative tree to classify each node as Conjunctive, Disjunctive, or Dominated.
+    Applies sigmoid normalization to match model inference.
+    Resets compounded weight when a node is decisively contributing.
+    """
+    weights_raw = [w.detach().cpu().item() for w in model.weights]
+    biases_raw = [b.detach().cpu().item() for b in model.biases]
+
+    results = []
+    compounded = 1.0  # Start with 1 at root
+
+    for i, (w_raw, a_raw) in enumerate(zip(weights_raw, biases_raw)):
+        # Apply sigmoid as in the model's forward
+        right_weight = torch.sigmoid(torch.tensor(w_raw)).item()
+        left_weight = 1 - right_weight
+        bias_a = torch.sigmoid(torch.tensor(a_raw)).item() * 3 - 1
+
+        # Effective compounded weight for feature entering at right input
+        feature_compounded_weight = compounded * right_weight
+
+        # Decision logic
+        if feature_compounded_weight < compound_drop_threshold:
+            conclusion = "Dominated (structure suppresses)"
+        elif right_weight < balanced_threshold[0]:
+            conclusion = "Dominated (left dominates)"
+        elif right_weight > balanced_threshold[1]:
+            conclusion = "Conjunctive" if bias_a > 0.5 else "Disjunctive"
+            compounded = 1.0  # Reset after right feature contributed
+        else:
+            conclusion = "Conjunctive" if bias_a > 0.5 else "Disjunctive (balanced)"
+            compounded = 1.0
+            
+
+        results.append({
+            'Node': f'Node{i}',
+            'w (right)': round(right_weight, 4),
+            '1-w (left)': round(left_weight, 4),
+            'bias (a)': round(bias_a, 4),
+            'compounded_weight': round(feature_compounded_weight, 4),
+            'Conclusion': conclusion
+        })
+
+        # ✅ Reset compounded weight if the right path was decisive enough
+        if feature_compounded_weight >= compound_drop_threshold:
+            compounded = 1.0  # Reset after right feature contributed
+        else:
+            compounded *= left_weight  # Otherwise, keep decaying left path
+
+    return pd.DataFrame(results)
+
 class SigmoidScaler(BaseEstimator, TransformerMixin):
     def __init__(self, alpha=1.0, beta=0.0):
         self.alpha = alpha
