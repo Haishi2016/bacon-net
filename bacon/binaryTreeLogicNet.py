@@ -14,7 +14,7 @@ class binaryTreeLogicNet(nn.Module):
     def __init__(self, 
                  input_size, 
                  weight_mode="trainable", 
-                 weight_value=1.0, 
+                 weight_value=0.5, 
                  weight_range=(0.0, 1.0), 
                  weight_choices=None,
                  noise_increase=1.05,
@@ -22,10 +22,12 @@ class binaryTreeLogicNet(nn.Module):
                  loss_amplifier=1000.0,
                  min_noise=0.0,
                  max_noise=2.0,
+                 is_frozen = False,
                  lock_loss_tolerance=0.04,
                  freeze_loss_threshold=0.07,
                  permutation_max=10000,
                  tree_layout="left",
+                 weight_penalty_strength=1e-3,
                  device=None):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
@@ -36,31 +38,37 @@ class binaryTreeLogicNet(nn.Module):
         self.loss_amplifier = loss_amplifier
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32, device=self.device) if weight_choices else None
-        self.input_to_leaf = inputToLeafSinkhorn(input_size, self.num_leaves, use_gumbel=True).to(self.device)  
         self.noise_increase = noise_increase
         self.noise_decrease = noise_decrease
         self.min_noise = min_noise
         self.max_noise = max_noise
         self.lock_loss_tolerance = lock_loss_tolerance
-        self.is_frozen = False
+        self.is_frozen = is_frozen
         self.freeze_loss_threshold = freeze_loss_threshold
         self.permutation_max = permutation_max
         self.locked_perm = None  # For frozen models
-        self.reset_optimizer()  # Initialize optimizer
         self.tree_layout = tree_layout  # Layout for visualization
-        self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary tree
-        self.reinitialize(weight_mode, weight_value, weight_range, weight_choices)
+        self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary 
+        self.weight_penalty_strength = weight_penalty_strength
+        self.layer_outputs = None  # For storing layer outputs during forward pass
+        self.reinitialize(weight_mode, weight_value, weight_range, weight_choices, self.is_frozen)
+        self.reset_optimizer()  # Initialize optimizer
     def reset_optimizer(self, learning_rate=0.2):
         """Reset the optimizer for the model."""
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate, weight_decay=0.0)
-    def reinitialize(self, weight_mode, weight_value, weight_range, weight_choices):
-        self.is_frozen = False
-        self.locked_perm = None
-        self.input_to_leaf = inputToLeafSinkhorn(
-            self.original_input_size,
-            self.num_leaves,
-            use_gumbel=True
-        )
+    def reinitialize(self, weight_mode, weight_value, weight_range, weight_choices, is_frozen=False):
+        self.is_frozen = is_frozen
+        if not self.is_frozen:
+            self.locked_perm = None
+            self.input_to_leaf = inputToLeafSinkhorn(
+                self.original_input_size,
+                self.num_leaves,
+                use_gumbel=True
+            )
+        else:
+            best_perm = torch.arange(self.num_leaves, dtype=torch.long)
+            self.locked_perm = best_perm.clone().detach()
+            self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size)
         self.input_to_leaf.gumbel_noise_scale = 1.0
         self.input_to_leaf.temperature = 1.0
         self.weights = nn.ParameterList()
@@ -68,7 +76,7 @@ class binaryTreeLogicNet(nn.Module):
 
         for _ in range(self.num_layers):
             if weight_mode == "fixed":
-                self.weights.append(nn.Parameter(torch.tensor([weight_value, weight_value], dtype=torch.float32), requires_grad=False))
+                self.weights.append(nn.Parameter(torch.tensor([weight_value], dtype=torch.float32), requires_grad=False))
             elif weight_mode == "range":
                 self.weights.append(nn.Parameter(
                     torch.rand(2) * (weight_range[1] - weight_range[0]) + weight_range[0]
@@ -142,14 +150,16 @@ class binaryTreeLogicNet(nn.Module):
         if self.tree_layout == "balanced":
             final = self.build_balanced_tree(node_outputs, self.weights, self.biases)
         else:
-            layer_outputs = []  
+            self.layer_outputs = []  
 
             for i in range(self.num_layers):
-                w = self.weights[i]
                 bias = self.biases[i]
 
                 a = torch.sigmoid(bias) * 3-1
-                w = torch.sigmoid(self.weights[i])
+                if self.weight_mode == "fixed":
+                    w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
+                else:
+                    w = torch.sigmoid((self.weights[i] - 0.5) * 4)
 
                 if i == 0:
                     left = node_outputs[0]
@@ -163,7 +173,7 @@ class binaryTreeLogicNet(nn.Module):
                     nres = torch.where(torch.isnan(nres), bias, nres)
                 node_outputs.append(nres)
                 # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
-                layer_outputs.append(node_outputs[-1])
+                self.layer_outputs.append(node_outputs[-1])
                 final = node_outputs[-1]
 
         return final.unsqueeze(1)  # Add batch dimension
@@ -237,9 +247,8 @@ class binaryTreeLogicNet(nn.Module):
         return self.F(a, b, r, w0, w1)
     
     def train_model(self, x, y, epochs):
-        self.reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices)
+        self.reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices, self.is_frozen)
         loss_history = []
-        self.is_frozen = False        
         self.reset_optimizer() 
         criterion = nn.BCELoss()
         best_indexes = []
@@ -256,20 +265,18 @@ class binaryTreeLogicNet(nn.Module):
 
             loss = criterion(outputs, y)
 
+            if self.weight_mode == "trainable":
+                depth_weight_penalty = 0.0
+                N = len(self.weights)
+                for i, (w, b) in enumerate(zip(self.weights, self.biases)):
+                    # Existing depth penalty (optional baseline)
+                    penalty_strength = self.weight_penalty_strength # * (i + 1)
+                    depth_weight_penalty += penalty_strength * ((torch.sigmoid(w) - 0.5) ** 2).mean()
 
-            lam = 1e-4
-            depth_weight_penalty = 0.0
-            N = len(self.weights)
+                loss += depth_weight_penalty
 
-            for i, w in enumerate(self.weights):
-                # Deeper in list = shallower in tree → reverse the index
-                depth_from_root = N - i  # or just: importance = i + 1
-                penalty_strength = lam * depth_from_root  # linear
-                depth_weight_penalty += penalty_strength * ((w - 0.5) ** 2).mean()
+            loss = loss * self.loss_amplifier  # Amplify loss
 
-            loss += depth_weight_penalty
-
-            loss = loss * self.loss_amplifier  # Amplify the loss for better training
             loss.backward()
             self.optimizer.step()
                     
@@ -323,6 +330,7 @@ class binaryTreeLogicNet(nn.Module):
             if epoch % 200 == 0:
                 logging.info(f"   Epoch {epoch} - Loss: {loss.item():.4f}")
             epoch += 1
+        logging.info(f" is fronzen: {self.is_frozen}")
         logging.info(f"🧾 Indexes of best models: {best_indexes}")
 
     def sinkhorn(self, log_alpha, n_iters=20, temperature=1.0):
@@ -403,7 +411,11 @@ class binaryTreeLogicNet(nn.Module):
             layer_outputs = []
             epsilon = 1e-6
             for i in range(len(pruned_weights)):
-                w = torch.sigmoid(pruned_weights[i])
+                if self.weight_mode == "fixed":
+                    w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
+                else:
+                    w = torch.sigmoid((pruned_weights[i] - 0.5) * 4)
+                    
                 a = torch.sigmoid(pruned_biases[i])*3-1
 
                 # w_soft = torch.softmax(w, dim=0)
@@ -448,7 +460,11 @@ class binaryTreeLogicNet(nn.Module):
             layer_outputs = []
             epsilon = 1e-6
             for i in range(len(kept_weights)):
-                w = torch.sigmoid(kept_weights[i])
+                if self.weight_mode == "fixed":
+                    w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
+                else:
+                    w = torch.sigmoid((kept_weights[i] - 0.5) * 4)
+
                 a = torch.sigmoid(kept_biases[i])*3-1
               
                 if i == 0:

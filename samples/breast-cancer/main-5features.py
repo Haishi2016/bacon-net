@@ -17,9 +17,7 @@ from bacon.visualization import (
     plot_feature_correlation,
     overlay_sorted_predictions_and_feature,
     plot_feature_sensitivity_synthetic,
-    plot_feature_aggregator_response_aligned,
-    print_table_structure,
-    plot_gcd_aggregator_3d
+    print_table_structure
 )
 from bacon.utils import (
     balance_classes, 
@@ -46,6 +44,7 @@ df['target'] = y
 
 # Separate back
 X = df.drop(columns=['target'])
+X = df[['area3', 'concave_points1', 'area2', 'perimeter3', 'radius3']]
 y = df['target']
 
 feature_names = X.columns.tolist()
@@ -73,18 +72,12 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 # 200 - 95.43%
 # 195 - 96.49%
 # 140 - 94.55%
-bacon = baconNet(input_size=30, freeze_loss_threshold=95, loss_amplifier=1000, weight_penalty_strength=1e-2)
-(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90, max_epochs=12000)
+bacon = baconNet(input_size=5, freeze_loss_threshold=70, loss_amplifier=1000, is_frozen=True, weight_penalty_strength=1e-2)
+(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90, max_epochs=3600, save_path='assembler-5features.pth')
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)
 Y_all = torch.cat([Y_train, Y_test], dim=0)
 
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 1.3, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 0, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 1.99, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, -0.99, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 0.5, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.3, 0.3, grid_points=20)
 # col_idx = df.columns.get_loc('concave_points3')
 # X_all[:, col_idx] = 0.8
 
@@ -119,59 +112,9 @@ best_threshold, best_score = find_best_threshold(bacon, X_all, Y_all, metric='ac
 print(f"Best threshold for accuracy: {best_threshold:.2f}, Best score: {best_score:.4f}")
 print_metrics(bacon, X_all, Y_all, threshold=best_threshold)
 
-bacon.evaluate(X_all, Y_all, threshold=best_threshold)
-accuracies.append(best_score)
-
-for i in range(1, 30):
-    func_eval = bacon.prune_features(i)
-    kept_indices = bacon.assembler.locked_perm[i:].tolist()
-    removed_feature_idx = bacon.assembler.locked_perm[i - 1].item()
-    X_test_pruned = X_all[:, kept_indices]
-    with torch.no_grad():
-        pruned_output = func_eval(X_test_pruned)
-        pruned_accuracy = (pruned_output.round() == Y_all).float().mean().item()
-        accuracies.append(pruned_accuracy)
-        drop = accuracies[i - 1] - pruned_accuracy
-        accuracy_drops.append(drop)
-        feature_contributions.append((removed_feature_idx, drop))
-        print(f"✅ Accuracy after pruning {i} feature(s): {pruned_accuracy * 100:.2f}%")
-
-sorted_contributions = sorted(feature_contributions, key=lambda x: x[1], reverse=True)
-
-print("\n📊 Feature contributions (sorted by accuracy drop):")
-for idx, drop in sorted_contributions:
-    relevance = "❌ Irrelevant" if drop <= 0 else ""
-    print(f"📉 Feature {feature_names[idx]}: accuracy drop = {drop * 100:.2f}% {relevance}")
-
-plt.figure(figsize=(10, 5))
-plt.plot(range(1, len(accuracies) + 1), [a * 100 for a in accuracies], marker='o')
-plt.title("Accuracy vs. Number of Features Pruned")
-plt.xlabel("Number of Features Pruned from Left")
-plt.ylabel("Accuracy (%)")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
 
 plot_sorted_predictions_with_labels(bacon, X_all, Y_all, threshold=best_threshold)
 plot_sorted_predictions_with_errors(bacon, X_all, Y_all, threshold=best_threshold)
 
 for feature in feature_names:
     plot_feature_sensitivity_synthetic(bacon, X_all, feature, feature_names)
-
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concave_points1', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concave_points3', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'area3', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'radius2', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'area2', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concavity1', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concavity3', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'perimeter3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concave_points1', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concave_points3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'area3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'radius2', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'area2', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concavity1', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concavity3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'perimeter3', feature_names)

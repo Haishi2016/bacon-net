@@ -5,16 +5,25 @@ import logging
 import os
 
 class baconNet(nn.Module):
-    def __init__(self, input_size, freeze_loss_threshold=0.07, lock_loss_tolerance=0.01, tree_layout="left", loss_amplifier=1):
+    def __init__(self, input_size, 
+                 freeze_loss_threshold=0.07, 
+                 lock_loss_tolerance=0.01, 
+                 tree_layout="left", 
+                 loss_amplifier=1, 
+                 weight_penalty_strength=1e-3,
+                 weight_mode="trainable",
+                 is_frozen=False):
         super(baconNet, self).__init__()
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
-                                            weight_mode="trainable", 
-                                            weight_value=1.0,                                             
+                                            weight_mode=weight_mode,
+                                            weight_value=0.5,                                             
                                             weight_range=(0.5, 2.0), 
                                             lock_loss_tolerance=lock_loss_tolerance,
                                             tree_layout=tree_layout,
                                             loss_amplifier=loss_amplifier,
+                                            is_frozen = is_frozen,
+                                            weight_penalty_strength = weight_penalty_strength,
                                             weight_choices=None)
     def forward(self, x):
         output = self.assembler(x)
@@ -57,7 +66,12 @@ class baconNet(nn.Module):
     def load_model(self, filepath):
         self.assembler.load_model(filepath)
 
-    def find_best_model(self, x, y, x_test, y_test, attempts = 100, acceptance_threshold = 0.95, save_path = "./assembler.pth", max_epochs = 12000, save_model = True):
+    def find_best_model(self, x, y, x_test, y_test, 
+                        attempts = 100, 
+                        acceptance_threshold = 0.95, 
+                        save_path = "./assembler.pth", 
+                        max_epochs = 12000, 
+                        save_model = True):
         best_accuracy = 0.0
         best_model = None        
         if os.path.exists(save_path):
@@ -79,6 +93,7 @@ class baconNet(nn.Module):
 
             try:
                 self.train_model(x, y, epochs=max_epochs)
+                logging.info(f"✅ assembler frozen: {self.assembler.is_frozen}")
                 if self.assembler.is_frozen:        
                     accuracy = self.evaluate(x_test, y_test)
                     logging.info(f"✅ Attempt {attempt + 1} accuracy: {accuracy:.4f}")

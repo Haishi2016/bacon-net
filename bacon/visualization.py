@@ -117,8 +117,10 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
     print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
 
     previous_w = None
-    weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
-    print(weights)
+    if model.weight_mode == 'fixed':
+        weights = [w.item() for w in model.weights]
+    else:
+        weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
     a = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
     indent = 2
     for i in range(model.num_layers):
@@ -139,7 +141,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
         else:
             print(fmt_label(new_leaf) + f"─{1-weights[i]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
         indent += 15
-            
+
 def print_table_structure(model, labels=None):
     """
     Print the left-associative logic tree as a flat table showing features, weights, and biases at each layer.
@@ -159,7 +161,10 @@ def print_table_structure(model, labels=None):
     print(f"{'Layer':<6} {'Left Feature':<20} {'Right Feature':<20} {'w (left)':<10} {'a (bias)':<10} {'1-w (right)':<12}")
     print("-" * 80)
 
-    weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
+    if model.weight_mode == 'fixed':
+        weights = [w.item() for w in model.weights]
+    else:
+        weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
     biases = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
 
     for i in range(model.num_layers):
@@ -319,6 +324,90 @@ def plot_precision_vs_threshold(model, X_val, Y_val, steps=1000):
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+def plot_gcd_aggregator_3d(model, w, a, grid_points=100):
+    from mpl_toolkits.mplot3d import Axes3D
+
+    x = torch.linspace(0, 1, grid_points)
+    y = torch.linspace(0, 1, grid_points)
+    X, Y = torch.meshgrid(x, y, indexing='ij')
+
+    x_flat = X.flatten()
+    y_flat = Y.flatten()
+
+    with torch.no_grad():
+        output = model.generalized_gcd(x_flat, y_flat, a, w, 1-w)
+        output_grid = output.reshape(grid_points, grid_points).cpu().numpy()
+
+    X = X.cpu().numpy()
+    Y = Y.cpu().numpy()
+
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(X, Y, output_grid, cmap='viridis', edgecolor='none', alpha=0.9)
+    ax.set_xlabel('Left Input (x)')
+    ax.set_ylabel('Right Input (y)')
+    ax.set_zlabel('GCD Output')
+    ax.set_title(f'3D GCD Aggregator Surface\nw={w:.2f}, 1-w={1-w:.2f}, a={a:.2f}')
+    plt.show()
+
+def plot_feature_aggregator_response_aligned(model, X_tensor, feature_name, feature_names):
+    """
+    Plots feature value vs. left input, right input, and aggregator output using model's cached layer_outputs.
+
+    Args:
+        model: Your binaryTreeLogicNet instance.
+        X_tensor: Input tensor [N, D].
+        feature_name: Name of feature to analyze.
+        feature_names: List of all feature names.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    assert feature_name in feature_names, f"Feature '{feature_name}' not found."
+    feature_index = feature_names.index(feature_name)
+    if feature_index == 0:
+        raise ValueError("Feature 0 is always combined at Aggregator 0. No standalone aggregator.")
+
+    model.eval()
+    with torch.no_grad():
+        # Trigger forward pass to ensure layer_outputs and node_outputs are populated
+        _ = model(X_tensor)
+
+        # From model.forward() logic:
+        # At aggregator index (feature_index - 1):
+        #   Left input = node_outputs[feature_index - 1]
+        #   Right input = node_outputs[feature_index]
+        #   Output = self.layer_outputs[feature_index - 1]
+        leaf_values = model.input_to_leaf(X_tensor)
+        node_outputs = list(leaf_values.T)
+
+        left_input = node_outputs[feature_index - 1]
+        right_input = node_outputs[feature_index]
+        aggregator_output = model.layer_outputs[feature_index - 1]
+
+    # Prepare for plotting
+    feature_values = X_tensor[:, feature_index].cpu().numpy()
+    sorted_idx = np.argsort(feature_values)
+    sorted_feature = feature_values[sorted_idx]
+    sorted_left = left_input.cpu().numpy()[sorted_idx]
+    sorted_right = right_input.cpu().numpy()[sorted_idx]
+    sorted_aggregator = aggregator_output.cpu().numpy()[sorted_idx]
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    plt.plot(sorted_feature, sorted_left, label="Left Input", linestyle='-', marker='.')
+    plt.plot(sorted_feature, sorted_right, label="Right Input (Feature itself)", linestyle='-', marker='.')
+    plt.plot(sorted_feature, sorted_aggregator, label="Aggregator Output", linestyle='-', marker='o')
+    plt.xlabel(feature_name)
+    plt.ylabel("Values")
+    plt.title(f"{feature_name} vs. Aggregator {feature_index - 1} Inputs & Output")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
 
 def plot_feature_sensitivity(model, X_tensor, X_tensor_extended, feature_name, feature_names):
     """
