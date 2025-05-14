@@ -173,7 +173,7 @@ class binaryTreeLogicNet(nn.Module):
                     nres = torch.where(torch.isnan(nres), bias, nres)
                 node_outputs.append(nres)
                 # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
-                self.layer_outputs.append(node_outputs[-1])
+                self.layer_outputs.append(nres.detach().clone())
                 final = node_outputs[-1]
 
         return final.unsqueeze(1)  # Add batch dimension
@@ -305,7 +305,7 @@ class binaryTreeLogicNet(nn.Module):
                     topk=self.permutation_max,
                     X=x,
                     Y=y,
-                    noise_std=0.1)                                    
+                    noise_std=0.1)         
                 if best_model is not None:
                     best_indexes.append(best_index)
                 if best_model is not None and best_loss < self.freeze_loss_threshold + self.lock_loss_tolerance:
