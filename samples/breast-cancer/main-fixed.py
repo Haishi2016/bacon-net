@@ -17,9 +17,7 @@ from bacon.visualization import (
     plot_feature_correlation,
     overlay_sorted_predictions_and_feature,
     plot_feature_sensitivity_synthetic,
-    plot_feature_aggregator_response_aligned,
-    print_table_structure,
-    plot_gcd_aggregator_3d
+    print_table_structure
 )
 from bacon.utils import (
     balance_classes, 
@@ -73,18 +71,13 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 # 200 - 95.43%
 # 195 - 96.49%
 # 140 - 94.55%
-bacon = baconNet(input_size=30, freeze_loss_threshold=95, loss_amplifier=1000, weight_penalty_strength=1e-2)
-(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90, max_epochs=12000)
+bacon = baconNet(input_size=30, freeze_loss_threshold=140, loss_amplifier=1000, weight_mode='fixed')
+(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90, max_epochs=12000, 
+                                                    save_path='assembler-fixed.pth')
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)
 Y_all = torch.cat([Y_train, Y_test], dim=0)
 
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 1.3, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 0, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 1.99, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, -0.99, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 0.5, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.3, 0.3, grid_points=20)
 # col_idx = df.columns.get_loc('concave_points3')
 # X_all[:, col_idx] = 0.8
 
@@ -159,19 +152,28 @@ plot_sorted_predictions_with_errors(bacon, X_all, Y_all, threshold=best_threshol
 for feature in feature_names:
     plot_feature_sensitivity_synthetic(bacon, X_all, feature, feature_names)
 
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concave_points1', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concave_points3', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'area3', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'radius2', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'area2', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concavity1', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'concavity3', feature_names)
-plot_feature_aggregator_response_aligned(bacon.assembler, X_all, 'perimeter3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concave_points1', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concave_points3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'area3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'radius2', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'area2', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concavity1', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'concavity3', feature_names)
-plot_feature_sensitivity_synthetic(bacon, X_all, 'perimeter3', feature_names)
+idx1 = feature_names.index("radius3")
+idx2 = feature_names.index("area3")
+idx3 = feature_names.index("concave_points1")
+idx4 = feature_names.index("area2")
+idx5 = feature_names.index("perimeter3")
+
+idx6 = feature_names.index("radius1")
+
+# Extract columns
+
+radius = X_all[:, idx6]
+
+# Compute texture3 as the sum of radius2 and symmetry3
+
+indices = [idx2, idx2, idx3, idx4, idx5]
+selected = X_all[:, indices]   
+
+# Compute max(area3, texture1)
+X_combined = torch.max( 0.2 * selected, dim=1).values # shape: [N]
+# X_combined = torch.pow(X_combined, 3.5)
+X_combined =torch.min(X_combined, radius)
+X_all_extended = torch.cat([X_all, X_combined.unsqueeze(1)], dim=1)
+feature_names.append("combined")
+# plot_multi_feature_sensitivity(bacon, X_all, ['concave_points1', 'texture3', 'concavity3'], feature_names, is_or=False)
+plot_feature_sensitivity(bacon, X_all, X_all_extended, 'combined', feature_names)
