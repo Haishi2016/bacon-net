@@ -15,7 +15,7 @@ input_size = 3
 x, y,  expr_info = generate_classic_boolean_data(input_size, repeat_factor=100, device=device)
 print(f"➗ Expression: {expr_info['expression_text']}")
 
-bacon = baconNet(input_size, freeze_loss_threshold=0.01)
+bacon = baconNet(input_size, freeze_loss_threshold=0.03)
 (best_model, best_accuracy) = bacon.find_best_model(x, y, x, y, acceptance_threshold=0.95, attempts=10, max_epochs=2000, save_model=False)
 
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
