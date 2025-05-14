@@ -16,7 +16,7 @@ y = breast_cancer.data.targets
 y = LabelEncoder().fit_transform(y.values.ravel())
 
 # Train/test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=None)
 
 # Standardize the features
 scaler = MinMaxScaler()
@@ -24,7 +24,7 @@ X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
 # Train Decision Tree with depth limit for compactness
-clf = DecisionTreeClassifier(max_depth=2, random_state=42)
+clf = DecisionTreeClassifier(max_depth=2, random_state=None)
 clf.fit(X_train, y_train)
 
 # Evaluate
