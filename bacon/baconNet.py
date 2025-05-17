@@ -3,7 +3,12 @@ import torch
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 import logging
 import os
+from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator
 
+_aggregator_registry = {
+    "lsp.full_weight": FullWeightAggregator,
+    "lsp.half_weight": HalfWeightAggregator,
+}
 class baconNet(nn.Module):
     def __init__(self, input_size, 
                  freeze_loss_threshold=0.07, 
@@ -12,8 +17,14 @@ class baconNet(nn.Module):
                  loss_amplifier=1, 
                  weight_penalty_strength=1e-3,
                  weight_mode="trainable",
+                 aggregator="lsp.full_weight",
+                 max_permutations=10000,
                  is_frozen=False):
-        super(baconNet, self).__init__()
+        super(baconNet, self).__init__()        
+        if aggregator not in _aggregator_registry:
+            raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
+        aggregator_class = _aggregator_registry[aggregator]
+        aggregator = aggregator_class()
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
                                             weight_mode=weight_mode,
@@ -23,6 +34,8 @@ class baconNet(nn.Module):
                                             tree_layout=tree_layout,
                                             loss_amplifier=loss_amplifier,
                                             is_frozen = is_frozen,
+                                            permutation_max=max_permutations,
+                                            aggregator=aggregator,
                                             weight_penalty_strength = weight_penalty_strength,
                                             weight_choices=None)
     def forward(self, x):

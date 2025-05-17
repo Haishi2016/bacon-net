@@ -28,6 +28,7 @@ class binaryTreeLogicNet(nn.Module):
                  permutation_max=10000,
                  tree_layout="left",
                  weight_penalty_strength=1e-3,
+                 aggregator=None,
                  device=None):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
@@ -36,6 +37,7 @@ class binaryTreeLogicNet(nn.Module):
         self.weight_value = weight_value
         self.weight_range = weight_range
         self.loss_amplifier = loss_amplifier
+        self.aggregator = aggregator
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32, device=self.device) if weight_choices else None
         self.noise_increase = noise_increase
@@ -131,7 +133,7 @@ class binaryTreeLogicNet(nn.Module):
             idx = combine.node_index
             a_scaled = biases[idx]
             w = weights[idx]
-            out = self.generalized_gcd(left, right, a_scaled, w, 1-w)
+            out = self.aggregator.aggregate(left, right, a_scaled, w, 1-w)
 
             combine.node_index += 1
             return out
@@ -167,7 +169,7 @@ class binaryTreeLogicNet(nn.Module):
                 else:
                     left = node_outputs[-1]  # previous node
                     right = node_outputs[i + 1]  # next input
-                nres = self.generalized_gcd(left, right, a, w, 1-w)
+                nres = self.aggregator.aggregate(left, right, a, w, 1-w)
                 # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
                 if torch.isnan(nres).any():
                     nres = torch.where(torch.isnan(nres), bias, nres)
@@ -177,75 +179,7 @@ class binaryTreeLogicNet(nn.Module):
                 final = node_outputs[-1]
 
         return final.unsqueeze(1)  # Add batch dimension
-    
-    def F(self, x,y,a, w0, w1):
-        try:
-            epsilon = 1e-6  # To prevent division by zero
-
-            x = torch.where(torch.isnan(x), torch.tensor(epsilon, device=x.device), x)
-            y = torch.where(torch.isnan(y), torch.tensor(epsilon, device=y.device), y)
-
-            x = torch.clamp(x, min=epsilon, max=1-epsilon)
-            y = torch.clamp(y, min=epsilon, max=1-epsilon)
-
-            if not isinstance(a, torch.Tensor):
-                a = torch.tensor(a, dtype=torch.float32)
-
-            # a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
-            # a = torch.nan_to_num(a, nan=-1.0, posinf=2.0-epsilon, neginf=-1.0+epsilon)
-            # a = a.clamp(-1.0 + epsilon, 2.0 - epsilon)  # avoid exact ends
-            # if a == 2, return 1 of x==y==1, otherwise 0
-            if torch.any(torch.abs(a - 2) < epsilon):
-                cond = torch.logical_and(torch.abs(x - 1) < epsilon, torch.abs(y - 1) < epsilon)
-                result = torch.where(cond, torch.ones_like(x), torch.zeros_like(x))
-                if torch.isnan(result).any():
-                    print(f"[TRACE] Rule 0 result has NaN: {torch.isnan(result).any()}")
-                return result
-
-            # if 1.25 < a < 2, return (xy)^(sqrt(3/(2-a))-1)
-            elif torch.logical_and(a >= 0.75, a < 2):
-                result = (x ** (2*w0) * y ** (2*w1)) ** (torch.sqrt(3 / (2 - a)) - 1)
-                if torch.isnan(result).any():
-                    print(f"[TRACE] Rule 1 result has NaN: {torch.isnan(result).any()}")
-                
-                return result
-            
-            # 1/2 < a < 3/4 return (3-4a)(0.5x+0.5y) + (4a-2)(0.5x^R+0.5y^R)^1/R
-            elif torch.logical_and(a > 0.5, a < 0.75):
-                result = (3-4*a)*(w0*x+w1*y) + (4*a-2)*(x ** (2*w0) * y ** (2*w1)) ** (torch.sqrt(3 / (2 - a)) - 1)
-                if torch.isnan(result).any():
-                    result = torch.where(torch.isnan(result), torch.tensor(float('inf'), device=result.device), result)
-                    print(f"[TRACE] Rule 6 result has NaN: {torch.isnan(result).any()} scalar_a={a} x={x} y={y}")
-                return result
-            
-            # a == 0.5 return 0.5x+0.5y
-            elif torch.any(torch.abs(a - 0.5) < epsilon):
-                result = w0*x + w1*y
-                if torch.isnan(result).any():
-                    print(f"[TRACE] Rule 7 result has NaN: {torch.isnan(result).any()}")
-                return result
-
-            # -1 <= a < 0.5 return 1-F(1-x,1-y,1-a)
-            elif torch.logical_and(a >= -1, a < 0.5):
-                result = 1 - self.F(1-x, 1-y, (1-a).clamp(-1.0 + epsilon, 2.0 - epsilon), w0, w1)
-                #result = 1 - self.F(1-x, 1-y, 1-a, w0, w1)
-                if torch.isnan(result).any():
-                    print(f"[TRACE] Rule 8 result has NaN: {torch.isnan(result).any()}")
-                return result
-            else:
-                raise ValueError(f"Invalid value for a: {a}. Must be in [-1, 2].")
-        except Exception as e:
-            print(f"[ERROR] Exception in F: {e}")
-            print(f"[DEBUG] x: {x}, y: {y}, a: {a}, w0: {w0}, w1: {w1}")
-            raise e
-
-    def generalized_gcd(self, a, b, r, w0, w1):
-        if a is None or b is None:
-            raise ValueError(f"[ERROR] One of the inputs to generalized_gcd is None! a={a}, b={b}")
-        if torch.isnan(a).any() or torch.isnan(b).any():
-            raise ValueError(f"[ERROR] NaN input to generalized_gcd: a={a}, b={b}")
-        return self.F(a, b, r, w0, w1)
-    
+        
     def train_model(self, x, y, epochs):
         self.reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices, self.is_frozen)
         loss_history = []
@@ -330,7 +264,6 @@ class binaryTreeLogicNet(nn.Module):
             if epoch % 200 == 0:
                 logging.info(f"   Epoch {epoch} - Loss: {loss.item():.4f}")
             epoch += 1
-        logging.info(f" is fronzen: {self.is_frozen}")
         logging.info(f"🧾 Indexes of best models: {best_indexes}")
 
     def sinkhorn(self, log_alpha, n_iters=20, temperature=1.0):
@@ -427,7 +360,7 @@ class binaryTreeLogicNet(nn.Module):
                     # Normal aggregator behavior
                     left = node_outputs[-1]
                     right = node_outputs[i]
-                z = self.generalized_gcd(left, right, a, w, 1-w)
+                z = self.aggregator.aggregate(left, right, a, w, 1-w)
                 node_outputs.append(z)
                 layer_outputs.append(z)
             # final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
@@ -474,7 +407,7 @@ class binaryTreeLogicNet(nn.Module):
                     left = node_outputs[-1]
                     right = node_outputs[i]
 
-                z = self.generalized_gcd(left, right, a, w, 1-w)
+                z = self.aggregator.aggregate(left, right, a, w, 1-w)
                 node_outputs.append(z)
                 layer_outputs.append(z)
 
