@@ -1,5 +1,7 @@
 # BACON
 
+⚠️ Latest code is available at: https://anonymous.4open.science/r/bacon-net ⚠️
+
 BACON is an end-to-end explainable AI model that offers full transparency in automated decision-making processes. It employs [Graded Logic](https://link.springer.com/book/9783031885570) to construct an aggregation tree that reveals how inputs are combined into a final output across various scenarios, including purchasing a house, selecting a vendor, making a medical diagnosis, or determining actions for a humanoid.
 
 The BACON architecture is built from the ground up to support explainability. It includes a permutation layer that explores possible input orderings (since commutativity is not assumed), and an aggregation layer that merges inputs based on a logical model such as the [Logic Scoring of Preference (LSP) method](https://books.google.com/books/about/Soft_Computing_Evaluation_Logic.html?id=PgtuDwAAQBAJ). The resulting model is fully explainable, highly precise, and efficient for inference.
