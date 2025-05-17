@@ -56,6 +56,7 @@ The following are some settings that worked in earlier tests:
 
 | input_size | max_epoch | freeze_loss_threshold |
 |--------|--------|--------|
-| 3 | 2000 | 0.01 |
-| 5 | 2000 | 0.03 |
-| 7 | 2000 | 0.08 |
+| <=7 | 2000 | 0.03 |
+| <=9 | 2000 | 0.08 |
+
+⚠️ n this scenario, if the accuracy is less than 100%, it means that BACON has discovered an expression that closely approximates the target logic, but does not exactly replicate it. ⚠️

@@ -351,6 +351,49 @@ def plot_gcd_aggregator_3d(model, w, a, grid_points=100):
     ax.set_title(f'3D GCD Aggregator Surface\nw={w:.2f}, 1-w={1-w:.2f}, a={a:.2f}')
     plt.show()
 
+def plot_gcd_aggregator_3d_minimal(model, w, a, grid_points=5):
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    import torch
+    import numpy as np
+
+    # Create coarse grid
+    x = torch.linspace(0, 1, grid_points)
+    y = torch.linspace(0, 1, grid_points)
+    X, Y = torch.meshgrid(x, y, indexing='ij')
+
+    x_flat = X.flatten()
+    y_flat = Y.flatten()
+
+    # Evaluate model
+    with torch.no_grad():
+        Z = model.generalized_gcd(x_flat, y_flat, a, w, 1 - w).reshape(grid_points, grid_points).cpu().numpy()
+
+    X = X.cpu().numpy()
+    Y = Y.cpu().numpy()
+
+    # Create pure white facecolors with full alpha (RGBA)
+    white_facecolors = np.full((grid_points, grid_points, 4), [1, 1, 1, 1])
+
+    # Plot
+    fig = plt.figure(figsize=(7, 5))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(X, Y, Z,
+                    facecolors=white_facecolors,
+                    edgecolor='black',
+                    linewidth=0.5,
+                    antialiased=False,
+                    shade=False)  # Important to disable shading
+
+    ax.view_init(elev=20, azim=-137)  # Fix view angle
+
+    # ax.set_xlabel('Left Input (x)')
+    # ax.set_ylabel('Right Input (y)')
+    # ax.set_zlabel('GCD Output')
+    # ax.set_title(f'GCD Aggregator (Minimal Grid)\nw={w:.2f}, 1-w={1-w:.2f}, a={a:.2f}')
+    plt.show()
+
+
 def plot_feature_aggregator_response_aligned(model, X_tensor, feature_name, feature_names):
     """
     Plots feature value vs. left input, right input, and aggregator output using model's cached layer_outputs.

@@ -19,7 +19,7 @@ from bacon.visualization import (
     plot_feature_sensitivity_synthetic,
     plot_feature_aggregator_response_aligned,
     print_table_structure,
-    plot_gcd_aggregator_3d
+    plot_gcd_aggregator_3d_minimal
 )
 from bacon.utils import (
     balance_classes, 
@@ -73,18 +73,18 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 # 200 - 95.43%
 # 195 - 96.49%
 # 140 - 94.55%
-bacon = baconNet(input_size=30, freeze_loss_threshold=95, loss_amplifier=1000, weight_penalty_strength=1e-3)
+bacon = baconNet(input_size=30, freeze_loss_threshold=70, loss_amplifier=1000, weight_penalty_strength=1e-4)
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90, max_epochs=12000)
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)
 Y_all = torch.cat([Y_train, Y_test], dim=0)
 
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 1.3, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 0, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 1.99, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, -0.99, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.5, 0.5, grid_points=20)
-plot_gcd_aggregator_3d(bacon.assembler, 0.3, 0.3, grid_points=20)
+plot_gcd_aggregator_3d_minimal(bacon.assembler, 0.5, 1.3, grid_points=20)
+plot_gcd_aggregator_3d_minimal(bacon.assembler, 0.5, 0, grid_points=20)
+plot_gcd_aggregator_3d_minimal(bacon.assembler, 0.5, 1.99, grid_points=20)
+plot_gcd_aggregator_3d_minimal(bacon.assembler, 0.5, -0.99, grid_points=20)
+plot_gcd_aggregator_3d_minimal(bacon.assembler, 0.5, 0.5, grid_points=20)
+plot_gcd_aggregator_3d_minimal(bacon.assembler, 0.3, 0.3, grid_points=20)
 # col_idx = df.columns.get_loc('concave_points3')
 # X_all[:, col_idx] = 0.8
 
