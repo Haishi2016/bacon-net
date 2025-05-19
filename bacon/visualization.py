@@ -41,7 +41,10 @@ def visualize_tree_structure(model, labels=None):
     # Build the tree structure and assign labels
     for i in range(model.num_layers):
         a = (torch.sigmoid(model.biases[i])*3-1).item()
-        w = model.weights[i].detach().cpu().numpy().item()
+        if model.weight_mode == 'fixed':
+            w = model.weights[i].item()
+        else:
+            w = torch.sigmoid(model.weights[i]).item()
 
         left = f"Node{i}" if i > 0 else leaf_names[0]
         right = leaf_names[i + 1]

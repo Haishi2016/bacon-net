@@ -55,7 +55,7 @@ X_train_2f.requires_grad_()
 X_test_2f.requires_grad_()
 
 # Train BACON
-bacon = baconNet(input_size=2, freeze_loss_threshold=0.35)
+bacon = baconNet(input_size=2, freeze_loss_threshold=0.35, weight_mode='fixed')
 best_model, best_accuracy = bacon.find_best_model(
     X_train_2f, Y_train, X_test_2f, Y_test, 
     attempts=100, 
