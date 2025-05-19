@@ -106,7 +106,7 @@ class baconNet(nn.Module):
 
             try:
                 self.train_model(x, y, epochs=max_epochs)
-                logging.info(f"✅ assembler frozen: {self.assembler.is_frozen}")
+                logging.info(f"✅ Permutation is frozen: {self.assembler.is_frozen}")
                 if self.assembler.is_frozen:        
                     accuracy = self.evaluate(x_test, y_test)
                     logging.info(f"✅ Attempt {attempt + 1} accuracy: {accuracy:.4f}")

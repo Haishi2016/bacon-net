@@ -50,7 +50,7 @@ X_train = 1 - X_train  # Invert the features
 X_test = 1 - X_test    # Invert the features
 
 # Train BACON
-bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.4)
+bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.4, weight_mode='fixed')
 best_model, best_accuracy = bacon.find_best_model(
     X_train, Y_train, X_test, Y_test, 
     attempts=100, 

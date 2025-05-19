@@ -47,7 +47,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 Y_test = torch.tensor(y_test_np.reshape(-1, 1), dtype=torch.float32).to(device)
 
 # Train BACON
-bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.4)
+bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.4, weight_mode='fixed')
 best_model, best_accuracy = bacon.find_best_model(
     X_train, Y_train, X_test, Y_test, 
     attempts=100, 

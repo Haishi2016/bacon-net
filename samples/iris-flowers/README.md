@@ -24,8 +24,8 @@ Because BACON operates on degrees of truth, all features are reversed before tra
 ```bash
 🔍 Training BACON to detect class 'Iris-setosa' vs others
 📂 Found saved model at assembler-setosa.pth, loading...
-✅ Loaded model accuracy: 0.9667
-✅ Best accuracy for 'Iris-setosa' vs rest: 96.67%
+✅ Loaded model accuracy: 1.0000
+✅ Best accuracy for 'Iris-setosa' vs rest: 100.00%
 ```
 ## Versicolor classification
 ```bash

@@ -1,4 +1,6 @@
 import sys
+
+from sklearn.preprocessing import MinMaxScaler
 sys.path.append('../../')
 from sklearn.model_selection import train_test_split
 import torch
@@ -21,15 +23,15 @@ feature_indices = {name: idx for idx, name in enumerate(features)}
 
 df = df[features].dropna()
 
-df = df[df['acre_lot'] < 10]
+df = df[df['acre_lot'] < 5]
 df = df[df['bed'] < 10]
 df = df[df['bath'] < 10]
 
 def purchasing_condition(row):
     return (
         row['bed'] >= 4 
-        or row['bath'] >= 3
-        or row['acre_lot'] >= 0.5
+        and row['bath'] >= 3
+        and row['acre_lot'] >= 0.5
     )
 
 df['Buy'] = df.apply(purchasing_condition, axis=1).astype(float)
@@ -44,7 +46,7 @@ X_test_np_original = X_test_np.copy()
 
 
 # Standardize the features
-scaler = SigmoidScaler()
+scaler = MinMaxScaler()
 X_train_np = scaler.fit_transform(X_train_np)
 X_test_np = scaler.transform(X_test_np)
 
@@ -56,7 +58,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 Y_test = torch.tensor(y_test_np.values.reshape(-1, 1), dtype=torch.float32).to(device)
 
 # Initialize and train the BACON model
-bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.15)
+bacon = baconNet(input_size=X.shape[1], freeze_loss_threshold=0.15, weight_mode='fixed', aggregator='lsp.half_weight')
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, 
         attempts=100, 
         acceptance_threshold=0.90,
