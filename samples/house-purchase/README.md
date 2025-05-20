@@ -34,3 +34,28 @@ Notably, `bath` is considered irrelevant in this case, even though the original 
 ✅ Accuracy after pruning 4 feature(s): 92.71%
 ✅ Accuracy after pruning 5 feature(s): 87.84%
 ```
+
+## Condition 2
+```bash
+python main-condition2.py
+```
+Sample outputs:
+```bash
+📂 Found saved model at ./assembler-condition2.pth, loading...
+✅ Loaded model accuracy: 0.9324
+🏆 Best accuracy: 93.24%
+
+🧠 Logical Aggregation Tree (Left-Associative):
+
+  [house_size]─0.50────┐
+       [price]─0.50──[a=1.61567378]─0.50────┐
+    [zip_code]─0.50─────────────────[a=1.60525060]─0.50────┐
+        [bath]─0.50────────────────────────────────[a=-0.89010799]─0.50────┐
+         [bed]─0.50───────────────────────────────────────────────[a=1.15654206]─0.50────┐
+    [acre_lot]─0.50──────────────────────────────────────────────────────────────[a=0.94135535]──OUTPUT
+✅ Accuracy after pruning 1 feature(s): 93.24%
+✅ Accuracy after pruning 2 feature(s): 93.24%
+✅ Accuracy after pruning 3 feature(s): 93.24%
+✅ Accuracy after pruning 4 feature(s): 93.03%
+✅ Accuracy after pruning 5 feature(s): 93.03%
+```
