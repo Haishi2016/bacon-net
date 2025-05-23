@@ -56,4 +56,4 @@ from bacon.utils import generate_classic_boolean_data
 
 ## Resources
 
-* [BACON Documentation](./docs/build/index.html)
+* [BACON Documentation](./docs/build/html/index.html)
