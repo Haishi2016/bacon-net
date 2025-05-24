@@ -8,13 +8,25 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 import logging
 
-def generate_classic_boolean_data(num_vars=5, repeat_factor=100, device=None):
+def generate_classic_boolean_data(num_vars=5, repeat_factor=100, randomize=False, device=None):
+    """ Generate a dataset for classic boolean expressions with a specified number of variables.
+
+    Args:
+        num_vars (int): Number of boolean variables (A, B, C, etc.) to use in the expression.
+        repeat_factor (int): How many times to repeat the truth table for each variable combination.
+        randomize (bool): If True, randomize the order of variable combinations.
+        device (torch.device): Device to store the generated tensors.
+    Returns:
+        tuple: A tuple containing:
+            - torch.Tensor: Input data tensor of shape (num_cases, num_vars).
+            - torch.Tensor: Output labels tensor of shape (num_cases, 1).
+            - dict: Metadata dictionary with expression details.
+    """
     logging.info("🧠 Generating data...")
     assert num_vars >= 2, "Need at least 2 variables for expression."
     data = []
     labels = []
-    base_cases = list(itertools.product([0, 1], repeat=num_vars))
-
+    
     # generate stable ops per variable link
     ops = [random.choice(["and", "or"]) for _ in range(num_vars - 1)]
 
@@ -27,12 +39,21 @@ def generate_classic_boolean_data(num_vars=5, repeat_factor=100, device=None):
         symbolic_expr = f"({symbolic_expr} {op} {var_names[i]})"
         eval_expr = f"({eval_expr} {op} x[{i}])"
 
-    # evaluate the expression across the truth table
-    for _ in range(repeat_factor):
-        for x in base_cases:
+    if randomize:
+        logging.info("⚡ Randomized input generation mode enabled.")
+        num_samples = repeat_factor  # reinterpret repeat_factor as sample count
+        for _ in range(num_samples):
+            x = [random.randint(0, 1) for _ in range(num_vars)]
             y = int(eval(eval_expr))
-            data.append(list(x))
+            data.append(x)
             labels.append([y])
+    else:
+        base_cases = list(itertools.product([0, 1], repeat=num_vars))
+        for _ in range(repeat_factor):
+            for x in base_cases:
+                y = int(eval(eval_expr))
+                data.append(list(x))
+                labels.append([y])
     return (
         torch.tensor(data, dtype=torch.float32, device=device),
         torch.tensor(labels, dtype=torch.float32, device=device),
