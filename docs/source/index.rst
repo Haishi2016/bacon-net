@@ -6,13 +6,12 @@
 BACON documentation
 ===================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
-
+Welcome to BACON, an end-to-end explanable AI model for decision-making problems.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    dev-guide/dev-guide.md
+   bacon
+   aggregators/index

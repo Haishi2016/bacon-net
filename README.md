@@ -1,6 +1,6 @@
 # BACON
 
-⚠️ Latest code is available at: https://anonymous.4open.science/r/bacon-net ⚠️
+⚠️ To browse HTML-based documentation, clone this repository and open `docs/build/html/index.html` ⚠️
 
 BACON is an end-to-end explainable AI framework designed to produce transparent, logically grounded decision models. Unlike black-box systems, BACON explicitly constructs interpretable aggregation trees using [Graded Logic]((https://link.springer.com/book/9783031885570)), a formalism that captures nuanced reasoning with degrees of truth. These trees reveal how individual inputs contribute to the final output, offering step-by-step insight into the decision-making process. BACON has been applied to diverse, high-stakes domains such as housing decisions, vendor evaluation, clinical diagnosis, and robotic control, where clarity, trust, and human-alignment are critical.
 

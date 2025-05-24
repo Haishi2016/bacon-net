@@ -10,6 +10,21 @@ _aggregator_registry = {
     "lsp.half_weight": HalfWeightAggregator,
 }
 class baconNet(nn.Module):
+    """
+    Represents a BACON network for interpretable decision-making using graded logic.
+
+    Args:
+        input_size (int): Number of input features.
+        freeze_loss_threshold (float, optional): Loss threshold at which to freeze structure learning. Defaults to 0.07.
+        lock_loss_tolerance (float, optional): Tolerance for locking permutations. Defaults to 0.01.
+        tree_layout (str, optional): Layout of the tree. Defaults to "left".
+        loss_amplifier (float, optional): Amplifier for the loss. Defaults to 1.
+        weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3.
+        weight_mode (str, optional): Mode for weight configuration. Defaults to "trainable".
+        aggregator (str, optional): Aggregation strategy. Defaults to "lsp.full_weight".
+        max_permutations (int, optional): Maximum permutations to explore. Defaults to 10000.
+        is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
+    """
     def __init__(self, input_size, 
                  freeze_loss_threshold=0.07, 
                  lock_loss_tolerance=0.01, 
@@ -39,9 +54,25 @@ class baconNet(nn.Module):
                                             weight_penalty_strength = weight_penalty_strength,
                                             weight_choices=None)
     def forward(self, x):
+        """ Forward pass through the BACON network.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, 1).
+        """
         output = self.assembler(x)
         return output
     def train_model(self, x, y, epochs):
+        """ Train the BACON network.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+            y (torch.Tensor): Target tensor of shape (batch_size, 1).
+            epochs (int): Number of training epochs.
+        Returns:
+            dict: Training output containing loss and accuracy.
+        """
         try:
             output = self.assembler.train_model(x,y, epochs)
         except RuntimeError as e:
@@ -49,6 +80,14 @@ class baconNet(nn.Module):
             raise e
         return output
     def inference(self, x, threshold=0.5):
+        """ Perform inference on the BACON network.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+            threshold (float, optional): Threshold for binarizing the output. Defaults to 0.5.
+        Returns:
+            torch.Tensor: Binarized output tensor of shape (batch_size, 1).
+        """
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
@@ -57,11 +96,27 @@ class baconNet(nn.Module):
             predictions = (outputs > threshold).float()
             return predictions
     def inference_raw(self, x):
+        """ Perform raw inference on the BACON network. Returns the level of truth in [0,1] instead of binarized output.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+        Returns:
+            torch.Tensor: Raw output tensor of shape (batch_size, 1).
+        """
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
             return outputs
     def evaluate(self, x, y, threshold=0.5):
+        """ Evaluate the BACON network.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+            y (torch.Tensor): Target tensor of shape (batch_size, 1).
+            threshold (float, optional): Threshold for binarizing the output. Defaults to 0.5.
+        Returns:
+            float: Accuracy of the model on the input data.
+        """
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
@@ -71,12 +126,22 @@ class baconNet(nn.Module):
             accuracy = (predictions == y).float().mean()
             return accuracy.item()
     def save_model(self, filepath):
+        """ Save the BACON network model to a file.
+
+        Args:
+            filepath (str): Path to save the model.
+        """        
         directory = os.path.dirname(filepath)
         if directory:
             os.makedirs(directory, exist_ok=True)
         self.assembler.save_model(filepath)
 
     def load_model(self, filepath):
+        """ Load the BACON network model from a file.
+
+        Args:
+            filepath (str): Path to load the model from.
+        """
         self.assembler.load_model(filepath)
 
     def find_best_model(self, x, y, x_test, y_test, 
@@ -85,6 +150,21 @@ class baconNet(nn.Module):
                         save_path = "./assembler.pth", 
                         max_epochs = 12000, 
                         save_model = True):
+        """ Find the best model by training multiple times and evaluating accuracy.
+
+        Args:
+            x (torch.Tensor): Input tensor for training.
+            y (torch.Tensor): Target tensor for training.
+            x_test (torch.Tensor): Input tensor for testing.
+            y_test (torch.Tensor): Target tensor for testing.
+            attempts (int, optional): Number of attempts to find the best model. Defaults to 100.
+            acceptance_threshold (float, optional): Minimum accuracy to accept a model. Defaults to 0.95.
+            save_path (str, optional): Path to save the best model. Defaults to "./assembler.pth".
+            max_epochs (int, optional): Maximum epochs for training. Defaults to 12000.
+            save_model (bool, optional): Whether to save the best model. Defaults to True.
+        Returns:
+            tuple: Best model state dictionary and its accuracy.
+        """
         best_accuracy = 0.0
         best_model = None        
         if os.path.exists(save_path):
@@ -125,12 +205,12 @@ class baconNet(nn.Module):
             self.save_model(save_path)
         return best_model, best_accuracy
     
-    def print_tree_structure(self, labels=None):
-        self.assembler.print_tree_structure(labels)
-        print(f"Permutation: {self.assembler.locked_perm}")
-    
-    def visualize_tree_structure(self, labels=None):
-        self.assembler.visualize_tree_structure(labels)
-        print(f"Permutation: {self.assembler.locked_perm}")
     def prune_features(self, features):
+        """ Prune the features of the BACON network.
+        
+        Args:
+            features (int): Number of features to prune.
+        Returns:
+            torch.Tensor: Pruned features.
+        """
         return self.assembler.prune_features(features=features)    
