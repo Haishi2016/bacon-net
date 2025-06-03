@@ -51,6 +51,9 @@ class binaryTreeLogicNet(nn.Module):
                  tree_layout="left",
                  weight_penalty_strength=1e-3,
                  aggregator=None,
+                 early_stop_patience = 10,
+                 early_stop_min_delta = 1e-4,
+                 early_stop_threshold = 0.01,
                  device=None):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
@@ -66,6 +69,9 @@ class binaryTreeLogicNet(nn.Module):
         self.noise_decrease = noise_decrease
         self.min_noise = min_noise
         self.max_noise = max_noise
+        self.early_stop_patience = early_stop_patience
+        self.early_stop_min_delta = early_stop_min_delta
+        self.early_stop_threshold = early_stop_threshold
         self.lock_loss_tolerance = lock_loss_tolerance
         self.is_frozen = is_frozen
         self.freeze_loss_threshold = freeze_loss_threshold
@@ -207,43 +213,48 @@ class binaryTreeLogicNet(nn.Module):
         Returns:
             torch.Tensor: Output tensor of shape (batch_size, 1).
         """
-        # 🔹 Compute input-to-leaf values
-        leaf_values = self.input_to_leaf(x)
+        try:
+            # 🔹 Compute input-to-leaf values
+            leaf_values = self.input_to_leaf(x)
 
-        if torch.isnan(leaf_values).any():
-            raise ValueError("[DEBUG] NaNs detected in leaf_values!")
+            if torch.isnan(leaf_values).any():
+                raise ValueError("[DEBUG] NaNs detected in leaf_values!")
 
-        node_outputs = list(leaf_values.T)  
-        if self.tree_layout == "balanced":
-            final = self.build_balanced_tree(node_outputs, self.weights, self.biases)
-        else:
-            self.layer_outputs = []  
+            node_outputs = list(leaf_values.T)  
+            if self.tree_layout == "balanced":
+                final = self.build_balanced_tree(node_outputs, self.weights, self.biases)
+            else:
+                self.layer_outputs = []  
 
-            for i in range(self.num_layers):
-                bias = self.biases[i]
+                for i in range(self.num_layers):
+                    bias = self.biases[i]
 
-                a = torch.sigmoid(bias) * 3-1
-                if self.weight_mode == "fixed":
-                    w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
-                else:
-                    w = torch.sigmoid((self.weights[i] - 0.5) * 4)
+                    a = torch.sigmoid(bias) * 3-1
+                    if self.weight_mode == "fixed":
+                        w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
+                    else:
+                        w = torch.sigmoid((self.weights[i] - 0.5) * 4)
 
-                if i == 0:
-                    left = node_outputs[0]
-                    right = node_outputs[1]
-                else:
-                    left = node_outputs[-1]  # previous node
-                    right = node_outputs[i + 1]  # next input
-                nres = self.aggregator.aggregate(left, right, a, w, 1-w)
-                # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
-                if torch.isnan(nres).any():
-                    nres = torch.where(torch.isnan(nres), bias, nres)
-                node_outputs.append(nres)
-                # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
-                self.layer_outputs.append(nres.detach().clone())
-                final = node_outputs[-1]
+                    if i == 0:
+                        left = node_outputs[0]
+                        right = node_outputs[1]
+                    else:
+                        left = node_outputs[-1]  # previous node
+                        right = node_outputs[i + 1]  # next input
+                    nres = self.aggregator.aggregate(left, right, a, w, 1-w)
+                    # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
+                    if torch.isnan(nres).any():
+                        nres = torch.where(torch.isnan(nres), bias, nres)
+                    node_outputs.append(nres)
+                    # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
+                    self.layer_outputs.append(nres.detach().clone())
+                    final = node_outputs[-1]
 
-        return final.unsqueeze(1)  # Add batch dimension
+            return final.unsqueeze(1)  # Add batch dimension
+        except Exception as e:
+            logging.error(f"[ERROR] Exception in forward pass: {e}")
+            logging.error(f"[DEBUG] Input x: {x}")
+            raise e
         
     def train_model(self, x, y, epochs):
         """Train the binary tree logic network.
@@ -261,6 +272,8 @@ class binaryTreeLogicNet(nn.Module):
         criterion = nn.BCELoss()
         best_indexes = []
         epoch = 0
+        patience_counter = 0
+        best_loss = float('inf')
         while epoch < epochs:
             if hasattr(self.input_to_leaf, "temperature") and (epoch + 1) % 1000 == 0:
                 self.input_to_leaf.temperature *= 0.8
@@ -334,9 +347,24 @@ class binaryTreeLogicNet(nn.Module):
                     self.is_frozen = False
                     self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True).to(self.device)
                     self.reset_optimizer() 
-                    
+
+            if self.is_frozen:
+                if loss.item() < best_loss - self.early_stop_min_delta:
+                    best_loss = loss.item()
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+
+                if best_loss < self.early_stop_threshold:
+                    logging.info(f"🎯 Early stopping triggered by reaching low loss: {best_loss:.6f} at epoch {epoch}")
+                    break
+
+                if patience_counter >= self.early_stop_patience:
+                    logging.info(f"🛑 Early stopping triggered by plateau. Best loss: {best_loss:.6f}")
+                    break
+        
             if epoch % 200 == 0:
-                logging.info(f"   Epoch {epoch} - Loss: {loss.item():.4f}")
+                logging.info(f"   🏋️ Epoch {epoch} - Loss: {loss.item():.4f}")
             epoch += 1
         logging.info(f"🧾 Indexes of best models: {best_indexes}")
 

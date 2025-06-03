@@ -4,10 +4,12 @@ from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 import logging
 import os
 from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator
+from bacon.aggregators.bool import MinMaxAggregator
 
 _aggregator_registry = {
     "lsp.full_weight": FullWeightAggregator,
     "lsp.half_weight": HalfWeightAggregator,
+    "bool.min_max": MinMaxAggregator
 }
 class baconNet(nn.Module):
     """
