@@ -78,7 +78,7 @@ class FullWeightAggregator(AggregatorBase):
 
             # -1 <= a < 0.5 return 1-F(1-x,1-y,1-a)
             elif torch.logical_and(a >= -1, a < 0.5):
-                result = 1 - self.F(1-x, 1-y, (1-a).clamp(-1.0 + epsilon, 2.0 - epsilon), w0, w1)
+                result = 1 - self._F(1-x, 1-y, (1-a).clamp(-1.0 + epsilon, 2.0 - epsilon), w0, w1)
                 #result = 1 - self.F(1-x, 1-y, 1-a, w0, w1)
                 if torch.isnan(result).any():
                     print(f"[TRACE] Rule 8 result has NaN: {torch.isnan(result).any()}")

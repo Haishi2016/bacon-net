@@ -35,6 +35,7 @@ class baconNet(nn.Module):
                  loss_amplifier=1, 
                  weight_penalty_strength=1e-3,
                  weight_mode="trainable",
+                 weight_normalization="minmax",
                  aggregator="lsp.full_weight",
                  normalize_andness=True,
                  max_permutations=10000,
@@ -55,6 +56,7 @@ class baconNet(nn.Module):
                                             loss_amplifier=loss_amplifier,
                                             is_frozen = is_frozen,
                                             permutation_max=max_permutations,
+                                            weight_normalization=weight_normalization,
                                             aggregator=aggregator,
                                             weight_penalty_strength = weight_penalty_strength,
                                             weight_choices=None)

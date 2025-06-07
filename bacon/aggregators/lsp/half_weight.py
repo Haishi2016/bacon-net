@@ -7,13 +7,13 @@ class HalfWeightAggregator(AggregatorBase):
     def aggregate_float(self, a: float, b: float, r: float, w0: float, w1: float) -> float:
         pass
 
-    def aggregate_tensor(self, a, b, r, w0, w1):
+    def aggregate_tensor(self, x1, x2, andness, w0, w1):
         import torch
-        if a is None or b is None:
-            raise ValueError(f"[ERROR] One of the inputs to generalized_gcd is None! a={a}, b={b}")
-        if torch.isnan(a).any() or torch.isnan(b).any():
-            raise ValueError(f"[ERROR] NaN input to generalized_gcd: a={a}, b={b}")
-        return self.F(a, b, r, w0, w1)
+        if x1 is None or x2 is None:
+            raise ValueError(f"[ERROR] One of the inputs to generalized_gcd is None! x1={x1}, x2={x2}")
+        if torch.isnan(x1).any() or torch.isnan(x2).any():
+            raise ValueError(f"[ERROR] NaN input to generalized_gcd: x1={x1}, x2={x2}")
+        return self._F(x1, x2, andness, w0, w1)
     def r(self, a):
         import torch
         if not torch.is_tensor(a):
@@ -29,7 +29,7 @@ class HalfWeightAggregator(AggregatorBase):
         denominator = torch.where(denominator.abs() < 1e-6, torch.full_like(denominator, epsilon), denominator)  # Avoid division by zero
         return numerator / denominator
     
-    def F(self, x,y,a, w0, w1):
+    def _F(self, x,y,a, w0, w1):
         import torch
         try:
             epsilon = 1e-6  # To prevent division by zero
@@ -81,7 +81,7 @@ class HalfWeightAggregator(AggregatorBase):
 
             # -1 <= a < 0.5 return 1-F(1-x,1-y,1-a)
             elif torch.logical_and(a >= -1, a < 0.5):
-                result = 1 - self.F(1-x, 1-y, (1-a).clamp(-1.0 + epsilon, 2.0 - epsilon), w0, w1)
+                result = 1 - self._F(1-x, 1-y, (1-a).clamp(-1.0 + epsilon, 2.0 - epsilon), w0, w1)
                 #result = 1 - self.F(1-x, 1-y, 1-a, w0, w1)
                 if torch.isnan(result).any():
                     print(f"[TRACE] Rule 8 result has NaN: {torch.isnan(result).any()}")
