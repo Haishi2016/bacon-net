@@ -7,15 +7,28 @@ class FullWeightAggregator(AggregatorBase):
     def aggregate_float(self, a: float, b: float, r: float, w0: float, w1: float) -> float:
         pass
 
-    def aggregate_tensor(self, a, b, r, w0, w1):
+    def aggregate_tensor(self, x1, x2, andness, w0, w1):
+        """
+        Aggregates two tensors using the Full Weight method.
+
+        Args:
+            x1 (torch.Tensor): First input tensor.
+            x2 (torch.Tensor): Second input tensor.
+            andness (float): Andness.
+            w0 (float): Weight for the first tensor.
+            w1 (float): Weight for the second tensor.
+
+        Returns:
+            torch.Tensor: Resulting tensor after aggregation.
+        """
         import torch
-        if a is None or b is None:
-            raise ValueError(f"[ERROR] One of the inputs to generalized_gcd is None! a={a}, b={b}")
-        if torch.isnan(a).any() or torch.isnan(b).any():
-            raise ValueError(f"[ERROR] NaN input to generalized_gcd: a={a}, b={b}")
-        return self.F(a, b, r, w0, w1)
+        if x1 is None or x2 is None:
+            raise ValueError(f"[ERROR] One of the inputs to generalized_gcd is None! x1={x1}, x2={x2}")
+        if torch.isnan(x1).any() or torch.isnan(x2).any():
+            raise ValueError(f"[ERROR] NaN input to generalized_gcd: x1={x1}, x2={x2}")
+        return self._F(x1, x2, andness, w0, w1)
     
-    def F(self, x,y,a, w0, w1):
+    def _F(self, x,y,a, w0, w1):
         import torch
         try:
             epsilon = 1e-6  # To prevent division by zero

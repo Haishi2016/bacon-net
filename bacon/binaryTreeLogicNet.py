@@ -25,12 +25,12 @@ class binaryTreeLogicNet(nn.Module):
         min_noise (float, optional): Minimum noise level. Defaults to 0.0.
         max_noise (float, optional): Maximum noise level. Defaults to 2.0.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
-        lock_loss_tolerance (float, optional): Tolerance for locking permutations. Defaults to 0.04.
-        freeze_loss_threshold (float, optional): Loss threshold at which to freeze structure learning. Defaults to 0.07.
+        lock_loss_tolerance (float, optional): The maximum tolerated accuracy loss when locking the structure. Defaults to 0.04. Note that this is multiplied by `loss_amplifier`.
+        freeze_loss_threshold (float, optional): Loss threshold at which to freeze structure learning. Defaults to 0.07. Note that this is multiplied by `loss_amplifier`.
         permutation_max (int, optional): Maximum permutations to explore. Defaults to 10000.
         tree_layout (str, optional): Layout of the tree. Defaults to "left".
-        weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3.
-        aggregator (callable, optional): Aggregation strategy. Defaults to None.
+        weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
+        aggregator (callable, optional): Aggregator to be used. Defaults to "lsp.full_weight".
         device (torch.device, optional): Device to run the model on. Defaults to None (uses CUDA if available).
     """
     def __init__(self, 
@@ -41,7 +41,8 @@ class binaryTreeLogicNet(nn.Module):
                  weight_choices=None,
                  noise_increase=1.05,
                  noise_decrease=0.95,
-                 loss_amplifier=1000.0,
+                 loss_amplifier=1.0,
+                 normalize_andness= True,
                  min_noise=0.0,
                  max_noise=2.0,
                  is_frozen = False,
@@ -50,7 +51,7 @@ class binaryTreeLogicNet(nn.Module):
                  permutation_max=10000,
                  tree_layout="left",
                  weight_penalty_strength=1e-3,
-                 aggregator=None,
+                 aggregator="lsp.full_weight",
                  early_stop_patience = 10,
                  early_stop_min_delta = 1e-4,
                  early_stop_threshold = 0.01,
@@ -69,12 +70,13 @@ class binaryTreeLogicNet(nn.Module):
         self.noise_decrease = noise_decrease
         self.min_noise = min_noise
         self.max_noise = max_noise
+        self.normalize_andness = normalize_andness
         self.early_stop_patience = early_stop_patience
         self.early_stop_min_delta = early_stop_min_delta
         self.early_stop_threshold = early_stop_threshold
-        self.lock_loss_tolerance = lock_loss_tolerance
+        self.lock_loss_tolerance = lock_loss_tolerance * self.loss_amplifier  # Adjust tolerance based on loss amplifier
         self.is_frozen = is_frozen
-        self.freeze_loss_threshold = freeze_loss_threshold
+        self.freeze_loss_threshold = freeze_loss_threshold * self.loss_amplifier  # Adjust threshold based on loss amplifier
         self.permutation_max = permutation_max
         self.locked_perm = None  # For frozen models
         self.tree_layout = tree_layout  # Layout for visualization
@@ -229,7 +231,10 @@ class binaryTreeLogicNet(nn.Module):
                 for i in range(self.num_layers):
                     bias = self.biases[i]
 
-                    a = torch.sigmoid(bias) * 3-1
+                    if self.normalize_andness:
+                        a = torch.sigmoid(bias) * 3-1
+                    else:
+                        a = bias
                     if self.weight_mode == "fixed":
                         w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
                     else:
@@ -315,7 +320,7 @@ class binaryTreeLogicNet(nn.Module):
                         # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🟰 Plateau. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
                     elif any(d > 0 for d in diffs):  # getting worse
-                        self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * self.noise_increase, self.max_noise)
+                        self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * self.noise_increase * 2, self.max_noise * 2)
                         # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
             
@@ -477,8 +482,11 @@ class binaryTreeLogicNet(nn.Module):
                     w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
                 else:
                     w = torch.sigmoid((pruned_weights[i] - 0.5) * 4)
-                    
-                a = torch.sigmoid(pruned_biases[i])*3-1
+                
+                if self.normalize_andness:
+                    a = torch.sigmoid(pruned_biases[i])*3-1
+                else:
+                    a = pruned_biases[i]
 
                 # w_soft = torch.softmax(w, dim=0)
                 if i == 0:

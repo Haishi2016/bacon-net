@@ -208,6 +208,10 @@
 <li class="toctree-l3"><a class="reference internal" href="half_weight.html">Half-Weight Aggregator</a></li>
 </ul>
 </li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../boolean/index.html">Boolean Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Boolean Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../boolean/min_max.html">Min-Max Aggregator</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -255,7 +259,30 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.aggregators.lsp.full_weight.FullWeightAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.aggregators.lsp.full_weight.</span></span><span class="sig-name descname"><span class="pre">FullWeightAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.lsp.full_weight.FullWeightAggregator" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="bacon.aggregators.lsp.full_weight.FullWeightAggregator.aggregate_tensor">
+<span class="sig-name descname"><span class="pre">aggregate_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">andness</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.lsp.full_weight.FullWeightAggregator.aggregate_tensor" title="Link to this definition">¶</a></dt>
+<dd><p>Aggregates two tensors using the Full Weight method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x1</strong> (<em>torch.Tensor</em>) – First input tensor.</p></li>
+<li><p><strong>x2</strong> (<em>torch.Tensor</em>) – Second input tensor.</p></li>
+<li><p><strong>andness</strong> (<em>float</em>) – Andness.</p></li>
+<li><p><strong>w0</strong> (<em>float</em>) – Weight for the first tensor.</p></li>
+<li><p><strong>w1</strong> (<em>float</em>) – Weight for the second tensor.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Resulting tensor after aggregation.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
 
 </section>
 
@@ -315,7 +342,10 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Full-Weight Aggregator</a><ul>
-<li><a class="reference internal" href="#bacon.aggregators.lsp.full_weight.FullWeightAggregator"><code class="docutils literal notranslate"><span class="pre">FullWeightAggregator</span></code></a></li>
+<li><a class="reference internal" href="#bacon.aggregators.lsp.full_weight.FullWeightAggregator"><code class="docutils literal notranslate"><span class="pre">FullWeightAggregator</span></code></a><ul>
+<li><a class="reference internal" href="#bacon.aggregators.lsp.full_weight.FullWeightAggregator.aggregate_tensor"><code class="docutils literal notranslate"><span class="pre">FullWeightAggregator.aggregate_tensor()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

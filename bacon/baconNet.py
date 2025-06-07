@@ -16,25 +16,27 @@ class baconNet(nn.Module):
     Represents a BACON network for interpretable decision-making using graded logic.
 
     Args:
-        input_size (int): Number of input features.
-        freeze_loss_threshold (float, optional): Loss threshold at which to freeze structure learning. Defaults to 0.07.
-        lock_loss_tolerance (float, optional): Tolerance for locking permutations. Defaults to 0.01.
-        tree_layout (str, optional): Layout of the tree. Defaults to "left".
+        input_size (int): Number of input features. This is likely to be removed in the future.
+        freeze_loss_threshold (float, optional): Loss threshold at which to freeze structure learning. Defaults to 0.07. Not if you are using `loss_amplifier`, this will be multiplied by it.
+        lock_loss_tolerance (float, optional): Maximum tolerated accuracy loss when locking the structure. Defaults to 0.04. Not if you are using `loss_amplifier`, this will be multiplied by it.
+        tree_layout (str, optional): Layout of the tree. Defaults to "left". Other layouts are not supported yet.
         loss_amplifier (float, optional): Amplifier for the loss. Defaults to 1.
-        weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3.
-        weight_mode (str, optional): Mode for weight configuration. Defaults to "trainable".
-        aggregator (str, optional): Aggregation strategy. Defaults to "lsp.full_weight".
+        weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
+        normalize_andness (bool, optional): Whether to normalize andness. Defaults to True. This should set to False if the chose aggregator, such as `bool.min_max`, already normalizes the andness.
+        weight_mode (str, optional): Mode for weight configuration. Defaults to "trainable". Use "fixed" for fixed weights (set to 0.5).
+        aggregator (str, optional): Aggregator to be used. Defaults to "lsp.full_weight".
         max_permutations (int, optional): Maximum permutations to explore. Defaults to 10000.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
     """
     def __init__(self, input_size, 
                  freeze_loss_threshold=0.07, 
-                 lock_loss_tolerance=0.01, 
+                 lock_loss_tolerance=0.04, 
                  tree_layout="left", 
                  loss_amplifier=1, 
                  weight_penalty_strength=1e-3,
                  weight_mode="trainable",
                  aggregator="lsp.full_weight",
+                 normalize_andness=True,
                  max_permutations=10000,
                  is_frozen=False):
         super(baconNet, self).__init__()        
@@ -48,6 +50,7 @@ class baconNet(nn.Module):
                                             weight_value=0.5,                                             
                                             weight_range=(0.5, 2.0), 
                                             lock_loss_tolerance=lock_loss_tolerance,
+                                            normalize_andness=normalize_andness,
                                             tree_layout=tree_layout,
                                             loss_amplifier=loss_amplifier,
                                             is_frozen = is_frozen,
