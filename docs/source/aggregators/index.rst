@@ -7,3 +7,4 @@ BACON supports different aggregators for various tasks. An aggregator takes weig
    :maxdepth: 2
 
    lsp/index
+   boolean/index
