@@ -36,6 +36,7 @@ class binaryTreeLogicNet(nn.Module):
     def __init__(self, 
                  input_size, 
                  weight_mode="trainable", 
+                 weight_normalization="minmax",
                  weight_value=0.5, 
                  weight_range=(0.0, 1.0), 
                  weight_choices=None,
@@ -63,6 +64,7 @@ class binaryTreeLogicNet(nn.Module):
         self.weight_value = weight_value
         self.weight_range = weight_range
         self.loss_amplifier = loss_amplifier
+        self.weight_normalization = weight_normalization
         self.aggregator = aggregator
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32, device=self.device) if weight_choices else None
@@ -238,7 +240,16 @@ class binaryTreeLogicNet(nn.Module):
                     if self.weight_mode == "fixed":
                         w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
                     else:
-                        w = torch.sigmoid((self.weights[i] - 0.5) * 4)
+                        if self.weight_normalization == "sigmoid":
+                            w = torch.sigmoid((self.weights[i] - 0.5) * 4)
+                        elif self.weight_normalization == "minmax":
+                            raw_w = self.weights[i]
+                            w_min = raw_w.min()
+                            w_max = raw_w.max()
+                            denom = w_max - w_min if w_max != w_min else torch.tensor(1.0, device=self.device)
+                            w = (raw_w - w_min) / denom            
+                        else:
+                            w = self.weights[i]                
 
                     if i == 0:
                         left = node_outputs[0]
@@ -320,7 +331,7 @@ class binaryTreeLogicNet(nn.Module):
                         # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🟰 Plateau. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
                     elif any(d > 0 for d in diffs):  # getting worse
-                        self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * self.noise_increase * 2, self.max_noise * 2)
+                        self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * self.noise_increase, self.max_noise)
                         # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
             
@@ -481,7 +492,16 @@ class binaryTreeLogicNet(nn.Module):
                 if self.weight_mode == "fixed":
                     w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
                 else:
-                    w = torch.sigmoid((pruned_weights[i] - 0.5) * 4)
+                    if self.weight_normalization == "sigmoid":
+                        w = torch.sigmoid((pruned_weights[i] - 0.5) * 4)
+                    elif self.weight_normalization == "minmax":
+                        raw_w = pruned_weights[i]
+                        w_min = raw_w.min()
+                        w_max = raw_w.max()
+                        denom = w_max - w_min if w_max != w_min else torch.tensor(1.0, device=self.device)
+                        w = (raw_w - w_min) / denom          
+                    else:
+                        w = pruned_weights[i]              
                 
                 if self.normalize_andness:
                     a = torch.sigmoid(pruned_biases[i])*3-1
