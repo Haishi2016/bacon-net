@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 import logging
+import torch.nn.functional as F
 
 def generate_classic_boolean_data(num_vars=5, repeat_factor=100, randomize=False, device=None):
     """ Generate a dataset for classic boolean expressions with a specified number of variables.
@@ -146,20 +147,41 @@ def find_best_threshold(model, X_val, Y_val, metric='accuracy', steps=1000):
 def analyze_bacon_tree_conjunctive_disjunctive(model, balanced_threshold=(0.35, 0.65), compound_drop_threshold=0.1):
     """
     Analyze a BACON model's left-associative tree to classify each node as Conjunctive, Disjunctive, or Dominated.
-    Applies sigmoid normalization to match model inference.
+    Handles 2-element weight tensors with the selected normalization method.
     Resets compounded weight when a node is decisively contributing.
     """
-    weights_raw = [w.detach().cpu().item() for w in model.weights]
-    biases_raw = [b.detach().cpu().item() for b in model.biases]
-
     results = []
     compounded = 1.0  # Start with 1 at root
 
-    for i, (w_raw, a_raw) in enumerate(zip(weights_raw, biases_raw)):
-        # Apply sigmoid as in the model's forward
-        right_weight = torch.sigmoid(torch.tensor(w_raw)).item()
-        left_weight = 1 - right_weight
-        bias_a = torch.sigmoid(torch.tensor(a_raw)).item() * 3 - 1
+    for i, (w_raw, a_raw) in enumerate(zip(model.weights, model.biases)):
+        w_tensor = w_raw.detach().cpu()
+
+        # Normalize weights
+        if model.weight_normalization == 'softmax':
+            w = F.softmax(w_tensor, dim=0)
+        elif model.weight_normalization == 'minmax':
+            w_min = w_tensor.min()
+            w_max = w_tensor.max()
+            denom = w_max - w_min
+            if denom.item() == 0:
+                w = torch.tensor([0.5, 0.5])
+            else:
+                w = (w_tensor - w_min) / denom
+                w = w / w.sum()
+        else:
+            # No normalization or fixed weights
+            w = torch.sigmoid((w_tensor - 0.5) * 4)  # mimic sharp sigmoid if used
+
+        left_weight = w[0].item()
+        right_weight = w[1].item()
+
+        # Normalize andness bias
+        if model.normalize_andness:
+            bias_a = torch.sigmoid(a_raw.detach().cpu()) * 3 - 1
+        else:
+            bias_a = a_raw.detach().cpu()
+
+        bias_a = bias_a.item()
 
         # Effective compounded weight for feature entering at right input
         feature_compounded_weight = compounded * right_weight
@@ -171,11 +193,10 @@ def analyze_bacon_tree_conjunctive_disjunctive(model, balanced_threshold=(0.35, 
             conclusion = "Dominated (left dominates)"
         elif right_weight > balanced_threshold[1]:
             conclusion = "Conjunctive" if bias_a > 0.5 else "Disjunctive"
-            compounded = 1.0  # Reset after right feature contributed
+            compounded = 1.0
         else:
             conclusion = "Conjunctive" if bias_a > 0.5 else "Disjunctive (balanced)"
             compounded = 1.0
-            
 
         results.append({
             'Node': f'Node{i}',
@@ -186,11 +207,11 @@ def analyze_bacon_tree_conjunctive_disjunctive(model, balanced_threshold=(0.35, 
             'Conclusion': conclusion
         })
 
-        # ✅ Reset compounded weight if the right path was decisive enough
+        # Update compounded logic
         if feature_compounded_weight >= compound_drop_threshold:
-            compounded = 1.0  # Reset after right feature contributed
+            compounded = 1.0
         else:
-            compounded *= left_weight  # Otherwise, keep decaying left path
+            compounded *= left_weight
 
     return pd.DataFrame(results)
 

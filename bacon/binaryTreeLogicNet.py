@@ -6,6 +6,7 @@ import torch.optim as optim
 import numpy as np
 import copy
 import logging 
+import torch.nn.functional as F
 
 import torch
 from scipy.optimize import linear_sum_assignment
@@ -122,7 +123,7 @@ class binaryTreeLogicNet(nn.Module):
 
         for _ in range(self.num_layers):
             if weight_mode == "fixed":
-                self.weights.append(nn.Parameter(torch.tensor([weight_value], dtype=torch.float32), requires_grad=False))
+                self.weights.append(nn.Parameter(torch.tensor([weight_value, weight_value], dtype=torch.float32), requires_grad=False))
             elif weight_mode == "range":
                 self.weights.append(nn.Parameter(
                     torch.rand(2) * (weight_range[1] - weight_range[0]) + weight_range[0]
@@ -132,7 +133,7 @@ class binaryTreeLogicNet(nn.Module):
                     torch.choice(self.weight_choices, (2,)), requires_grad=True
                 ))
             else:  # "trainable"
-                self.weights.append(nn.Parameter(torch.rand(1))) 
+                self.weights.append(nn.Parameter(torch.rand(2))) 
 
             self.biases.append(nn.Parameter(torch.rand(1) * 3 - 1))
         self.apply(self._initialize_weights)
@@ -238,16 +239,26 @@ class binaryTreeLogicNet(nn.Module):
                     else:
                         a = bias
                     if self.weight_mode == "fixed":
-                        w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
+                        w = torch.tensor([self.weight_value,self.weight_value], dtype=torch.float32, device=self.device)
                     else:
-                        if self.weight_normalization == "sigmoid":
-                            w = torch.sigmoid((self.weights[i] - 0.5) * 4)
+                        if self.weight_normalization == "softmax":
+                            w = F.softmax(self.weights[i], dim=0)
                         elif self.weight_normalization == "minmax":
                             raw_w = self.weights[i]
                             w_min = raw_w.min()
                             w_max = raw_w.max()
-                            denom = w_max - w_min if w_max != w_min else torch.tensor(1.0, device=self.device)
-                            w = (raw_w - w_min) / denom            
+                            denom = w_max - w_min
+
+                            if denom.item() == 0:
+                                # Both weights are equal — fallback to uniform weights
+                                w = torch.tensor([0.5, 0.5], device=self.device)
+                            else:
+                                w = (raw_w - w_min) / denom
+                                w_sum = w.sum()
+                                if w_sum.item() == 0:
+                                    w = torch.tensor([0.5, 0.5], device=self.device)
+                                else:
+                                    w = w / w_sum        
                         else:
                             w = self.weights[i]                
 
@@ -257,7 +268,7 @@ class binaryTreeLogicNet(nn.Module):
                     else:
                         left = node_outputs[-1]  # previous node
                         right = node_outputs[i + 1]  # next input
-                    nres = self.aggregator.aggregate(left, right, a, w, 1-w)
+                    nres = self.aggregator.aggregate(left, right, a, w[0], w[1])
                     # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
                     if torch.isnan(nres).any():
                         nres = torch.where(torch.isnan(nres), bias, nres)
@@ -272,7 +283,7 @@ class binaryTreeLogicNet(nn.Module):
             logging.error(f"[DEBUG] Input x: {x}")
             raise e
         
-    def train_model(self, x, y, epochs):
+    def train_model(self, x, y, epochs, is_frozen):
         """Train the binary tree logic network.
 
         Args:
@@ -282,7 +293,7 @@ class binaryTreeLogicNet(nn.Module):
         Returns:
             list: History of loss values during training.
         """
-        self._reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices, self.is_frozen)
+        self._reinitialize(self.weight_mode, self.weight_value, self.weight_range, self.weight_choices, is_frozen)
         loss_history = []
         self.reset_optimizer() 
         criterion = nn.BCELoss()
@@ -490,16 +501,26 @@ class binaryTreeLogicNet(nn.Module):
             epsilon = 1e-6
             for i in range(len(pruned_weights)):
                 if self.weight_mode == "fixed":
-                    w = torch.tensor([self.weight_value], dtype=torch.float32, device=self.device)
+                    w = torch.tensor([self.weight_value,self.weight_value], dtype=torch.float32, device=self.device)
                 else:
-                    if self.weight_normalization == "sigmoid":
-                        w = torch.sigmoid((pruned_weights[i] - 0.5) * 4)
+                    if self.weight_normalization == "softmax":
+                        w = F.softmax(pruned_weights[i], dim=0)
                     elif self.weight_normalization == "minmax":
                         raw_w = pruned_weights[i]
                         w_min = raw_w.min()
                         w_max = raw_w.max()
-                        denom = w_max - w_min if w_max != w_min else torch.tensor(1.0, device=self.device)
-                        w = (raw_w - w_min) / denom          
+                        denom = w_max - w_min
+
+                        if denom.item() == 0:
+                            # Both weights are equal — fallback to uniform weights
+                            w = torch.tensor([0.5, 0.5], device=self.device)
+                        else:
+                            w = (raw_w - w_min) / denom
+                            w_sum = w.sum()
+                            if w_sum.item() == 0:
+                                w = torch.tensor([0.5, 0.5], device=self.device)
+                            else:
+                                w = w / w_sum
                     else:
                         w = pruned_weights[i]              
                 
@@ -517,7 +538,7 @@ class binaryTreeLogicNet(nn.Module):
                     # Normal aggregator behavior
                     left = node_outputs[-1]
                     right = node_outputs[i]
-                z = self.aggregator.aggregate(left, right, a, w, 1-w)
+                z = self.aggregator.aggregate(left, right, a, w[0], w[1])
                 node_outputs.append(z)
                 layer_outputs.append(z)
             # final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
