@@ -45,6 +45,7 @@ class baconNet(nn.Module):
             raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
         aggregator_class = _aggregator_registry[aggregator]
         aggregator = aggregator_class()
+        self.is_frozen = is_frozen
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
                                             weight_mode=weight_mode,
@@ -81,7 +82,7 @@ class baconNet(nn.Module):
             dict: Training output containing loss and accuracy.
         """
         try:
-            output = self.assembler.train_model(x,y, epochs)
+            output = self.assembler.train_model(x,y, epochs, self.is_frozen)
         except RuntimeError as e:
                 # We'll raise the error now as there's only one binaryTreeLogicNet
             raise e

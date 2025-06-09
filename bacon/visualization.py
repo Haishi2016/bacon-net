@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import pandas as pd
 import seaborn as sns
+import torch.nn.functional as F
 
 def left_associative_layout(G, root):
     pos = {}
@@ -40,11 +41,14 @@ def visualize_tree_structure(model, labels=None):
 
     # Build the tree structure and assign labels
     for i in range(model.num_layers):
-        a = (torch.sigmoid(model.biases[i])*3-1).item()
-        if model.weight_mode == 'fixed':
-            w = model.weights[i].item()
+        if model.normalize_andness:
+            a = (torch.sigmoid(model.biases[i])*3-1).item()
         else:
-            w = torch.sigmoid(model.weights[i]).item()
+            a = model.biases[i].item()
+        if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
+            w = model.weights[i]
+        else:
+            w = torch.sigmoid(model.weights[i])
 
         left = f"Node{i}" if i > 0 else leaf_names[0]
         right = leaf_names[i + 1]
@@ -53,8 +57,8 @@ def visualize_tree_structure(model, labels=None):
         node_dict[parent] = (left, right)
         node_labels[parent] = f"{a:.2f}"
 
-        weight_map[(parent, left)] = w
-        weight_map[(parent, right)] = 1-w
+        weight_map[(parent, left)] = w[0]
+        weight_map[(parent, right)] = w[1]
 
         # Keep track of all possible leaf nodes
         if left in leaf_names:
@@ -120,15 +124,15 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
     print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
 
     previous_w = None
-    if model.weight_mode == 'fixed':
-        weights = [w.item() for w in model.weights]
+    if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
+        weights = model.weights
     else:
-        weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
+        weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
     a = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
     indent = 2
     for i in range(model.num_layers):
         if i == 0:
-            print(fmt_label(leaf_names[0]) + f"─{weights[0]:.2f}".rjust(5) + "────┐")
+            print(fmt_label(leaf_names[0]) + f"─{weights[0][0]:.2f}".rjust(5) + "────┐")
             new_leaf = leaf_names[1]
         else:
             new_leaf = leaf_names[i + 1]
@@ -140,9 +144,9 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
         else:
             operator = f"[a={a[i]:.8f}]"
         if i < model.num_layers - 1:
-            print(fmt_label(new_leaf) + f"─{1-weights[i]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1]:.2f}".rjust(5) + "────┐")
+            print(fmt_label(new_leaf) + f"─{1-weights[i][1]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1][0]:.2f}".rjust(5) + "────┐")
         else:
-            print(fmt_label(new_leaf) + f"─{1-weights[i]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
+            print(fmt_label(new_leaf) + f"─{1-weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
         indent += 15
 
 def print_table_structure(model, labels=None):
@@ -164,10 +168,10 @@ def print_table_structure(model, labels=None):
     print(f"{'Layer':<6} {'Left Feature':<20} {'Right Feature':<20} {'w (left)':<10} {'a (bias)':<10} {'1-w (right)':<12}")
     print("-" * 80)
 
-    if model.weight_mode == 'fixed':
+    if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
         weights = [w.item() for w in model.weights]
     else:
-        weights = [torch.sigmoid(w.detach().cpu()).item() for w in model.weights]
+        weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
     biases = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
 
     for i in range(model.num_layers):
@@ -179,7 +183,7 @@ def print_table_structure(model, labels=None):
         right_feature = leaf_names[i + 1]
         w = weights[i]
         a = biases[i]
-        print(f"{i+1:<6} {left_feature:<20} {right_feature:<20} {w:.4f}     {a:.4f}     {1 - w:.4f}")
+        print(f"{i+1:<6} {left_feature:<20} {right_feature:<20} {w[0]:.4f}     {a:.4f}     {w[1]:.4f}")
 
     print("-" * 80)
     print("Note: 'w' applies to left input, '1-w' applies to right input.\n")

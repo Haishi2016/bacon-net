@@ -69,12 +69,11 @@ X_train = torch.tensor(X_train_np, dtype=torch.float32).to(device)
 Y_train = torch.tensor(y_train_np.to_numpy().reshape(-1, 1), dtype=torch.float32).to(device)
 Y_test = torch.tensor(y_test_np.to_numpy().reshape(-1, 1), dtype=torch.float32).to(device)
 X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
-# 205 - 95.08%, 95.96%
-# 200 - 95.43%
-# 195 - 96.49%
-# 140 - 94.55%
-bacon = baconNet(input_size=30, freeze_loss_threshold=0.07, loss_amplifier=1000, weight_penalty_strength=1e-4, weight_normalization='sigmoid')
-(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=100, acceptance_threshold=0.90, max_epochs=12000)
+
+freeze_loss_threshold = 0.05
+
+bacon = baconNet(input_size=30, freeze_loss_threshold=freeze_loss_threshold, loss_amplifier=1000, weight_penalty_strength=1e-4, weight_normalization='softmax')
+(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=10, acceptance_threshold=0.90, max_epochs=12000)
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)
 Y_all = torch.cat([Y_train, Y_test], dim=0)
@@ -94,7 +93,7 @@ print(analysis)
 # X_normalized = normalize_features(X_all, feature_names)
 # X_tensor_normalized = torch.tensor(X_normalized.values, dtype=torch.float32).to(device)
 
-plot_all_feature_correlations(X_all, feature_names)
+# plot_all_feature_correlations(X_all, feature_names)
 
 print_tree_structure(bacon.assembler, X.columns.tolist())
 print_table_structure(bacon.assembler, X.columns.tolist())
@@ -153,8 +152,8 @@ plt.tight_layout()
 plt.show()
 
 
-# plot_sorted_predictions_with_labels(bacon, X_all, Y_all, threshold=best_threshold)
-# plot_sorted_predictions_with_errors(bacon, X_all, Y_all, threshold=best_threshold)
+plot_sorted_predictions_with_labels(bacon, X_all, Y_all, threshold=best_threshold)
+plot_sorted_predictions_with_errors(bacon, X_all, Y_all, threshold=best_threshold)
 
 # for feature in feature_names:
 #     plot_feature_sensitivity_synthetic(bacon, X_all, feature, feature_names)
