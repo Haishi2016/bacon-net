@@ -169,7 +169,7 @@ def print_table_structure(model, labels=None):
     print("-" * 80)
 
     if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
-        weights = [w.item() for w in model.weights]
+        weights = model.weights
     else:
         weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
     biases = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
