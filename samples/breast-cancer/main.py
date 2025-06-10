@@ -70,10 +70,23 @@ Y_train = torch.tensor(y_train_np.to_numpy().reshape(-1, 1), dtype=torch.float32
 Y_test = torch.tensor(y_test_np.to_numpy().reshape(-1, 1), dtype=torch.float32).to(device)
 X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 
-freeze_loss_threshold = 0.05
+freeze_loss_threshold = 0.42
+aggregator = 'bool.min_max' 
+weight_mode = 'fixed'
+acceptance_threshold = 0.90
 
-bacon = baconNet(input_size=30, freeze_loss_threshold=freeze_loss_threshold, loss_amplifier=1000, weight_penalty_strength=1e-4, weight_normalization='softmax')
-(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, attempts=10, acceptance_threshold=0.90, max_epochs=12000)
+bacon = baconNet(
+    input_size=30, 
+    freeze_loss_threshold=freeze_loss_threshold, 
+    aggregator=aggregator, 
+    loss_amplifier=1000, 
+    weight_penalty_strength=1e-4, 
+    weight_normalization='softmax', 
+    weight_mode=weight_mode)
+(best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, 
+                                                        attempts=10, 
+                                                        acceptance_threshold=acceptance_threshold, 
+                                                        max_epochs=12000)
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)
 Y_all = torch.cat([Y_train, Y_test], dim=0)
