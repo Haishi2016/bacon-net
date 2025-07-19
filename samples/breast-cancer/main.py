@@ -70,17 +70,19 @@ Y_train = torch.tensor(y_train_np.to_numpy().reshape(-1, 1), dtype=torch.float32
 Y_test = torch.tensor(y_test_np.to_numpy().reshape(-1, 1), dtype=torch.float32).to(device)
 X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 
-freeze_loss_threshold = 0.42
-aggregator = 'bool.min_max' 
-weight_mode = 'fixed'
+freeze_loss_threshold = 0.07
+aggregator = 'lsp.half_weight' 
+weight_mode = 'trainable'
 acceptance_threshold = 0.90
+weight_penalty_strength=1e-2 
+
 
 bacon = baconNet(
     input_size=30, 
     freeze_loss_threshold=freeze_loss_threshold, 
     aggregator=aggregator, 
     loss_amplifier=1000, 
-    weight_penalty_strength=1e-4, 
+    weight_penalty_strength=weight_penalty_strength, 
     weight_normalization='softmax', 
     weight_mode=weight_mode)
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, 
