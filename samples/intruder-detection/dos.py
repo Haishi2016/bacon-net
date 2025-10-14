@@ -117,7 +117,7 @@ Y_train_tensor = torch.tensor(y_train.values.reshape(-1, 1), dtype=torch.float32
 X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
 Y_test_tensor = torch.tensor(y_test.values.reshape(-1, 1), dtype=torch.float32)
 
-bacon = baconNet(input_size=X_train.shape[1], freeze_loss_threshold=0.03, lock_loss_tolerance=0.04)
+bacon = baconNet(input_size=X_train.shape[1])
 
 X_test_tensor = X_test_tensor.to(device)
 Y_test_tensor = Y_test_tensor.to(device)    

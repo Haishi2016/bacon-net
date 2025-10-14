@@ -111,11 +111,11 @@ class binaryTreeLogicNet(nn.Module):
                 self.original_input_size,
                 self.num_leaves,
                 use_gumbel=True
-            )
+            ).to(self.device)
         else:
             best_perm = torch.arange(self.num_leaves, dtype=torch.long)
             self.locked_perm = best_perm.clone().detach()
-            self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size)
+            self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size).to(self.device)
         self.input_to_leaf.gumbel_noise_scale = 1.0
         self.input_to_leaf.temperature = 1.0
         self.weights = nn.ParameterList()

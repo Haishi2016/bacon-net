@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling>=1.24.2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bacon-net"
+dynamic = ["version"]
+description = "BACON: Binary Aggregation Classifier for interpretable decision-making using graded logic."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+keywords = ["interpretable-ml", "logic", "pytorch", "classifier", "explainability"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "torch>=2.0.0",
+  "numpy>=1.22",
+  "pandas>=1.5",
+  "scipy>=1.9",
+  "scikit-learn>=1.1",
+  "networkx>=2.8",
+  "matplotlib>=3.6",
+  "seaborn>=0.12",
+]
+
+[project.urls]
+"Homepage" = "https://example.com/bacon-net"
+
+[tool.hatch.version]
+path = "bacon/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["bacon", "README.md", "LICENSE"]
+exclude = ["docs/build", "docs/build/**"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["bacon"]
+
+

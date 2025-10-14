@@ -1,5 +1,7 @@
-import sys
-sys.path.append('../../')
+# Note: required to import baconNet from local folder
+# import sys
+# sys.path.append('../../')
+
 from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler, RobustScaler, LabelEncoder

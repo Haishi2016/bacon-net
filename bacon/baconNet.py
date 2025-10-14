@@ -22,7 +22,7 @@ class baconNet(nn.Module):
         tree_layout (str, optional): Layout of the tree. Defaults to "left". Other layouts are not supported yet.
         loss_amplifier (float, optional): Amplifier for the loss. Defaults to 1.
         weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
-        normalize_andness (bool, optional): Whether to normalize andness. Defaults to True. This should set to False if the chose aggregator, such as `bool.min_max`, already normalizes the andness.
+        normalize_andness (bool, optional): Whether to normalize andness. Defaults to True. This should set to False if the chosen aggregator, such as `bool.min_max`, already normalizes the andness.
         weight_mode (str, optional): Mode for weight configuration. Defaults to "trainable". Use "fixed" for fixed weights (set to 0.5).
         aggregator (str, optional): Aggregator to be used. Defaults to "lsp.full_weight".
         max_permutations (int, optional): Maximum permutations to explore. Defaults to 10000.
