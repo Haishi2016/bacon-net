@@ -1,5 +1,7 @@
-import sys
-sys.path.append('../../')
+# Note: required to import baconNet from local folder
+# import sys
+# sys.path.append('../../')
+
 import torch
 from bacon.baconNet import baconNet
 from bacon.visualization import visualize_tree_structure, print_tree_structure

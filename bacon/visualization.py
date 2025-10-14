@@ -7,6 +7,227 @@ import pandas as pd
 import seaborn as sns
 import torch.nn.functional as F
 
+import torch
+import torch.nn.functional as F
+
+import networkx as nx
+import matplotlib.pyplot as plt
+import torch
+
+def _left_associative_layout(G, root):
+    """Same geometry as your previous helper: leaves laid out left→right, parents centered."""
+    pos = {}
+    def dfs(node, depth=0, y=0):
+        children = list(G.successors(node))
+        if not children:
+            pos[node] = (y, -depth)
+            return y + 1
+        y = dfs(children[0], depth + 1, y)
+        y = dfs(children[1], depth + 1, y)
+        pos[node] = ((pos[children[0]][0] + pos[children[1]][0]) / 2, -depth)
+        return y
+    dfs(root)
+    return pos
+
+def visualize_vector_as_tree_structure(model, labels=None, classic_boolean=False, figsize=(14, 8)):
+    """
+    Visualize the left-associative VectorLogicNet as a graph.
+
+    Args:
+        model: VectorLogicNet instance.
+        labels (list[str] | None): optional feature names (len == num_leaves).
+        classic_boolean (bool): show [AND]/[OR] using a threshold; else print 'a' value.
+        figsize (w,h): matplotlib figure size.
+    """
+    # ---- resolve leaf names (apply locked permutation if present) ----
+    if labels is not None and len(labels) < model.num_leaves:
+        raise ValueError("Label count does not match number of leaves")
+
+    if labels:
+        if getattr(model, "locked_perm", None) is not None:
+            leaf_names = [labels[i] for i in model.locked_perm.tolist()]
+        else:
+            leaf_names = labels
+    else:
+        leaf_names = [f"Leaf {i+1}" for i in range(model.num_leaves)]
+
+    L = model.num_leaves - 1
+    if L <= 0:
+        print("(nothing to visualize: num_leaves <= 1)")
+        return
+
+    # ---- map parameters to CPU scalars for plotting ----
+    if getattr(model, "normalize_andness", False):
+        a_vec = (torch.sigmoid(model.a_raw) * 3.0 - 1.0).detach().cpu()
+    else:
+        a_vec = model.a_raw.detach().cpu()
+
+    if hasattr(model, "_map_weights"):
+        w_new = model._map_weights().detach().cpu()  # weight for NEW/right
+    else:
+        w_new = torch.sigmoid(model.w_raw).detach().cpu()
+
+    w_acc = (1.0 - w_new)  # weight for accumulator/left
+
+    # ---- build node/edge sets for the left-assoc tree ----
+    # Nodes: leaves + internal nodes Node1..NodeL; root is NodeL
+    node_dict = {}     # parent -> (left, right)
+    node_labels = {}   # node -> label (a or AND/OR)
+    edge_weights = {}  # (parent, child) -> weight
+
+    for i in range(L):
+        parent = f"Node{i+1}"
+        left   = leaf_names[0] if i == 0 else f"Node{i}"
+        right  = leaf_names[i + 1]
+
+        node_dict[parent] = (left, right)
+
+        a = float(a_vec[i])
+        if classic_boolean:
+            node_labels[parent] = "[ AND ]" if a >= 0.5 else "[ O R ]"
+        else:
+            node_labels[parent] = f"a={a:.3f}"
+
+        # edge weights: left gets w_acc[i], right gets w_new[i]
+        edge_weights[(parent, left)]  = float(w_acc[i])
+        edge_weights[(parent, right)] = float(w_new[i])
+
+    # label leaves with their own names
+    for leaf in leaf_names:
+        node_labels.setdefault(leaf, leaf)
+
+    # ---- build DiGraph ----
+    G = nx.DiGraph()
+    def add_edges(node):
+        if node in node_dict:
+            l, r = node_dict[node]
+            G.add_edge(node, l, weight=edge_weights.get((node, l), 1.0))
+            G.add_edge(node, r, weight=edge_weights.get((node, r), 1.0))
+            add_edges(l)
+            add_edges(r)
+        else:
+            G.add_node(node)
+
+    root = f"Node{L}"
+    add_edges(root)
+
+    # ---- layout & draw ----
+    pos = _left_associative_layout(G, root)
+    edge_lbls = {e: f"{w:.2f}" for e, w in nx.get_edge_attributes(G, "weight").items()}
+
+    plt.figure(figsize=figsize)
+    nx.draw(
+        G, pos,
+        with_labels=True,
+        labels=node_labels,
+        node_color='lightblue',
+        node_size=2000,
+        font_size=9,
+        arrows=False,
+    )
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_lbls, font_color='red')
+    plt.title("VectorLogicNet Tree Structure (Left-Associative)")
+    plt.axis("off")
+    plt.margins(0.1)
+    plt.tight_layout()
+    plt.show()
+
+
+def print_vector_as_tree_structure(model, labels=None, classic_boolean=False):
+    """
+    Pretty-prints the left-associative tree for VectorLogicNet using its vectors:
+      - a_raw (andness, length = num_leaves - 1)
+      - w_raw (weight for NEW/right input; left/accumulator uses 1 - w)
+
+    Args:
+        model: VectorLogicNet instance.
+        labels (list[str] | None): Optional feature names (length == num_leaves).
+        classic_boolean (bool): If True, shows AND/OR by thresholding a; else prints a value.
+    """
+    # --- resolve leaf names (respect locked permutation if present) ---
+    if labels is not None and len(labels) < model.num_leaves:
+        raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {model.num_leaves}")
+
+    if labels:
+        if getattr(model, "locked_perm", None) is not None:
+            leaf_names = [labels[i] for i in model.locked_perm.tolist()]
+        else:
+            leaf_names = labels
+    else:
+        leaf_names = [f"feature{i+1}" for i in range(model.num_leaves)]
+
+    max_label_length = max(len(name) for name in leaf_names)
+    label_width = max_label_length + 2
+
+    def fmt_label(name):
+        return f"[{name}]".rjust(label_width + 2)
+
+    # --- map parameters to printable scalars ---
+    # andness vector
+    if getattr(model, "normalize_andness", False):
+        a_vec = (torch.sigmoid(model.a_raw) * 3.0 - 1.0).detach().cpu()
+    else:
+        a_vec = model.a_raw.detach().cpu()
+
+    # weights for the NEW (right) input per step; left = 1 - w_new
+    if hasattr(model, "_map_weights"):
+        w_new = model._map_weights().detach().cpu()
+    else:
+        # fallback: reasonable mapping
+        w_new = torch.sigmoid(model.w_raw).detach().cpu()
+    w_acc = (1.0 - w_new)
+
+    L = model.num_leaves - 1  # number of aggregations
+    if L <= 0:
+        print("(nothing to print: num_leaves <= 1)")
+        return
+
+    print("\n🧠 VectorLogicNet Aggregation Tree (Left-Associative):\n")
+
+    indent = 2
+    for i in range(L):
+        a = float(a_vec[i])
+        w_left  = float(w_acc[i])  # weight applied to accumulator (left)
+        w_right = float(w_new[i])  # weight applied to new/right leaf
+
+        if i == 0:
+            # First combine: acc = leaf[0], right = leaf[1]
+            # draw left branch up to the first aggregator node
+            print(fmt_label(leaf_names[0]) + f"─{w_left:>.2f}".rjust(5) + "────┐")
+
+        # operator label
+        if classic_boolean:
+            operator = "[ AND ]" if a >= 0.5 else "[ O R ]"
+        else:
+            operator = f"[a={a:.6f}]"
+
+        # right/new leaf name for this step
+        new_leaf = leaf_names[i + 1]
+
+        # If not the last layer, connect to next aggregator node; else to OUTPUT
+        if i < L - 1:
+            # left side (new right leaf’s edge into current aggregator)
+            # then operator box, then preview of next left weight
+            nxt_w_left = float(w_acc[i + 1])
+            print(
+                fmt_label(new_leaf)
+                + f"─{w_right:>.2f}".rjust(5)
+                + "─" * indent
+                + operator
+                + f"─{nxt_w_left:>.2f}".rjust(5)
+                + "────┐"
+            )
+        else:
+            # last aggregator goes to OUTPUT
+            print(
+                fmt_label(new_leaf)
+                + f"─{w_right:>.2f}".rjust(5)
+                + "─" * indent
+                + f"{operator}──OUTPUT"
+            )
+
+        indent += 15
+
 def left_associative_layout(G, root):
     pos = {}
     def dfs(node, depth=0, y=0):
