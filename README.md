@@ -53,7 +53,3 @@ from bacon.utils import generate_classic_boolean_data
 * [**House purchasing decisions**](./samples/house-purchase/README.md)
 
   Making house purchasing decisions based on different conditions. 
-
-## Resources
-
-* [BACON Documentation](./docs/build/html/index.html)
