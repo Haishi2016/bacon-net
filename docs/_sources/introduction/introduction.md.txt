@@ -25,10 +25,10 @@ python -m pip install bacon-net==0.3.0
 
 Then, check out our sample apps:
 
-* [Hello, World!](../../../samples/hello-world/README.md)
+* [Hello, World!](https://github.com/Haishi2016/bacon-net/blob/main/samples/hello-world/README.md)
 
     Discover classic Boolean expression from synthetic data.
 
-* [Breast Cancer Diagnosis](../../../samples/breast-cancer/README.md)
+* [Breast Cancer Diagnosis](https://github.com/Haishi2016/bacon-net/blob/main/samples/breast-cancer/README.md)
 
     Breast cancer diagnosis.
