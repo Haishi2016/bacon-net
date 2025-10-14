@@ -20,6 +20,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',  # allows Google and NumPy-style docstrings
     'myst_parser',
+    'sphinx.ext.githubpages',
 ]
 
 templates_path = ['_templates']
