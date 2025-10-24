@@ -247,6 +247,9 @@ def main():
     ap.add_argument("--seed", default=0, type=int)
     ap.add_argument("--patience", default=15, type=int)
     ap.add_argument("--pretrained", default=None, type=str)
+    ap.add_argument("--auto-refine", action="store_true", help="enable gated hard concepts (optional)")
+    ap.add_argument("--refine-tau-gate", default=None, type=float, help="enable hard concepts only when tau <= this value")
+    ap.add_argument("--refine-acc-gate", default=None, type=float, help="enable hard concepts only when eval acc >= this value (0..1)")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -301,6 +304,7 @@ def main():
 
     best_acc = 0.0
     bad_epochs = 0
+    last_eval_acc = None
 
     for epoch in range(1, args.epochs + 1):
         t = (epoch - 1) / max(1, args.epochs - 1)
@@ -312,7 +316,16 @@ def main():
         for (x1, x2), y in train_loader:
             x1, x2 = x1.to(device), x2.to(device)
             y = y.to(device)
-            y_prob, c_prob = model(x1, x2, tau=tau, hard=False)
+            # Optional external gating: switch to hard concepts when gate conditions are met
+            use_hard = False
+            if args.auto_refine:
+                cond = True
+                if args.refine_tau_gate is not None:
+                    cond = cond and (tau <= args.refine_tau_gate)
+                if args.refine_acc_gate is not None and last_eval_acc is not None:
+                    cond = cond and (last_eval_acc >= float(args.refine_acc_gate))
+                use_hard = cond
+            y_prob, c_prob = model(x1, x2, tau=tau, hard=use_hard)
             logits = torch.logit(y_prob.clamp(1e-6, 1 - 1e-6))
             loss_main = ce(logits, y)
             loss_ent = group_entropy_loss(c_prob) * args.entropy
@@ -344,6 +357,7 @@ def main():
             acc = correct / max(1, tot)
 
         print(f"Epoch {epoch:03d} | train_loss={train_loss:.4f} | acc={acc*100:.2f}% | tau={tau:.3f}")
+        last_eval_acc = acc
 
         if acc > best_acc:
             best_acc = acc
