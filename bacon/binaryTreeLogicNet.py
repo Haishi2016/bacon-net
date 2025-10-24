@@ -88,6 +88,14 @@ class binaryTreeLogicNet(nn.Module):
         self.layer_outputs = None  # For storing layer outputs during forward pass
         self._reinitialize(weight_mode, weight_value, weight_range, weight_choices, self.is_frozen)
         self.reset_optimizer()  # Initialize optimizer
+        # Auto refine (sample_best_permutation) during forward
+        self.auto_refine = False
+        self._auto_refine_every = 100  # batches
+        self._batches_since_refine = 0
+        self._auto_refine_topk = min(256, self.permutation_max)
+        self._auto_refine_noise = 0.1
+        self._auto_freeze_threshold = self.freeze_loss_threshold
+        self._auto_freeze_tolerance = self.lock_loss_tolerance
     def reset_optimizer(self, learning_rate=0.2):
         """Reset the optimizer for the model.
         Args:
@@ -276,11 +284,14 @@ class binaryTreeLogicNet(nn.Module):
             idx += 1
         return current
 
-    def forward(self, x):
+    def forward(self, x, targets=None):
         """Forward pass through the binary tree logic network.
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, input_size).
+            targets (torch.Tensor|None): Optional target tensor [batch,1] in {0,1};
+                if provided and auto_refine is enabled during training, the model may
+                run a light-weight permutation search and freeze the best permutation.
         Returns:
             torch.Tensor: Output tensor of shape (batch_size, 1).
         """
@@ -345,7 +356,32 @@ class binaryTreeLogicNet(nn.Module):
                     self.layer_outputs.append(nres.detach().clone())
                     final = node_outputs[-1]
 
-            return final.unsqueeze(1)  # Add batch dimension
+            out = final.unsqueeze(1)
+
+            # Optional: refine permutation inside forward (baby step integration)
+            if self.training and self.auto_refine and (targets is not None):
+                self._batches_since_refine += 1
+                if self._batches_since_refine >= self._auto_refine_every and not self.is_frozen:
+                    # Run a small permutation search on current batch
+                    criterion = nn.BCELoss()
+                    best_model, best_perm, best_loss, best_index = self.sample_best_permutation(
+                        model_template=self,
+                        topk=self._auto_refine_topk,
+                        X=x.detach(),
+                        Y=targets.detach(),
+                        noise_std=self._auto_refine_noise
+                    )
+                    if best_model is not None:
+                        # Freeze if good enough
+                        if best_loss < self._auto_freeze_threshold + self._auto_freeze_tolerance:
+                            self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
+                            self.input_to_leaf = frozenInputToLeaf(self.locked_perm, self.original_input_size).to(self.device)
+                            self.is_frozen = True
+                            # Optionally reduce LR externally after this point
+                    # Reset counter regardless
+                    self._batches_since_refine = 0
+
+            return out
         except Exception as e:
             logging.error(f"[ERROR] Exception in forward pass: {e}")
             logging.error(f"[DEBUG] Input x: {x}")

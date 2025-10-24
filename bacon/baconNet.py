@@ -193,9 +193,63 @@ class baconNet(nn.Module):
             torch.manual_seed(torch.initial_seed() + attempt)
 
             try:
-                self.train_model(x, y, epochs=max_epochs)
+                # Re-initialize a fresh assembler for this attempt, preserving config
+                cfg = self.assembler
+                self.assembler = binaryTreeLogicNet(
+                    cfg.original_input_size,
+                    weight_mode=cfg.weight_mode,
+                    weight_normalization=cfg.weight_normalization,
+                    weight_value=cfg.weight_value,
+                    weight_range=cfg.weight_range,
+                    weight_choices=None,
+                    noise_increase=cfg.noise_increase,
+                    noise_decrease=cfg.noise_decrease,
+                    loss_amplifier=cfg.loss_amplifier,
+                    normalize_andness=cfg.normalize_andness,
+                    min_noise=cfg.min_noise,
+                    max_noise=cfg.max_noise,
+                    is_frozen=False,
+                    lock_loss_tolerance=cfg.lock_loss_tolerance / cfg.loss_amplifier,  # unscale
+                    freeze_loss_threshold=cfg.freeze_loss_threshold / cfg.loss_amplifier,  # unscale
+                    permutation_max=cfg.permutation_max,
+                    tree_layout=cfg.tree_layout,
+                    weight_penalty_strength=cfg.weight_penalty_strength,
+                    aggregator=cfg.aggregator,
+                    early_stop_patience=cfg.early_stop_patience,
+                    early_stop_min_delta=cfg.early_stop_min_delta,
+                    early_stop_threshold=cfg.early_stop_threshold,
+                    device=cfg.device,
+                )
+
+                # Enable light auto-refinement inside forward
+                self.assembler.auto_refine = True
+                self.assembler._auto_refine_every = 10
+
+                optimizer = torch.optim.Adam(self.assembler.parameters(), lr=0.1)
+                criterion = nn.BCELoss()
+
+                for epoch in range(max_epochs):
+                    self.assembler.train()
+                    optimizer.zero_grad(set_to_none=True)
+                    outputs = self.assembler(x, targets=y)
+                    loss = criterion(outputs, y) * self.assembler.loss_amplifier
+
+                    # Optional weight regularization (only if trainable)
+                    if self.assembler.weight_mode == "trainable":
+                        depth_weight_penalty = 0.0
+                        for w in self.assembler.weights:
+                            depth_weight_penalty += self.assembler.weight_penalty_strength * ((torch.sigmoid(w) - 0.5) ** 2).mean()
+                        loss = loss + depth_weight_penalty
+
+                    loss.backward()
+                    optimizer.step()
+
+                    # Simple early stop when frozen and loss small
+                    if self.assembler.is_frozen and loss.item() < (self.assembler.early_stop_threshold * self.assembler.loss_amplifier):
+                        break
+
                 logging.info(f"✅ Permutation is frozen: {self.assembler.is_frozen}")
-                if self.assembler.is_frozen:        
+                if self.assembler.is_frozen:
                     accuracy = self.evaluate(x_test, y_test)
                     logging.info(f"✅ Attempt {attempt + 1} accuracy: {accuracy:.4f}")
                     if accuracy > best_accuracy:
