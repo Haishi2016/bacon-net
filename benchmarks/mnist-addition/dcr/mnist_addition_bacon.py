@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import argparse, math, random, os
+import argparse, math, random, os, sys
 from typing import Tuple, Iterator
 import numpy as np
 import torch
@@ -9,6 +9,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, IterableDataset, DataLoader
 from torchvision import datasets, transforms
+
+# Ensure local bacon package is used instead of any installed site-package
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 from bacon.aggregators.bool import MinMaxAggregator
@@ -22,11 +25,13 @@ class MnistAdditionStream(IterableDataset):
     Iterable dataset: yields epoch_len pairs per epoch.
     Each sample: ((img1, img2), sum) where sum in {0..18}.
     """
-    def __init__(self, root: str, train: bool, epoch_len: int, seed: int = 42):
+    def __init__(self, root: str, train: bool, epoch_len: int, seed: int = 42, target_sum: int = None, pos_frac: float = None):
         super().__init__()
         self.seed = seed
         self.epoch_len = epoch_len
         self.train = train
+        self.target_sum = target_sum
+        self.pos_frac = pos_frac
         aug = [
             transforms.RandomAffine(degrees=10, translate=(0.05, 0.05)),
         ] if train else []
@@ -39,6 +44,14 @@ class MnistAdditionStream(IterableDataset):
                 ]
             )
         )
+        # Build per-digit index lists if balancing is requested
+        self.digit_to_indices = None
+        if self.pos_frac is not None and self.target_sum is not None:
+            self.digit_to_indices = {d: [] for d in range(10)}
+            for idx in range(len(self.mnist)):
+                _, d = self.mnist[idx]
+                if 0 <= int(d) <= 9:
+                    self.digit_to_indices[int(d)].append(idx)
 
     def __iter__(self) -> Iterator:
         worker_info = torch.utils.data.get_worker_info()
@@ -46,18 +59,41 @@ class MnistAdditionStream(IterableDataset):
         rng = random.Random(base)
         n = len(self.mnist)
         for _ in range(self.epoch_len):
-            i1 = rng.randrange(n)
-            i2 = rng.randrange(n)
-            x1, d1 = self.mnist[i1]
-            x2, d2 = self.mnist[i2]
-            yield (x1, x2), int(d1 + d2)
+            if self.digit_to_indices is None:
+                i1 = rng.randrange(n)
+                i2 = rng.randrange(n)
+                x1, d1 = self.mnist[i1]
+                x2, d2 = self.mnist[i2]
+                yield (x1, x2), int(d1 + d2)
+            else:
+                # Balanced sampling w.r.t target_sum
+                want_pos = rng.random() < float(self.pos_frac)
+                if want_pos:
+                    # sample d1 such that d2 exists within [0,9] and both have indices
+                    while True:
+                        d1 = rng.randrange(10)
+                        d2 = self.target_sum - d1
+                        if 0 <= d2 <= 9 and self.digit_to_indices[d1] and self.digit_to_indices[d2]:
+                            break
+                else:
+                    # sample arbitrary digits avoiding target sum
+                    while True:
+                        d1 = rng.randrange(10)
+                        d2 = rng.randrange(10)
+                        if d1 + d2 != self.target_sum and self.digit_to_indices[d1] and self.digit_to_indices[d2]:
+                            break
+                i1 = rng.choice(self.digit_to_indices[d1])
+                i2 = rng.choice(self.digit_to_indices[d2])
+                x1, _ = self.mnist[i1]
+                x2, _ = self.mnist[i2]
+                yield (x1, x2), int(d1 + d2)
 
 
 # ------------------------------------------------------------
 # Fixed test set (so accuracy is stable across epochs)
 # ------------------------------------------------------------
 class MnistAdditionFixed(Dataset):
-    def __init__(self, root: str, train: bool, size_pairs: int, seed: int = 999):
+    def __init__(self, root: str, train: bool, size_pairs: int, seed: int = 999, target_sum: int = None, pos_frac: float = None):
         super().__init__()
         rng = random.Random(seed)
         self.mnist = datasets.MNIST(
@@ -69,12 +105,42 @@ class MnistAdditionFixed(Dataset):
         )
         n = len(self.mnist)
         self.pairs = []
-        for _ in range(size_pairs):
-            i1 = rng.randrange(n)
-            i2 = rng.randrange(n)
-            _, d1 = self.mnist[i1]
-            _, d2 = self.mnist[i2]
-            self.pairs.append((i1, i2, int(d1 + d2)))
+        if target_sum is None or pos_frac is None:
+            for _ in range(size_pairs):
+                i1 = rng.randrange(n)
+                i2 = rng.randrange(n)
+                _, d1 = self.mnist[i1]
+                _, d2 = self.mnist[i2]
+                self.pairs.append((i1, i2, int(d1 + d2)))
+        else:
+            # Build per-digit index lists
+            digit_to_indices = {d: [] for d in range(10)}
+            for idx in range(n):
+                _, d = self.mnist[idx]
+                if 0 <= int(d) <= 9:
+                    digit_to_indices[int(d)].append(idx)
+            num_pos = int(size_pairs * float(pos_frac))
+            num_neg = size_pairs - num_pos
+            # positives
+            for _ in range(num_pos):
+                while True:
+                    d1 = rng.randrange(10)
+                    d2 = target_sum - d1
+                    if 0 <= d2 <= 9 and digit_to_indices[d1] and digit_to_indices[d2]:
+                        break
+                i1 = rng.choice(digit_to_indices[d1])
+                i2 = rng.choice(digit_to_indices[d2])
+                self.pairs.append((i1, i2, d1 + d2))
+            # negatives
+            for _ in range(num_neg):
+                while True:
+                    d1 = rng.randrange(10)
+                    d2 = rng.randrange(10)
+                    if d1 + d2 != target_sum and digit_to_indices[d1] and digit_to_indices[d2]:
+                        break
+                i1 = rng.choice(digit_to_indices[d1])
+                i2 = rng.choice(digit_to_indices[d2])
+                self.pairs.append((i1, i2, d1 + d2))
 
     def __len__(self): return len(self.pairs)
 
@@ -142,13 +208,14 @@ class BaconAddition(nn.Module):
             loss_amplifier=1.0,
         )
 
-    def forward(self, x1, x2, tau: float, hard: bool = False):
+    def forward(self, x1, x2, tau: float, hard: bool = False, targets: torch.Tensor = None):
         z1 = self.tower1(x1)
         z2 = self.tower2(x2)
         p1 = self.head1(z1, tau=tau, hard=hard)  # [B,10]
         p2 = self.head2(z2, tau=tau, hard=hard)  # [B,10]
         c_prob = torch.cat([p1, p2], dim=1)      # [B,20]
-        y_score = self.bacon(c_prob)             # [B,1] in [0,1]
+        # Pass targets to BACON to allow in-forward light permutation refinement
+        y_score = self.bacon(c_prob, targets=targets)  # [B,1] in [0,1]
         return y_score, c_prob
 
 
@@ -209,6 +276,9 @@ def main():
     ap.add_argument("--seed", default=0, type=int)
     ap.add_argument("--patience", default=15, type=int)
     ap.add_argument("--pretrained", default=None, type=str, help="path to a pretrained model state_dict (.pt)")
+    ap.add_argument("--target-sum", default=10, type=int)
+    ap.add_argument("--pos-frac", default=None, type=float, help="if set, balance positives at this fraction in train/test")
+    ap.add_argument("--refine-tau-gate", default=1.5, type=float, help="enable BACON refine when tau <= this value")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -217,13 +287,17 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_ds = MnistAdditionStream(args.data, train=True, epoch_len=args.train_pairs, seed=args.seed)
+    train_ds = MnistAdditionStream(args.data, train=True, epoch_len=args.train_pairs, seed=args.seed,
+                                   target_sum=args.target_sum, pos_frac=args.pos_frac)
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, num_workers=2)
 
-    test_ds = MnistAdditionFixed(args.data, train=False, size_pairs=args.test_pairs, seed=999)
+    test_ds = MnistAdditionFixed(args.data, train=False, size_pairs=args.test_pairs, seed=999,
+                                 target_sum=args.target_sum, pos_frac=args.pos_frac)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
     model = BaconAddition().to(device)
+    # Start with refinement disabled; toggle based on tau during training
+    model.bacon.auto_refine = False
 
     # Optionally load pretrained weights
     if args.pretrained is not None:
@@ -293,9 +367,10 @@ def main():
         for (x1, x2), y in train_loader:
             x1, x2 = x1.to(device), x2.to(device)
             y = y.to(device)
-            y10 = (y == 10).float().view(-1, 1)
-
-            y_score, c_prob = model(x1, x2, tau=tau, hard=False)
+            # Gate BACON refinement by tau (external control)
+            model.bacon.auto_refine = (tau <= args.refine_tau_gate)
+            y10 = (y == args.target_sum).float().view(-1, 1)
+            y_score, c_prob = model(x1, x2, tau=tau, hard=False, targets=y10)
             loss_main = bce(y_score.clamp(1e-6, 1 - 1e-6), y10)
             loss_ent = group_entropy_loss(c_prob) * args.entropy
             loss = loss_main + loss_ent
@@ -321,7 +396,7 @@ def main():
             for (x1, x2), y in test_loader:
                 x1, x2 = x1.to(device), x2.to(device)
                 y = y.to(device)
-                y10 = (y == 10).float().view(-1, 1)
+                y10 = (y == args.target_sum).float().view(-1, 1)
                 y_score, _ = model(x1, x2, tau=args.tau_end, hard=True)
                 pred = (y_score >= 0.5).float()
                 correct += (pred == y10).sum().item()
