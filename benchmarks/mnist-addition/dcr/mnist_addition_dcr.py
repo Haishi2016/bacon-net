@@ -41,7 +41,7 @@ class MnistAdditionStream(IterableDataset):
         )
 
     def __iter__(self) -> Iterator:
-        # Different RNG per worker + epoch if available
+        # Different RNG per worker; epoch variation handled by caller via seed param
         worker_info = torch.utils.data.get_worker_info()
         base = self.seed + (0 if worker_info is None else worker_info.id)
         rng = random.Random(base)
@@ -174,12 +174,12 @@ def triangle_class_weights():
 
 
 # ------------------------------------------------------------
-# Pairwise rule printer (clean OR-of-ANDs per sum)
+# Pairwise rule printer (clean OR-of-ANDs per sum) — device-safe
 # ------------------------------------------------------------
 def print_pair_rules(model, test_loader, tau_eval=0.8, device='cpu'):
     model.eval()
-    pair_sum = torch.zeros(19, 10, 10)
-    count_k = torch.zeros(19)
+    pair_sum = torch.zeros(19, 10, 10, device=device)  # <-- allocate on device
+    count_k  = torch.zeros(19, device=device)
     with torch.no_grad():
         for (x1, x2), _ in test_loader:
             x1, x2 = x1.to(device), x2.to(device)
@@ -194,7 +194,7 @@ def print_pair_rules(model, test_loader, tau_eval=0.8, device='cpu'):
             for kk in range(19):
                 mask = (k == kk).float().view(-1, 1, 1)
                 pair_sum[kk] += (outer * mask).sum(dim=0)
-                count_k[kk] += mask.sum()
+                count_k[kk]  += mask.sum()
 
     print("\n=== Pairwise rules (valid pairs i∧j with i+j=k) ===")
     for kk in range(19):
@@ -224,10 +224,11 @@ def main():
     ap.add_argument("--emb", default=30, type=int)
     ap.add_argument("--aux", default=1.0, type=float, help="aux CE weight")
     ap.add_argument("--entropy", default=0.0005, type=float, help="tiny entropy kept always")
-    ap.add_argument("--tau-start", default=2.5, type=float)
-    ap.add_argument("--tau-end", default=0.8, type=float)
+    ap.add_argument("--tau-start", default=3.0, type=float)
+    ap.add_argument("--tau-end", default=0.6, type=float)
     ap.add_argument("--seed", default=0, type=int)
     ap.add_argument("--patience", default=15, type=int)
+    ap.add_argument("--pretrained", default=None, type=str, help="path to a pretrained model state_dict (.pt)")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -236,15 +237,64 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Streaming train, fixed test
     train_ds = MnistAdditionStream(args.data, train=True, epoch_len=args.train_pairs, seed=args.seed)
-    test_ds = MnistAdditionFixed(args.data, train=False, size_pairs=args.test_pairs, seed=999)
-
-    # For IterableDataset, don't set shuffle=True
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, num_workers=2)
+
+    test_ds = MnistAdditionFixed(args.data, train=False, size_pairs=args.test_pairs, seed=999)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
     model = DCRAddition(emb_size=args.emb).to(device)
+
+    # Optionally load pretrained weights
+    if args.pretrained is not None:
+        if not os.path.isfile(args.pretrained):
+            raise FileNotFoundError(f"Checkpoint not found: {args.pretrained}")
+        # Prefer safe loading where supported (guards against arbitrary code execution)
+        try:
+            ckpt = torch.load(args.pretrained, map_location=device, weights_only=True)
+        except TypeError:
+            # Older PyTorch versions do not support weights_only
+            ckpt = torch.load(args.pretrained, map_location=device)
+        except Exception as e:
+            print(f"Safe load (weights_only=True) failed: {e}. Falling back to standard torch.load (unsafe).")
+            ckpt = torch.load(args.pretrained, map_location=device)
+        # Accept plain state_dict, checkpoint dict with 'state_dict', or whole model objects
+        if isinstance(ckpt, dict) and "state_dict" in ckpt:
+            state_dict = ckpt["state_dict"]
+        elif isinstance(ckpt, dict) and all(isinstance(v, torch.Tensor) for v in ckpt.values()):
+            state_dict = ckpt
+        elif hasattr(ckpt, "state_dict"):
+            state_dict = ckpt.state_dict()
+        else:
+            raise RuntimeError("Unrecognized checkpoint format; expected a state_dict or a dict with 'state_dict'.")
+
+        # Strip potential 'module.' prefix (from DataParallel) for compatibility
+        cleaned_state_dict = {}
+        for k, v in state_dict.items():
+            nk = k[7:] if k.startswith("module.") else k
+            cleaned_state_dict[nk] = v
+
+        missing, unexpected = model.load_state_dict(cleaned_state_dict, strict=False)
+        if missing:
+            print(f"Warning: missing keys when loading pretrained weights: {sorted(missing)}")
+        if unexpected:
+            print(f"Warning: unexpected keys when loading pretrained weights: {sorted(unexpected)}")
+        print(f"Loaded pretrained weights from {args.pretrained}")
+
+        # Evaluate only, skip training entirely
+        model.eval()
+        with torch.no_grad():
+            tot, correct = 0, 0
+            for (x1, x2), y in test_loader:
+                x1, x2 = x1.to(device), x2.to(device)
+                y = y.to(device)
+                y_pred, _, _, _ = model(x1, x2, tau=args.tau_end, hard=True)
+                correct += (y_pred.argmax(1) == y).sum().item()
+                tot += y.size(0)
+            acc = correct / max(1, tot)
+        print(f"Pretrained eval | test_acc={acc*100:.2f}% | tau={args.tau_end:.3f}")
+        print_pair_rules(model, test_loader, tau_eval=args.tau_end, device=device)
+        return
 
     # Triangular class weights
     class_weights = triangle_class_weights().to(device)
@@ -297,7 +347,6 @@ def main():
                 break
 
         sched.step()
-
         train_loss = running_loss / max(1, seen)
 
         # ---- Eval (hard one-hots, slightly warm tau) ----
