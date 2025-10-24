@@ -160,6 +160,7 @@ class binaryTreeLogicNet(nn.Module):
             'optimizer_state_dict': self.optimizer.state_dict(),
             'is_frozen': self.is_frozen,
             'locked_perm': self.locked_perm,
+            'tree_layout': self.tree_layout,
         }, file_name)
     def load_model(self, file_name):
         """Load the model state from a file.
@@ -171,6 +172,7 @@ class binaryTreeLogicNet(nn.Module):
         state_dict = checkpoint['model_state_dict']
         self.is_frozen = checkpoint.get('is_frozen', False)
         self.locked_perm = checkpoint.get('locked_perm', None)
+        self.tree_layout = checkpoint.get('tree_layout', getattr(self, 'tree_layout', 'left'))
         if self.is_frozen:
             # Frozen → use FrozenInputToLeaf
             P_hard = state_dict['input_to_leaf.P_hard']
