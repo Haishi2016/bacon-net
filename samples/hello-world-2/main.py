@@ -33,6 +33,6 @@ bacon = baconNet(input_size,
 
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 print_tree_structure(bacon.assembler, expr_info['var_names'], classic_boolean=True, layout='paired')
-visualize_tree_structure(bacon.assembler, expr_info['var_names'])
+visualize_tree_structure(bacon.assembler, expr_info['var_names'], layout='paired')
 
 
