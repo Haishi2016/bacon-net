@@ -321,7 +321,7 @@ def visualize_tree_structure(model, labels=None):
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     plt.show()
 
-def print_tree_structure(model, labels=None, classic_boolean=False):
+def print_tree_structure(model, labels=None, classic_boolean=False, layout=None):
     # print(f" FC_OUT Weight: {model.fc_out.weight.item():.2f}")
     # print(f" FC_OUT Bias: {model.fc_out.bias.item():.2f}")
     """Print a left-associative logic tree showing weights and biases."""
@@ -342,33 +342,109 @@ def print_tree_structure(model, labels=None, classic_boolean=False):
     def fmt_label(name):
         return f"[{name}]".rjust(label_width + 2)
 
-    print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
+    effective_layout = layout or getattr(model, 'tree_layout', 'left')
+    if effective_layout == 'balanced':
+        print("\n🧠 Logical Aggregation Tree (Balanced):\n")
+    elif effective_layout == 'paired':
+        print("\n🧠 Logical Aggregation Tree (Paired):\n")
+    else:
+        print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
 
-    previous_w = None
+    # Map weights and biases to CPU for printing
     if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
-        weights = model.weights
+        weights = [w.detach().cpu() if hasattr(w, 'detach') else w for w in model.weights]
     else:
         weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
-    a = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
-    indent = 2
-    for i in range(model.num_layers):
-        if i == 0:
-            print(fmt_label(leaf_names[0]) + f"─{weights[0][0]:.2f}".rjust(5) + "────┐")
-            new_leaf = leaf_names[1]
-        else:
-            new_leaf = leaf_names[i + 1]
-        if classic_boolean:
-            if a[i] >= 0.5:
-                operator = "[ AND ]"
+    a_vals = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
+
+    if effective_layout == 'balanced':
+        # Build a balanced parenthesized expression using the same node indexing order
+        def build_expr(start, end, idx):
+            if start == end:
+                return leaf_names[start], idx
+            mid = (start + end) // 2
+            left_expr, idx = build_expr(start, mid, idx)
+            right_expr, idx = build_expr(mid + 1, end, idx)
+            a = a_vals[idx]
+            op = ("AND" if a >= 0.5 else "OR") if classic_boolean else f"a={a:.3f}"
+            # weights per internal node
+            w = weights[idx]
+            if hasattr(w, 'tolist'):
+                wl, wr = float(w[0]), float(w[1])
             else:
-                operator = "[ O R ]"
-        else:
-            operator = f"[a={a[i]:.8f}]"
-        if i < model.num_layers - 1:
-            print(fmt_label(new_leaf) + f"─{1-weights[i][1]:.2f}".rjust(5) + "─" * indent +  operator + f"─{weights[i+1][0]:.2f}".rjust(5) + "────┐")
-        else:
-            print(fmt_label(new_leaf) + f"─{1-weights[i][1]:.2f}".rjust(5) + "─" * indent +  f"{operator}──OUTPUT")
-        indent += 15
+                wl, wr = float(w), float(1 - w)
+            node_str = f"({left_expr} -{wl:.2f}- [{op}] -{wr:.2f}- {right_expr})"
+            return node_str, idx + 1
+
+        expr, _ = build_expr(0, model.num_leaves - 1, 0)
+        print(expr)
+        return
+    elif effective_layout == 'paired':
+        # Build a paired-then-fold expression using the same node indexing order as build_paired_tree
+        idx = 0
+        parts = []
+        j = 0
+        while j < model.num_leaves:
+            if j + 1 < model.num_leaves:
+                a = a_vals[idx]
+                op = ("AND" if a >= 0.5 else "OR") if classic_boolean else f"a={a:.3f}"
+                w = weights[idx]
+                if hasattr(w, 'tolist'):
+                    wl, wr = float(w[0]), float(w[1])
+                else:
+                    wl, wr = float(w), float(1 - w)
+                node_str = f"([{leaf_names[j]}] -{wl:.2f}- [{op}] -{wr:.2f}- [{leaf_names[j+1]}])"
+                parts.append(node_str)
+                idx += 1
+                j += 2
+            else:
+                parts.append(f"[{leaf_names[j]}]")
+                j += 1
+
+        current = parts[0]
+        for k in range(1, len(parts)):
+            a = a_vals[idx]
+            op = ("AND" if a >= 0.5 else "OR") if classic_boolean else f"a={a:.3f}"
+            w = weights[idx]
+            if hasattr(w, 'tolist'):
+                wl, wr = float(w[0]), float(w[1])
+            else:
+                wl, wr = float(w), float(1 - w)
+            current = f"({current} -{wl:.2f}- [{op}] -{wr:.2f}- {parts[k]})"
+            idx += 1
+        print(current)
+        return
+    else:
+        # Left-associative ASCII tree (existing behavior)
+        indent = 2
+        for i in range(model.num_layers):
+            a = a_vals[i]
+            if i == 0:
+                print(fmt_label(leaf_names[0]) + f"─{weights[0][0]:.2f}".rjust(5) + "────┐")
+                new_leaf = leaf_names[1]
+            else:
+                new_leaf = leaf_names[i + 1]
+            if classic_boolean:
+                operator = "[ AND ]" if a >= 0.5 else "[ O R ]"
+            else:
+                operator = f"[a={a:.8f}]"
+            if i < model.num_layers - 1:
+                print(
+                    fmt_label(new_leaf)
+                    + f"─{1-weights[i][1]:.2f}".rjust(5)
+                    + "─" * indent
+                    + operator
+                    + f"─{weights[i+1][0]:.2f}".rjust(5)
+                    + "────┐"
+                )
+            else:
+                print(
+                    fmt_label(new_leaf)
+                    + f"─{1-weights[i][1]:.2f}".rjust(5)
+                    + "─" * indent
+                    + f"{operator}──OUTPUT"
+                )
+            indent += 15
 
 def print_table_structure(model, labels=None):
     """
