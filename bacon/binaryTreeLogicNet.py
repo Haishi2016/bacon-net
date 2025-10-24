@@ -210,6 +210,70 @@ class binaryTreeLogicNet(nn.Module):
         combine.node_index = 0
         return combine(0, len(node_outputs) - 1)
 
+    def build_paired_tree(self, node_outputs, weights, biases):
+        """Build a two-stage 'paired' tree: first pair inputs (0,1), (2,3), ... then fold pairs.
+
+        Args:
+            node_outputs (list): Leaf outputs.
+            weights (list): Aggregator weights per node.
+            biases (list): Aggregator biases per node.
+        Returns:
+            torch.Tensor: Final aggregated output.
+        """
+        def get_a_w(i):
+            bias = biases[i]
+            if self.normalize_andness:
+                a = torch.sigmoid(bias) * 3 - 1
+            else:
+                a = bias
+            if self.weight_mode == "fixed":
+                w = torch.tensor([self.weight_value, self.weight_value], dtype=torch.float32, device=self.device)
+            else:
+                if self.weight_normalization == "softmax":
+                    w = F.softmax(weights[i], dim=0)
+                elif self.weight_normalization == "minmax":
+                    raw_w = weights[i]
+                    w_min = raw_w.min()
+                    w_max = raw_w.max()
+                    denom = w_max - w_min
+                    if denom.item() == 0:
+                        w = torch.tensor([0.5, 0.5], device=self.device)
+                    else:
+                        w = (raw_w - w_min) / denom
+                        w_sum = w.sum()
+                        if w_sum.item() == 0:
+                            w = torch.tensor([0.5, 0.5], device=self.device)
+                        else:
+                            w = w / w_sum
+                else:
+                    w = weights[i]
+            return a, w
+
+        self.layer_outputs = []
+        idx = 0
+        pair_outputs = []
+        j = 0
+        while j < len(node_outputs):
+            if j + 1 < len(node_outputs):
+                a, w = get_a_w(idx)
+                out = self.aggregator.aggregate(node_outputs[j], node_outputs[j + 1], a, w[0], w[1])
+                pair_outputs.append(out)
+                self.layer_outputs.append(out.detach().clone())
+                idx += 1
+            else:
+                # Odd leftover passes through to next stage
+                pair_outputs.append(node_outputs[j])
+            j += 2
+
+        # Fold all pair outputs to a single output
+        current = pair_outputs[0]
+        for k in range(1, len(pair_outputs)):
+            a, w = get_a_w(idx)
+            current = self.aggregator.aggregate(current, pair_outputs[k], a, w[0], w[1])
+            self.layer_outputs.append(current.detach().clone())
+            idx += 1
+        return current
+
     def forward(self, x):
         """Forward pass through the binary tree logic network.
 
@@ -224,10 +288,12 @@ class binaryTreeLogicNet(nn.Module):
 
             if torch.isnan(leaf_values).any():
                 raise ValueError("[DEBUG] NaNs detected in leaf_values!")
-
-            node_outputs = list(leaf_values.T)  
+            
+            node_outputs = list(leaf_values.T)
             if self.tree_layout == "balanced":
                 final = self.build_balanced_tree(node_outputs, self.weights, self.biases)
+            elif self.tree_layout == "paired":
+                final = self.build_paired_tree(node_outputs, self.weights, self.biases)
             else:
                 self.layer_outputs = []  
 
