@@ -243,7 +243,7 @@ def left_associative_layout(G, root):
     dfs(root)
     return pos
 
-def visualize_tree_structure(model, labels=None):
+def visualize_tree_structure(model, labels=None, layout=None):
     if labels is not None and len(labels) < model.num_leaves:
         raise ValueError("Label count does not match number of leaves")
 
@@ -260,32 +260,74 @@ def visualize_tree_structure(model, labels=None):
     weight_map = {}
     leaf_nodes = set()
 
-    # Build the tree structure and assign labels
-    for i in range(model.num_layers):
-        if model.normalize_andness:
-            a = (torch.sigmoid(model.biases[i])*3-1).item()
-        else:
-            a = model.biases[i].item()
-        if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
-            w = model.weights[i]
-        else:
-            w = torch.sigmoid(model.weights[i])
+    effective_layout = layout or getattr(model, 'tree_layout', 'left')
 
-        left = f"Node{i}" if i > 0 else leaf_names[0]
-        right = leaf_names[i + 1]
-        parent = f"Node{i+1}"
+    # Precompute a-values and normalized weights per internal node index
+    a_vals = [
+        (torch.sigmoid(b) * 3 - 1).item() if model.normalize_andness else b.item()
+        for b in model.biases
+    ]
+    if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
+        w_list = model.weights
+    else:
+        w_list = [torch.sigmoid(w) for w in model.weights]
 
+    def add_parent(parent, left, right, idx):
         node_dict[parent] = (left, right)
-        node_labels[parent] = f"{a:.2f}"
-
+        node_labels[parent] = f"{a_vals[idx]:.2f}"
+        w = w_list[idx]
         weight_map[(parent, left)] = w[0]
         weight_map[(parent, right)] = w[1]
-
-        # Keep track of all possible leaf nodes
         if left in leaf_names:
-            leaf_nodes.add(left)    
+            leaf_nodes.add(left)
         if right in leaf_names:
             leaf_nodes.add(right)
+
+    root = None
+    if effective_layout == 'balanced':
+        # Build a balanced tree structure with in-order node indexing
+        idx_ref = {'i': 0}
+        def build(start, end):
+            if start == end:
+                return leaf_names[start]
+            mid = (start + end) // 2
+            left = build(start, mid)
+            right = build(mid + 1, end)
+            parent = f"Node{idx_ref['i'] + 1}"
+            add_parent(parent, left, right, idx_ref['i'])
+            idx_ref['i'] += 1
+            return parent
+        root = build(0, model.num_leaves - 1)
+    elif effective_layout == 'paired':
+        # First stage: pair adjacent leaves; second stage: fold pair outputs
+        idx = 0
+        nodes = []
+        j = 0
+        while j < model.num_leaves:
+            if j + 1 < model.num_leaves:
+                parent = f"Node{idx + 1}"
+                add_parent(parent, leaf_names[j], leaf_names[j + 1], idx)
+                nodes.append(parent)
+                idx += 1
+                j += 2
+            else:
+                nodes.append(leaf_names[j])
+                j += 1
+        current = nodes[0]
+        for k in range(1, len(nodes)):
+            parent = f"Node{idx + 1}"
+            add_parent(parent, current, nodes[k], idx)
+            current = parent
+            idx += 1
+        root = current
+    else:
+        # Left-associative structure
+        for i in range(model.num_layers):
+            left = f"Node{i}" if i > 0 else leaf_names[0]
+            right = leaf_names[i + 1]
+            parent = f"Node{i+1}"
+            add_parent(parent, left, right, i)
+        root = f"Node{model.num_layers}"
 
     # Add labels for leaf nodes
     for leaf in leaf_nodes:
@@ -304,10 +346,9 @@ def visualize_tree_structure(model, labels=None):
         else:
             G.add_node(node)
 
-    root = f"Node{model.num_layers}"
     add_edges(root)
 
-    # Use the left-associative layout
+    # Use general DFS layout (works for all binary trees constructed above)
     pos = left_associative_layout(G, root)
     edge_labels = {e: f"{w:.2f}" for e, w in nx.get_edge_attributes(G, "weight").items()}
 
@@ -315,7 +356,12 @@ def visualize_tree_structure(model, labels=None):
     plt.figure(figsize=(14, 8))
     nx.draw(G, pos, with_labels=True, labels=node_labels, node_color='lightblue', node_size=2000, font_size=9)
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red')
-    plt.title("BACON Tree Structure (Left-Associative)")
+    title = "Left-Associative"
+    if effective_layout == 'balanced':
+        title = 'Balanced'
+    elif effective_layout == 'paired':
+        title = 'Paired'
+    plt.title(f"BACON Tree Structure ({title})")
     plt.axis("off")
     plt.margins(0.1)
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
