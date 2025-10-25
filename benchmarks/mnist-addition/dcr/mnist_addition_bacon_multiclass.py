@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 from bacon.aggregators.bool import MinMaxAggregator
+from scipy.optimize import linear_sum_assignment
 
 
 # ------------------------------------------------------------
@@ -249,6 +250,11 @@ def main():
     ap.add_argument("--auto-refine", action="store_true", help="enable gated hard concepts (optional)")
     ap.add_argument("--refine-tau-gate", default=None, type=float, help="enable hard concepts only when tau <= this value")
     ap.add_argument("--refine-acc-gate", default=None, type=float, help="enable hard concepts only when eval acc >= this value (0..1)")
+    ap.add_argument("--perm-search", action="store_true", help="enable permutation search on perm1/perm2 (optional)")
+    ap.add_argument("--perm-k", default=32, type=int, help="num candidate perms to try per search")
+    ap.add_argument("--perm-noise", default=0.1, type=float, help="noise std added to logits before Hungarian")
+    ap.add_argument("--perm-acc-gate", default=None, type=float, help="run perm search only when acc >= this")
+    ap.add_argument("--perm-tau-gate", default=None, type=float, help="run perm search only when tau <= this")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -357,6 +363,127 @@ def main():
 
         print(f"Epoch {epoch:03d} | train_loss={train_loss:.4f} | acc={acc*100:.2f}% | tau={tau:.3f}")
         last_eval_acc = acc
+
+        # Optional permutation search (uses perm1/perm2 logits + Hungarian)
+        if args.perm_search:
+            cond = True
+            if args.perm_tau_gate is not None:
+                cond = cond and (tau <= args.perm_tau_gate)
+            if args.perm_acc_gate is not None:
+                cond = cond and (acc >= float(args.perm_acc_gate))
+            if cond:
+                # Grab a small eval batch
+                try:
+                    (px1, px2), py = next(iter(test_loader))
+                except StopIteration:
+                    px1, px2, py = None, None, None
+                if px1 is not None:
+                    px1, px2, py = px1.to(device), px2.to(device), py.to(device)
+                    # Cache current logits
+                    def get_logits(module):
+                        itl = getattr(module, 'input_to_leaf', None)
+                        return getattr(itl, 'logits', None)
+                    L1 = get_logits(model.perm1)
+                    L2 = get_logits(model.perm2)
+                    if L1 is not None and L2 is not None:
+                        def sinkhorn(logits, n_iters=20, temperature=1.0):
+                            P = (logits / temperature).softmax(dim=1)
+                            for _ in range(n_iters):
+                                P = P / (P.sum(dim=1, keepdim=True) + 1e-12)
+                                P = P / (P.sum(dim=0, keepdim=True) + 1e-12)
+                            return P
+                        def sample_perm(logits, noise_std):
+                            noisy = logits + torch.randn_like(logits) * noise_std
+                            P = sinkhorn(noisy)
+                            # Hungarian on -P to maximize
+                            P_np = P.detach().cpu().numpy()
+                            row_ind, col_ind = linear_sum_assignment(-P_np)
+                            perm = col_ind[row_ind.argsort()]
+                            return torch.tensor(perm, device=logits.device, dtype=torch.long)
+                        # Compute baseline loss
+                        y_prob_base, _ = model(px1, px2, tau=args.tau_end, hard=True)
+                        logits_base = torch.logit(y_prob_base.clamp(1e-6, 1 - 1e-6))
+                        ce = nn.CrossEntropyLoss()
+                        best_loss = ce(logits_base, py).item()
+                        best_p1 = None
+                        best_p2 = None
+                        # Search perm1 keeping perm2 fixed
+                        for _ in range(int(args.perm_k)):
+                            p1_perm = sample_perm(L1, args.perm_noise)
+                            # Apply permutation to p1 only (evaluate fast path)
+                            with torch.no_grad():
+                                z1 = model.tower1(px1); z2 = model.tower2(px2)
+                                p1 = model.head1(z1, tau=args.tau_end, hard=True)
+                                p2 = model.head2(z2, tau=args.tau_end, hard=True)
+                                p1p = p1.index_select(1, p1_perm)
+                                p2p = model.perm2.input_to_leaf(p2)
+                                B = p1p.size(0)
+                                x = p1p.unsqueeze(2).expand(B, 10, 10)
+                                yv = p2p.unsqueeze(1).expand(B, 10, 10)
+                                a_and = torch.tensor(1.0, device=x.device)
+                                s = model.agg.aggregate_tensor(x, yv, a_and, w0=0.5, w1=0.5)
+                                mask = s.new_zeros(19, 10, 10)
+                                for kk in range(19):
+                                    for i in range(10):
+                                        j = kk - i
+                                        if 0 <= j <= 9:
+                                            mask[kk, i, j] = 1.0
+                                one_minus = (1.0 - s.clamp(1e-6, 1 - 1e-6))
+                                log_one_minus = (one_minus + 1e-12).log()
+                                y_list = []
+                                for kk in range(19):
+                                    mk = mask[kk].unsqueeze(0).expand(B, 10, 10)
+                                    log_prod_k = (log_one_minus * mk).sum(dim=(1, 2))
+                                    yk = 1.0 - torch.exp(log_prod_k)
+                                    y_list.append(yk.unsqueeze(1))
+                                y_prob_cand = torch.cat(y_list, dim=1)
+                                logits_cand = torch.logit(y_prob_cand.clamp(1e-6, 1 - 1e-6))
+                                loss_cand = ce(logits_cand, py).item()
+                                if loss_cand < best_loss:
+                                    best_loss = loss_cand
+                                    best_p1 = p1_perm
+                        # Search perm2 keeping perm1 fixed
+                        for _ in range(int(args.perm_k)):
+                            p2_perm = sample_perm(L2, args.perm_noise)
+                            with torch.no_grad():
+                                z1 = model.tower1(px1); z2 = model.tower2(px2)
+                                p1 = model.head1(z1, tau=args.tau_end, hard=True)
+                                p2 = model.head2(z2, tau=args.tau_end, hard=True)
+                                p1p = model.perm1.input_to_leaf(p1)
+                                p2p = p2.index_select(1, p2_perm)
+                                B = p1p.size(0)
+                                x = p1p.unsqueeze(2).expand(B, 10, 10)
+                                yv = p2p.unsqueeze(1).expand(B, 10, 10)
+                                a_and = torch.tensor(1.0, device=x.device)
+                                s = model.agg.aggregate_tensor(x, yv, a_and, w0=0.5, w1=0.5)
+                                mask = s.new_zeros(19, 10, 10)
+                                for kk in range(19):
+                                    for i in range(10):
+                                        j = kk - i
+                                        if 0 <= j <= 9:
+                                            mask[kk, i, j] = 1.0
+                                one_minus = (1.0 - s.clamp(1e-6, 1 - 1e-6))
+                                log_one_minus = (one_minus + 1e-12).log()
+                                y_list = []
+                                for kk in range(19):
+                                    mk = mask[kk].unsqueeze(0).expand(B, 10, 10)
+                                    log_prod_k = (log_one_minus * mk).sum(dim=(1, 2))
+                                    yk = 1.0 - torch.exp(log_prod_k)
+                                    y_list.append(yk.unsqueeze(1))
+                                y_prob_cand = torch.cat(y_list, dim=1)
+                                logits_cand = torch.logit(y_prob_cand.clamp(1e-6, 1 - 1e-6))
+                                loss_cand = ce(logits_cand, py).item()
+                                if loss_cand < best_loss:
+                                    best_loss = loss_cand
+                                    best_p2 = p2_perm
+                        # Apply best perms if any improvement
+                        from bacon.frozonInputToLeaf import frozenInputToLeaf
+                        if best_p1 is not None:
+                            model.perm1.input_to_leaf = frozenInputToLeaf(best_p1, 10)
+                            model.perm1.is_frozen = True
+                        if best_p2 is not None:
+                            model.perm2.input_to_leaf = frozenInputToLeaf(best_p2, 10)
+                            model.perm2.is_frozen = True
 
         if acc > best_acc:
             best_acc = acc
