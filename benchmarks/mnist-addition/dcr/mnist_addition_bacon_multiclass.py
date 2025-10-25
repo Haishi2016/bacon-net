@@ -122,52 +122,6 @@ class ImageConceptHead(nn.Module):
 # ------------------------------------------------------------
 # Multiclass BACON head (19 classes)
 # ------------------------------------------------------------
-class PairedSumBaconHead(nn.Module):
-    def __init__(self, smooth_or='prod', learnable_andness=True):
-        super().__init__()
-        self.agg = MinMaxAggregator()
-        # A single learnable andness controlling min/max blend for pairwise combination
-        if learnable_andness:
-            self.a_pair = nn.Parameter(torch.tensor(0.0))  # init around 0 (mid), STE inside aggregator will push
-        else:
-            self.register_buffer('a_pair', torch.tensor(0.0))
-        # Precompute masks for sums k=0..18 over 10x10 grid
-        mask = torch.zeros(19, 10, 10)
-        for k in range(19):
-            for i in range(10):
-                j = k - i
-                if 0 <= j <= 9:
-                    mask[k, i, j] = 1.0
-        self.register_buffer('pair_mask', mask)  # [19,10,10]
-        self.smooth_or = smooth_or
-
-    def forward(self, p1, p2):
-        # p1,p2: [B,10]
-        B = p1.size(0)
-        x = p1.unsqueeze(2).expand(B, 10, 10)  # [B,10,10]
-        y = p2.unsqueeze(1).expand(B, 10, 10)  # [B,10,10]
-        # Elementwise min-max blend via aggregator (weights unused)
-        s = self.agg.aggregate_tensor(x, y, self.a_pair, w0=0.5, w1=0.5)  # [B,10,10]
-        # Compute class probabilities via smooth OR over valid pairs for each sum
-        # Use product-based OR: 1 - prod(1 - s_pairs)
-        mask = self.pair_mask  # [19,10,10]
-        s_clamped = s.clamp(1e-6, 1 - 1e-6)
-        one_minus = 1.0 - s_clamped  # [B,10,10]
-        # For masked pairs not in class k, multiplication by 1 (no effect)
-        # Compute log-prod to avoid underflow: log(prod) = sum(log)
-        log_one_minus = (one_minus + 1e-12).log()  # [B,10,10]
-        # Expand mask to batch and sum over i,j per class
-        log_prod = []
-        for k in range(19):
-            mk = mask[k].unsqueeze(0).expand(B, 10, 10)
-            # Only sum where mask==1; else add 0 (log(1)=0)
-            log_prod_k = (log_one_minus * mk).sum(dim=(1, 2))
-            yk = 1.0 - torch.exp(log_prod_k)  # [B]
-            log_prod.append(yk.unsqueeze(1))
-        y_prob = torch.cat(log_prod, dim=1)  # [B,19]
-        return y_prob
-
-
 class BaconMultiHead(nn.Module):
     def __init__(self):
         super().__init__()
@@ -175,14 +129,59 @@ class BaconMultiHead(nn.Module):
         self.tower2 = SmallCnn(128)
         self.head1 = ImageConceptHead(128, 10)
         self.head2 = ImageConceptHead(128, 10)
-        self.paired_head = PairedSumBaconHead()
+        # Two small BACON trees (10 leaves each) to learn permutations for p1 and p2
+        self.perm1 = binaryTreeLogicNet(
+            input_size=10,
+            is_frozen=False,
+            weight_mode="fixed",
+            weight_normalization="minmax",
+            aggregator=MinMaxAggregator(),
+            normalize_andness=False,
+            tree_layout="paired",
+            loss_amplifier=1.0,
+        )
+        self.perm2 = binaryTreeLogicNet(
+            input_size=10,
+            is_frozen=False,
+            weight_mode="fixed",
+            weight_normalization="minmax",
+            aggregator=MinMaxAggregator(),
+            normalize_andness=False,
+            tree_layout="paired",
+            loss_amplifier=1.0,
+        )
+        self.agg = MinMaxAggregator()
 
     def forward(self, x1, x2, tau: float, hard: bool = False):
         z1 = self.tower1(x1)
         z2 = self.tower2(x2)
         p1 = self.head1(z1, tau=tau, hard=hard)  # [B,10]
         p2 = self.head2(z2, tau=tau, hard=hard)  # [B,10]
-        y_prob = self.paired_head(p1, p2)        # [B,19]
+        # Learn soft/hard permutations via BACON trees' input_to_leaf
+        p1p = self.perm1.input_to_leaf(p1)  # [B,10]
+        p2p = self.perm2.input_to_leaf(p2)  # [B,10]
+        # Pairwise AND via min (a=1.0) using MinMaxAggregator (vectorized)
+        B = p1p.size(0)
+        x = p1p.unsqueeze(2).expand(B, 10, 10)
+        y = p2p.unsqueeze(1).expand(B, 10, 10)
+        a_and = torch.tensor(1.0, device=x.device)
+        s = self.agg.aggregate_tensor(x, y, a_and, w0=0.5, w1=0.5)  # [B,10,10]
+        # Smooth OR per class k: 1 - prod(1 - s_ij) for i+j=k
+        mask = s.new_zeros(19, 10, 10)
+        for k in range(19):
+            for i in range(10):
+                j = k - i
+                if 0 <= j <= 9:
+                    mask[k, i, j] = 1.0
+        one_minus = (1.0 - s.clamp(1e-6, 1 - 1e-6))
+        log_one_minus = (one_minus + 1e-12).log()
+        y_list = []
+        for k in range(19):
+            mk = mask[k].unsqueeze(0).expand(B, 10, 10)
+            log_prod_k = (log_one_minus * mk).sum(dim=(1, 2))
+            yk = 1.0 - torch.exp(log_prod_k)
+            y_list.append(yk.unsqueeze(1))
+        y_prob = torch.cat(y_list, dim=1)  # [B,19]
         c_prob = torch.cat([p1, p2], dim=1)
         return y_prob, c_prob
 
