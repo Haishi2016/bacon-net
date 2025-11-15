@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import argparse, math, random, os
-from typing import Tuple, Iterator
+import argparse, math, random, os, sys
+from typing import Iterator, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,18 +15,13 @@ from torch_explain.nn.concepts import ConceptReasoningLayer
 
 
 # ------------------------------------------------------------
-# Streaming Dataset: re-sample MNIST pairs every epoch
+# Streaming Dataset (same as BACON v1)
 # ------------------------------------------------------------
 class MnistAdditionStream(IterableDataset):
-    """
-    Iterable dataset: yields epoch_len pairs per epoch.
-    Each sample: ((img1, img2), sum) where sum in {0..18}.
-    """
     def __init__(self, root: str, train: bool, epoch_len: int, seed: int = 42):
         super().__init__()
         self.seed = seed
         self.epoch_len = epoch_len
-        self.train = train
         aug = [
             transforms.RandomAffine(degrees=10, translate=(0.05, 0.05)),
         ] if train else []
@@ -41,7 +36,6 @@ class MnistAdditionStream(IterableDataset):
         )
 
     def __iter__(self) -> Iterator:
-        # Different RNG per worker; epoch variation handled by caller via seed param
         worker_info = torch.utils.data.get_worker_info()
         base = self.seed + (0 if worker_info is None else worker_info.id)
         rng = random.Random(base)
@@ -55,7 +49,7 @@ class MnistAdditionStream(IterableDataset):
 
 
 # ------------------------------------------------------------
-# Fixed test set (so accuracy is stable across epochs)
+# Fixed Dataset (same as BACON v1)
 # ------------------------------------------------------------
 class MnistAdditionFixed(Dataset):
     def __init__(self, root: str, train: bool, size_pairs: int, seed: int = 999):
@@ -87,16 +81,16 @@ class MnistAdditionFixed(Dataset):
 
 
 # ------------------------------------------------------------
-# Small CNN feature tower (with BatchNorm)
+# Small CNN tower (same as BACON v1)
 # ------------------------------------------------------------
 class SmallCnn(nn.Module):
     def __init__(self, out_features=128):
         super().__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(1, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
-            nn.MaxPool2d(2),  # 14x14
+            nn.MaxPool2d(2),
             nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(),
-            nn.MaxPool2d(2),  # 7x7
+            nn.MaxPool2d(2),
             nn.Conv2d(64, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(),
         )
         self.fc = nn.Sequential(
@@ -109,47 +103,55 @@ class SmallCnn(nn.Module):
 
 
 # ------------------------------------------------------------
-# Concept head per image: ConceptEmbedding + Gumbel-Softmax
+# DCR concept head per image: embeddings + Gumbel probs
 # ------------------------------------------------------------
-class ImageConceptHead(nn.Module):
+class ImageConceptHeadDCR(nn.Module):
     def __init__(self, feat_dim: int, n_concepts=10, emb_size=30):
         super().__init__()
         self.embed = te.nn.ConceptEmbedding(feat_dim, n_concepts, emb_size)
         self.logit_head = nn.Linear(feat_dim, n_concepts)
 
     def forward(self, features, tau: float, hard: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
-        c_emb, _ = self.embed(features)                  # [B,10,emb]
-        logits = self.logit_head(features)               # [B,10]
-        probs = F.gumbel_softmax(logits, tau=tau, hard=hard, dim=1)  # [B,10], sum=1
+        # c_emb: [B,10,emb_size], _ are concept activations we don't use explicitly
+        c_emb, _ = self.embed(features)
+        logits = self.logit_head(features)  # [B,10]
+        probs = F.gumbel_softmax(logits, tau=tau, hard=hard, dim=1)  # [B,10]
         return c_emb, probs
 
 
 # ------------------------------------------------------------
-# Full DCR model
+# DCR head (19-class addition)
 # ------------------------------------------------------------
-class DCRAddition(nn.Module):
+class DCRMultiHead(nn.Module):
     def __init__(self, emb_size=30):
         super().__init__()
         self.tower1 = SmallCnn(128)
         self.tower2 = SmallCnn(128)
-        self.head1 = ImageConceptHead(128, 10, emb_size)
-        self.head2 = ImageConceptHead(128, 10, emb_size)
-        self.core = ConceptReasoningLayer(emb_size, n_classes=19)  # outputs probs in [0,1]
-        # Auxiliary head on concept probs (logits for CE)
+        self.head1 = ImageConceptHeadDCR(128, 10, emb_size)
+        self.head2 = ImageConceptHeadDCR(128, 10, emb_size)
+
+        # Concept reasoning over 20 concepts (10+10) into 19 classes (0..18)
+        self.core = ConceptReasoningLayer(emb_size, n_classes=19)
+
+        # Auxiliary head on concept probabilities (like v1 DCR)
         self.aux = nn.Sequential(
             nn.Linear(20, 30), nn.ReLU(),
-            nn.Linear(30, 19)  # logits
+            nn.Linear(30, 19)
         )
 
     def forward(self, x1, x2, tau: float, hard: bool = False):
         z1 = self.tower1(x1)
         z2 = self.tower2(x2)
-        emb1, p1 = self.head1(z1, tau=tau, hard=hard)   # [B,10,emb], [B,10]
-        emb2, p2 = self.head2(z2, tau=tau, hard=hard)   # [B,10,emb], [B,10]
-        c_emb = torch.cat([emb1, emb2], dim=1)          # [B,20,emb]
-        c_prob = torch.cat([p1, p2], dim=1)             # [B,20]
-        y_pred = self.core(c_emb, c_prob)               # [B,19] probs
-        y_aux = self.aux(c_prob)                        # [B,19] logits
+
+        emb1, p1 = self.head1(z1, tau=tau, hard=hard)  # [B,10,emb], [B,10]
+        emb2, p2 = self.head2(z2, tau=tau, hard=hard)  # [B,10,emb], [B,10]
+
+        c_emb = torch.cat([emb1, emb2], dim=1)         # [B,20,emb]
+        c_prob = torch.cat([p1, p2], dim=1)            # [B,20]
+
+        y_pred = self.core(c_emb, c_prob)              # [B,19] probabilities
+        y_aux = self.aux(c_prob)                       # [B,19] logits
+
         return y_pred, y_aux, c_emb, c_prob
 
 
@@ -157,7 +159,6 @@ class DCRAddition(nn.Module):
 # Utils
 # ------------------------------------------------------------
 def group_entropy_loss(c_prob):
-    """Entropy penalty per 10-way group (normalize by log(10))."""
     eps = 1e-8
     g1 = c_prob[:, :10]
     g2 = c_prob[:, 10:]
@@ -166,37 +167,42 @@ def group_entropy_loss(c_prob):
 
 
 def triangle_class_weights():
-    """Analytic counts for sums: #{(i,j): i+j=k} = min(k,18-k)+1, normalized inverse."""
+    """
+    Analytic counts for sums: #{(i,j): i+j=k} = min(k,18-k)+1, normalized inverse.
+    """
     counts = np.array([min(k, 18 - k) + 1 for k in range(19)], dtype=np.float32)
     inv = 1.0 / counts
     w = inv / inv.mean()
     return torch.tensor(w, dtype=torch.float32)
 
 
-# ------------------------------------------------------------
-# Pairwise rule printer (clean OR-of-ANDs per sum) — device-safe
-# ------------------------------------------------------------
-def print_pair_rules(model, test_loader, tau_eval=0.8, device='cpu'):
+def print_pair_rules_dcr(model, test_loader, tau_eval=0.8, device='cpu'):
+    """
+    Optional: compute pairwise digit pairs (i,j) contributing to each sum k,
+    using hard concepts at eval, like in your DCR v1 script.
+    """
     model.eval()
-    pair_sum = torch.zeros(19, 10, 10, device=device)  # <-- allocate on device
-    count_k  = torch.zeros(19, device=device)
+    pair_sum = torch.zeros(19, 10, 10, device=device)
+    count_k = torch.zeros(19, device=device)
     with torch.no_grad():
         for (x1, x2), _ in test_loader:
             x1, x2 = x1.to(device), x2.to(device)
-            # hard one-hot concepts at eval
+            # Get hard one-hot concepts
             z1 = model.tower1(x1); z2 = model.tower2(x2)
             _, p1 = model.head1(z1, tau=tau_eval, hard=True)  # [B,10]
             _, p2 = model.head2(z2, tau=tau_eval, hard=True)  # [B,10]
-            # choose predicted class to attribute pairs
+
+            # Predict sums
             y_pred, _, _, _ = model(x1, x2, tau=tau_eval, hard=True)
             k = y_pred.argmax(1)  # [B]
+
             outer = p1.unsqueeze(2) * p2.unsqueeze(1)  # [B,10,10]
             for kk in range(19):
                 mask = (k == kk).float().view(-1, 1, 1)
                 pair_sum[kk] += (outer * mask).sum(dim=0)
                 count_k[kk]  += mask.sum()
 
-    print("\n=== Pairwise rules (valid pairs i∧j with i+j=k) ===")
+    print("\n=== DCR Pairwise rules (valid pairs i∧j with i+j=k) ===")
     for kk in range(19):
         if count_k[kk] == 0:
             print(f"y_{kk}: (no samples)")
@@ -211,24 +217,24 @@ def print_pair_rules(model, test_loader, tau_eval=0.8, device='cpu'):
 
 
 # ------------------------------------------------------------
-# Train / Eval
+# Train / Eval (DCR)
 # ------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="./data", type=str)
-    ap.add_argument("--train-pairs", default=80000, type=int, help="pairs per epoch (streamed)")
+    ap.add_argument("--train-pairs", default=80000, type=int)
     ap.add_argument("--test-pairs", default=5000, type=int)
     ap.add_argument("--batch-size", default=128, type=int)
     ap.add_argument("--epochs", default=120, type=int)
     ap.add_argument("--lr", default=1e-3, type=float)
     ap.add_argument("--emb", default=30, type=int)
     ap.add_argument("--aux", default=1.0, type=float, help="aux CE weight")
-    ap.add_argument("--entropy", default=0.0005, type=float, help="tiny entropy kept always")
+    ap.add_argument("--entropy", default=0.0005, type=float)
     ap.add_argument("--tau-start", default=3.0, type=float)
     ap.add_argument("--tau-end", default=0.6, type=float)
     ap.add_argument("--seed", default=0, type=int)
     ap.add_argument("--patience", default=15, type=int)
-    ap.add_argument("--pretrained", default=None, type=str, help="path to a pretrained model state_dict (.pt)")
+    ap.add_argument("--pretrained", default=None, type=str)
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -243,45 +249,32 @@ def main():
     test_ds = MnistAdditionFixed(args.data, train=False, size_pairs=args.test_pairs, seed=999)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
-    model = DCRAddition(emb_size=args.emb).to(device)
+    model = DCRMultiHead(emb_size=args.emb).to(device)
 
-    # Optionally load pretrained weights
+    # Optional: load pretrained DCR weights
     if args.pretrained is not None:
         if not os.path.isfile(args.pretrained):
             raise FileNotFoundError(f"Checkpoint not found: {args.pretrained}")
-        # Prefer safe loading where supported (guards against arbitrary code execution)
         try:
             ckpt = torch.load(args.pretrained, map_location=device, weights_only=True)
         except TypeError:
-            # Older PyTorch versions do not support weights_only
             ckpt = torch.load(args.pretrained, map_location=device)
         except Exception as e:
             print(f"Safe load (weights_only=True) failed: {e}. Falling back to standard torch.load (unsafe).")
             ckpt = torch.load(args.pretrained, map_location=device)
-        # Accept plain state_dict, checkpoint dict with 'state_dict', or whole model objects
+
         if isinstance(ckpt, dict) and "state_dict" in ckpt:
             state_dict = ckpt["state_dict"]
-        elif isinstance(ckpt, dict) and all(isinstance(v, torch.Tensor) for v in ckpt.values()):
-            state_dict = ckpt
         elif hasattr(ckpt, "state_dict"):
             state_dict = ckpt.state_dict()
         else:
-            raise RuntimeError("Unrecognized checkpoint format; expected a state_dict or a dict with 'state_dict'.")
+            state_dict = ckpt
 
-        # Strip potential 'module.' prefix (from DataParallel) for compatibility
-        cleaned_state_dict = {}
-        for k, v in state_dict.items():
-            nk = k[7:] if k.startswith("module.") else k
-            cleaned_state_dict[nk] = v
+        cleaned = { (k[7:] if k.startswith("module.") else k): v for k, v in state_dict.items() }
+        missing, unexpected = model.load_state_dict(cleaned, strict=False)
+        if missing: print(f"Warning: missing keys: {sorted(missing)}")
+        if unexpected: print(f"Warning: unexpected keys: {sorted(unexpected)}")
 
-        missing, unexpected = model.load_state_dict(cleaned_state_dict, strict=False)
-        if missing:
-            print(f"Warning: missing keys when loading pretrained weights: {sorted(missing)}")
-        if unexpected:
-            print(f"Warning: unexpected keys when loading pretrained weights: {sorted(unexpected)}")
-        print(f"Loaded pretrained weights from {args.pretrained}")
-
-        # Evaluate only, skip training entirely
         model.eval()
         with torch.no_grad():
             tot, correct = 0, 0
@@ -289,14 +282,15 @@ def main():
                 x1, x2 = x1.to(device), x2.to(device)
                 y = y.to(device)
                 y_pred, _, _, _ = model(x1, x2, tau=args.tau_end, hard=True)
-                correct += (y_pred.argmax(1) == y).sum().item()
+                pred = y_pred.argmax(1)
+                correct += (pred == y).sum().item()
                 tot += y.size(0)
             acc = correct / max(1, tot)
-        print(f"Pretrained eval | test_acc={acc*100:.2f}% | tau={args.tau_end:.3f}")
-        print_pair_rules(model, test_loader, tau_eval=args.tau_end, device=device)
+        print(f"Pretrained eval | DCR acc={acc*100:.2f}% | tau={args.tau_end:.3f}")
+        print_pair_rules_dcr(model, test_loader, tau_eval=args.tau_end, device=device)
         return
 
-    # Triangular class weights
+    # Class weights for imbalanced sums
     class_weights = triangle_class_weights().to(device)
     ce = nn.CrossEntropyLoss(weight=class_weights)
 
@@ -311,10 +305,9 @@ def main():
         t = (epoch - 1) / max(1, args.epochs - 1)
         tau = args.tau_start + (args.tau_end - args.tau_start) * t
 
-        # ---- Train one epoch over ~train_pairs samples ----
+        # ---- Train ----
         model.train()
-        running_loss = 0.0
-        seen = 0
+        running_loss, seen = 0.0, 0
 
         for (x1, x2), y in train_loader:
             x1, x2 = x1.to(device), x2.to(device)
@@ -322,14 +315,14 @@ def main():
 
             y_pred, y_aux, _, c_prob = model(x1, x2, tau=tau, hard=False)
 
-            # main CE on y_pred (convert probs->logits)
+            # main CE on y_pred (probabilities -> logits)
             main_logits = torch.logit(y_pred.clamp(1e-6, 1 - 1e-6))
             loss_main = ce(main_logits, y)
 
-            # aux CE on logits
+            # auxiliary CE on y_aux logits
             loss_aux = ce(y_aux, y)
 
-            # constant tiny entropy to prevent brittle collapse
+            # entropy regularizer over concepts
             loss_ent = group_entropy_loss(c_prob) * args.entropy
 
             loss = loss_main + args.aux * loss_aux + loss_ent
@@ -342,14 +335,13 @@ def main():
             bs = x1.size(0)
             running_loss += float(loss.item()) * bs
             seen += bs
-            # Stop epoch once we've produced epoch_len samples (IterableDataset keeps going otherwise)
             if seen >= args.train_pairs:
                 break
 
         sched.step()
         train_loss = running_loss / max(1, seen)
 
-        # ---- Eval (hard one-hots, slightly warm tau) ----
+        # ---- Eval ----
         model.eval()
         with torch.no_grad():
             tot, correct = 0, 0
@@ -357,27 +349,26 @@ def main():
                 x1, x2 = x1.to(device), x2.to(device)
                 y = y.to(device)
                 y_pred, _, _, _ = model(x1, x2, tau=args.tau_end, hard=True)
-                correct += (y_pred.argmax(1) == y).sum().item()
+                pred = y_pred.argmax(1)
+                correct += (pred == y).sum().item()
                 tot += y.size(0)
             acc = correct / tot
 
-        print(f"Epoch {epoch:03d} | train_loss={train_loss:.4f} | test_acc={acc*100:.2f}% | tau={tau:.3f}")
+        print(f"Epoch {epoch:03d} | train_loss={train_loss:.4f} | DCR_acc={acc*100:.2f}% | tau={tau:.3f}")
 
-        # Early stopping on best test acc
+        # Early stopping
         if acc > best_acc:
             best_acc = acc
             bad_epochs = 0
-            torch.save(model.state_dict(), "best_dcr_mnist_addition.pt")
+            torch.save(model.state_dict(), "best_dcr_mnist_addition_from_bacon.pt")
         else:
             bad_epochs += 1
             if bad_epochs >= args.patience:
                 print(f"Early stopping (no improvement for {args.patience} epochs).")
                 break
 
-    print(f"\nBest test_acc: {best_acc*100:.2f}% (checkpoint: best_dcr_mnist_addition.pt)")
-
-    # Pairwise rule view (clean)
-    print_pair_rules(model, test_loader, tau_eval=args.tau_end, device=device)
+    print(f"\nBest DCR acc: {best_acc*100:.2f}% (checkpoint: best_dcr_mnist_addition_from_bacon.pt)")
+    print_pair_rules_dcr(model, test_loader, tau_eval=args.tau_end, device=device)
 
 
 if __name__ == "__main__":

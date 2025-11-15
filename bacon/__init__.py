@@ -15,5 +15,5 @@ __all__ = [
     "VectorLogicNet",
     "FullWeightAggregator",
     "HalfWeightAggregator",
-    "MinMaxAggregator",
+    "MinMaxAggregator",    
 ]
