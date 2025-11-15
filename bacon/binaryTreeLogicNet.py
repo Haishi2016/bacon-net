@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from bacon.inputToLeafSinkhorn import inputToLeafSinkhorn
 from bacon.frozonInputToLeaf import frozenInputToLeaf
+from bacon.inputToCombinationSinkhorn import inputToCombinationSinkhorn
 import torch.optim as optim
 import numpy as np
 import copy
@@ -57,6 +58,8 @@ class binaryTreeLogicNet(nn.Module):
                  early_stop_patience = 10,
                  early_stop_min_delta = 1e-4,
                  early_stop_threshold = 0.01,
+                 combination_mode: str = "none",
+                 combination_split: int = None,
                  device=None):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
@@ -66,7 +69,6 @@ class binaryTreeLogicNet(nn.Module):
         self.weight_range = weight_range
         self.loss_amplifier = loss_amplifier
         self.weight_normalization = weight_normalization
-        self.aggregator = aggregator
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.weight_choices = torch.tensor(weight_choices, dtype=torch.float32, device=self.device) if weight_choices else None
         self.noise_increase = noise_increase
@@ -84,8 +86,15 @@ class binaryTreeLogicNet(nn.Module):
         self.locked_perm = None  # For frozen models
         self.tree_layout = tree_layout  # Layout for visualization
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary 
+        self.aggregator = aggregator       
         self.weight_penalty_strength = weight_penalty_strength
         self.layer_outputs = None  # For storing layer outputs during forward pass
+        self.combination_mode = combination_mode  # "none" or "cross"
+        if combination_split is None:
+            # default: split in half, e.g. 10/10 for 20D
+            self.combination_split = input_size // 2
+        else:
+            self.combination_split = combination_split
         self._reinitialize(weight_mode, weight_value, weight_range, weight_choices, self.is_frozen)
         self.reset_optimizer()  # Initialize optimizer
         # Auto refine (sample_best_permutation) during forward
@@ -95,7 +104,10 @@ class binaryTreeLogicNet(nn.Module):
         self._auto_refine_topk = min(256, self.permutation_max)
         self._auto_refine_noise = 0.1
         self._auto_freeze_threshold = self.freeze_loss_threshold
-        self._auto_freeze_tolerance = self.lock_loss_tolerance
+        self._auto_freeze_tolerance = self.lock_loss_tolerance       
+        if hasattr(self.aggregator, "attach_to_tree"):
+            self.aggregator.attach_to_tree(self.num_layers)      
+            self.add_module("aggregator", self.aggregator)   
     def reset_optimizer(self, learning_rate=0.2):
         """Reset the optimizer for the model.
         Args:
@@ -115,11 +127,23 @@ class binaryTreeLogicNet(nn.Module):
         self.is_frozen = is_frozen
         if not self.is_frozen:
             self.locked_perm = None
-            self.input_to_leaf = inputToLeafSinkhorn(
-                self.original_input_size,
-                self.num_leaves,
-                use_gumbel=True
-            ).to(self.device)
+            if self.combination_mode == "none":
+                self.input_to_leaf = inputToLeafSinkhorn(
+                    self.original_input_size,
+                    self.num_leaves,
+                    use_gumbel=True
+                ).to(self.device)
+            elif self.combination_mode == "cross":
+                 self.input_to_leaf = inputToCombinationSinkhorn(
+                    num_inputs=self.original_input_size,
+                    num_leaves=self.num_leaves,
+                    split_index=self.combination_split,
+                    temperature=3.0,
+                    sinkhorn_iters=20,
+                    use_gumbel=True,
+                ).to(self.device)
+            else:                 
+                raise ValueError(f"Unknown combination_mode: {self.combination_mode}")
         else:
             best_perm = torch.arange(self.num_leaves, dtype=torch.long)
             self.locked_perm = best_perm.clone().detach()
@@ -302,6 +326,9 @@ class binaryTreeLogicNet(nn.Module):
             if torch.isnan(leaf_values).any():
                 raise ValueError("[DEBUG] NaNs detected in leaf_values!")
             
+            if hasattr(self.aggregator, "start_forward"):
+                self.aggregator.start_forward()
+
             node_outputs = list(leaf_values.T)
             if self.tree_layout == "balanced":
                 final = self.build_balanced_tree(node_outputs, self.weights, self.biases)
@@ -450,7 +477,7 @@ class binaryTreeLogicNet(nn.Module):
                         # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
             
-            if not self.is_frozen and loss.item() < self.freeze_loss_threshold:
+            if not self.is_frozen and self.combination_mode == "none" and loss.item() < self.freeze_loss_threshold:
                 print(f"🧊 Low loss at epoch {epoch}, sampling top-k permutations...")
                 best_model, best_perm, best_loss, best_index = self.sample_best_permutation(
                     model_template=self,
