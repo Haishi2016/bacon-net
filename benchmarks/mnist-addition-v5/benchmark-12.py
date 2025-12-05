@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, IterableDataset, DataLoader
 from torchvision import datasets, transforms
+import matplotlib.pyplot as plt
 
 # Ensure local bacon package is used instead of any installed site-package
 sys.path.insert(
@@ -349,6 +350,348 @@ def evaluate_and_print(
 
     return mse, mae, acc_sum, acc_d1, acc_d2
 
+# ============================================================
+# Visualization helpers
+# ============================================================
+
+def _denorm_mnist(x: torch.Tensor) -> torch.Tensor:
+    """
+    Reverse the MNIST normalization: x_norm = (x - 0.1307) / 0.3081
+    So x = x_norm * 0.3081 + 0.1307
+    """
+    mean = 0.1307
+    std = 0.3081
+    return torch.clamp(x * std + mean, 0.0, 1.0)
+
+
+def save_sample_grid(
+    model: BaconAdditionWithPerception,
+    loader: DataLoader,
+    device: torch.device,
+    tau_eval: float,
+    filename: str,
+    max_samples: int = 32,
+    only_errors: bool = False,
+):
+    """
+    Save a grid of sample pairs.
+
+    If only_errors=True, saves only mispredicted sum pairs (up to max_samples).
+    Otherwise just takes the first max_samples from the loader.
+    """
+    model.eval()
+
+    imgs = []
+    titles = []
+
+    with torch.no_grad():
+        for (x1, x2), (d1, d2, s) in loader:
+            x1 = x1.to(device)
+            x2 = x2.to(device)
+            d1 = d1.to(device).long()
+            d2 = d2.to(device).long()
+            s = s.to(device).long()
+
+            y_hat_norm, _, _, d1_hat, d2_hat = model(x1, x2, tau=tau_eval, hard=True)
+            s_hat = (y_hat_norm * 18.0).clamp(0.0, 18.0).round().long()
+            d1_pred = d1_hat.clamp(0.0, 9.0).round().long()
+            d2_pred = d2_hat.clamp(0.0, 9.0).round().long()
+
+            # Move to CPU for plotting
+            x1_cpu = _denorm_mnist(x1.detach().cpu())
+            x2_cpu = _denorm_mnist(x2.detach().cpu())
+            d1_cpu = d1.detach().cpu()
+            d2_cpu = d2.detach().cpu()
+            s_cpu = s.detach().cpu()
+            s_hat_cpu = s_hat.detach().cpu()
+            d1_pred_cpu = d1_pred.detach().cpu()
+            d2_pred_cpu = d2_pred.detach().cpu()
+
+            for i in range(x1_cpu.size(0)):
+                correct = (s_hat_cpu[i] == s_cpu[i])
+                if only_errors and correct:
+                    continue
+                # mislabel = (
+                #     (int(d1_pred_cpu[i]) + int(d2_pred_cpu[i]) == int(s_cpu[i])) and
+                #     (
+                #         int(d1_pred_cpu[i]) != int(d1_cpu[i]) or
+                #         int(d2_pred_cpu[i]) != int(d2_cpu[i])
+                #     )
+                # )
+                # if not mislabel:
+                #     continue
+                # Concatenate the two digits horizontally: [1, 28, 56]
+                pair_img = torch.cat([x1_cpu[i], x2_cpu[i]], dim=2)
+
+                imgs.append(pair_img)
+                titles.append(
+                    f"{int(d1_cpu[i])}+{int(d2_cpu[i])}={int(s_cpu[i])} → "
+                    f"{int(s_hat_cpu[i])}  "
+                    f"({int(d1_pred_cpu[i])},{int(d2_pred_cpu[i])})"
+                )
+
+                if len(imgs) >= max_samples:
+                    break
+            if len(imgs) >= max_samples:
+                break
+
+    if len(imgs) == 0:
+        if only_errors:
+            print("No mispredicted samples found; skipping error grid.")
+        else:
+            print("No samples collected for visualization (unexpected).")
+        return
+
+    # Build grid
+    n = len(imgs)
+    cols = min(8, n)
+    rows = math.ceil(n / cols)
+
+    plt.figure(figsize=(cols * 2.0, rows * 2.0))
+    for idx, img in enumerate(imgs):
+        ax = plt.subplot(rows, cols, idx + 1)
+        ax.imshow(img.squeeze(0), cmap="gray")
+        ax.axis("off")
+
+        # Color titles red if wrong, green if correct
+        true_sum = titles[idx].split("→")[0].strip()
+        pred_part = titles[idx].split("→")[1].strip()
+        # quick correctness check from string is messy; recompute directly:
+        # but we can piggyback on comparison we already had:
+        # Instead, compute correctness again here:
+        # Not strictly necessary for visualization, so just color all black or red when only_errors.
+        color = "red" if only_errors else "black"
+
+        ax.set_title(titles[idx], fontsize=12, color=color)
+
+    plt.tight_layout()
+    out_dir = os.path.dirname(filename)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(filename, dpi=150)
+    plt.close()
+    print(f"Saved grid to {filename}")
+
+
+def visualize_examples(
+    model: BaconAdditionWithPerception,
+    loader: DataLoader,
+    device: torch.device,
+    tau_eval: float,
+    out_prefix: str,
+):
+    """
+    Convenience wrapper: save
+      - a grid of random samples
+      - a grid of mispredicted samples (if any)
+    """
+    samples_path = out_prefix + "_samples.png"
+    errors_path = out_prefix + "_errors.png"
+
+    print("Saving sample grid...")
+    save_sample_grid(
+        model,
+        loader,
+        device,
+        tau_eval=tau_eval,
+        filename=samples_path,
+        max_samples=24,
+        only_errors=False,
+    )
+
+    print("Saving error grid (if any mispredictions)...")
+    save_sample_grid(
+        model,
+        loader,
+        device,
+        tau_eval=tau_eval,
+        filename=errors_path,
+        max_samples=24,
+        only_errors=True,
+    )
+
+def analyze_mislabels_and_bacon_errors(
+    model: BaconAdditionWithPerception,
+    loader: DataLoader,
+    device: torch.device,
+    tau_eval: float = 0.6,
+    digit_conf_thresh: float = 0.995,
+    max_grid_samples: int = 32,
+    only_bacon_correct: bool = True,
+    save_path: str = None,
+):
+    """
+    Scan a dataset, detect suspected mislabels, compare with BACON errors, and
+    optionally plot a grid of interesting samples.
+
+    A "suspected mislabel" is defined as:
+        - model is highly confident on both digits, AND
+        - at least one predicted digit differs from the dataset digit.
+
+    Among suspected mislabels, we further look at cases where:
+
+        - Dataset says: sum = s_true   (derived from d1_true + d2_true)
+        - Model says:   sum = s_pred   (via BACON)
+        - Visual truth (proxy): d1_pred + d2_pred
+
+    Especially interesting:
+        "BACON correct but marked wrong by dataset":
+            high_conf
+            AND (d1_pred, d2_pred) != (d1_true, d2_true)
+            AND s_pred != s_true          # would count as an error vs dataset
+            AND s_pred == d1_pred + d2_pred
+
+    Args:
+        model: trained BaconAdditionWithPerception.
+        loader: DataLoader yielding ((x1, x2), (d1, d2, s)).
+        device: torch.device.
+        tau_eval: temperature for Gumbel/digit head in eval.
+        digit_conf_thresh: confidence threshold on digit predictions.
+        max_grid_samples: max number of images to show in the grid.
+        only_bacon_correct: if True, grid shows only the cases where BACON's
+            sum prediction matches d1_pred + d2_pred but differs from s_true.
+        save_path: if not None, save the grid figure to this path.
+
+    Returns:
+        stats: dict with counts of different categories.
+    """
+    model.eval()
+
+    total_pairs = 0
+    suspected_mislabels = 0
+    bacon_wrong_vs_dataset = 0
+    bacon_correct_vs_own_digits = 0
+
+    # For visualization
+    grid_imgs = []
+    grid_titles = []
+
+    with torch.no_grad():
+        for (x1, x2), (d1, d2, s) in loader:
+            x1 = x1.to(device)
+            x2 = x2.to(device)
+            d1 = d1.to(device).long()
+            d2 = d2.to(device).long()
+            s  = s.to(device).long()
+
+            # Forward pass
+            y_hat_norm, p1, p2, d1_hat, d2_hat = model(
+                x1, x2, tau=tau_eval, hard=True
+            )
+
+            # Move to CPU for inspection
+            x1_cpu = x1.cpu()
+            x2_cpu = x2.cpu()
+            d1_cpu = d1.cpu()
+            d2_cpu = d2.cpu()
+            s_cpu  = s.cpu()
+
+            p1_cpu = p1.cpu()
+            p2_cpu = p2.cpu()
+            d1_pred_cpu = d1_hat.round().long().cpu()
+            d2_pred_cpu = d2_hat.round().long().cpu()
+
+            s_pred_cpu = (y_hat_norm * 18.0).round().long().cpu()
+
+            batch_size = x1_cpu.size(0)
+            total_pairs += batch_size
+
+            for i in range(batch_size):
+                d1_true = int(d1_cpu[i])
+                d2_true = int(d2_cpu[i])
+                s_true  = int(s_cpu[i])
+
+                d1_pred = int(d1_pred_cpu[i])
+                d2_pred = int(d2_pred_cpu[i])
+                s_pred  = int(s_pred_cpu[i])
+
+                # confidences of digit predictions
+                conf1 = float(p1_cpu[i].max())
+                conf2 = float(p2_cpu[i].max())
+                high_conf = (conf1 >= digit_conf_thresh and
+                             conf2 >= digit_conf_thresh)
+
+                if not high_conf:
+                    continue
+
+                # disagree with dataset digits?
+                if (d1_pred == d1_true) and (d2_pred == d2_true):
+                    continue
+
+                suspected_mislabels += 1
+
+                # dataset judgement about sum
+                dataset_says_correct = (s_pred == s_true)
+                if not dataset_says_correct:
+                    bacon_wrong_vs_dataset += 1
+
+                # "visual truth" using model digits
+                sum_from_pred_digits = d1_pred + d2_pred
+                bacon_consistent_with_digits = (s_pred == sum_from_pred_digits)
+                if bacon_consistent_with_digits:
+                    bacon_correct_vs_own_digits += 1
+
+                # Decide whether to include in grid
+                take_for_grid = True
+                if only_bacon_correct:
+                    # only keep: BACON misjudged by dataset but consistent with its digits
+                    if not (bacon_consistent_with_digits and not dataset_says_correct):
+                        take_for_grid = False
+
+                if take_for_grid and len(grid_imgs) < max_grid_samples:
+                    # build concatenated image [1, 28, 56]
+                    pair_img = torch.cat([x1_cpu[i], x2_cpu[i]], dim=2)
+
+                    title = (
+                        f"label: {d1_true}+{d2_true}={s_true} \n "
+                        f"model: {d1_pred}+{d2_pred}={s_pred} \n"
+                        f"(conf=({conf1:.3f},{conf2:.3f}))"
+                    )
+                    grid_imgs.append(pair_img)
+                    grid_titles.append(title)
+
+    # ---- Stats summary ----
+    stats = {
+        "total_pairs": total_pairs,
+        "suspected_mislabels": suspected_mislabels,
+        "bacon_wrong_vs_dataset": bacon_wrong_vs_dataset,
+        "bacon_correct_vs_own_digits": bacon_correct_vs_own_digits,
+    }
+
+    print("\n=== Mislabel / BACON error analysis ===")
+    print(f"Total pairs checked:                 {total_pairs}")
+    print(f"Suspected mislabels (high-conf, digit disagreement): {suspected_mislabels}")
+    print(f"  of which BACON is counted wrong vs dataset (s_pred != s_true): "
+          f"{bacon_wrong_vs_dataset}")
+    print(f"  of which BACON is consistent with its inferred digits "
+          f"(s_pred == d1_pred + d2_pred): {bacon_correct_vs_own_digits}")
+    print("=======================================\n")
+
+    # ---- Grid visualization ----
+    if len(grid_imgs) > 0:
+        n = len(grid_imgs)
+        cols = min(8, n)
+        rows = int(math.ceil(n / cols))
+
+        plt.figure(figsize=(2.5 * cols, 2.5 * rows))
+        for idx, img in enumerate(grid_imgs):
+            ax = plt.subplot(rows, cols, idx + 1)
+            # img: [1, 28, 56]
+            ax.imshow(img.squeeze(0), cmap="gray")
+            ax.axis("off")
+            ax.set_title(grid_titles[idx], fontsize=8)
+
+        plt.tight_layout()
+        if save_path is not None:
+            plt.savefig(save_path, dpi=200)
+            print(f"Sample grid saved to {save_path}")
+        else:
+            plt.show()
+
+    else:
+        print("No samples selected for grid (try lowering digit_conf_thresh).")
+
+    return stats
 
 # ============================================================
 # Train / Eval
@@ -426,6 +769,22 @@ def main():
 
         evaluate_and_print(model, test_loader, tau_eval=args.tau_end, device=device,
                            prefix="Pretrained eval", print_ops=True)
+        dump_operator_stats(model)
+
+        # Visualizations: samples + mispredictions
+        out_prefix = os.path.splitext(args.pretrained)[0]
+        # visualize_examples(model, test_loader, device, tau_eval=args.tau_end, out_prefix=out_prefix)
+        # Mislabel / BACON error analysis
+        analyze_mislabels_and_bacon_errors(
+            model,
+            test_loader,
+            device=device,
+            tau_eval=args.tau_end,
+            digit_conf_thresh=0.995,   # relax to 0.98 if no hits
+            max_grid_samples=24,
+            only_bacon_correct=True,
+            save_path="bacon_mislabel_grid.png",
+        )
         return
 
     # ------- Training setup -------
@@ -538,6 +897,11 @@ def main():
         prefix="Final eval",
         print_ops=True,
     )
+    dump_operator_stats(model)
+
+    # Visualizations: samples + mispredictions
+    out_prefix = os.path.splitext(save_path)[0]
+    visualize_examples(model, test_loader, device, tau_eval=args.tau_end, out_prefix=out_prefix)
 
 
 if __name__ == "__main__":

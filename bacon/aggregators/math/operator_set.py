@@ -32,8 +32,6 @@ class OperatorSetAggregator(nn.Module):
         kind: str = "logic",
         op_names=None,
         use_gumbel: bool = True,
-        auto_lock: bool = False,
-        lock_threshold: float = 0.98,
         tau: float = 1.0,
         eps: float = 1e-6,
     ):
@@ -44,9 +42,6 @@ class OperatorSetAggregator(nn.Module):
         self.eps = eps
         self.use_gumbel = use_gumbel
         self.tau = tau
-
-        self.auto_lock = auto_lock
-        self.lock_threshold = lock_threshold
 
         if op_names is None:
             if kind == "logic":
@@ -63,10 +58,6 @@ class OperatorSetAggregator(nn.Module):
 
         # Internal pointer used during a single forward pass
         self._node_ptr: int = 0
-
-         # Lock state: one entry since we have one node
-        self.register_buffer("locked", torch.tensor([False]))
-        self.register_buffer("locked_idx", torch.tensor([-1], dtype=torch.long))
 
     # ------------------------------------------------------------------
     # Wiring from BACON
@@ -107,30 +98,8 @@ class OperatorSetAggregator(nn.Module):
 
         logits = self.op_logits_per_node[node_index]
 
-        # Auto-lock logic
-        if self.auto_lock and (not bool(self.locked[node_index])):
-            max_p, max_j = logits.max(dim=0)
-            if max_p.item() >= self.lock_threshold:
-                # Lock this node to a single operator (no more gradient to logits)
-                self.locked[node_index] = True
-                self.locked_idx[node_index] = max_j
-                # Optional: print once
-                print(
-                    f"[OperatorSetAggregator] Locking node {node_index} to "
-                    f"{self.operator_names[max_j]} (p={max_p.item():.3f})"
-                )
-
-        if bool(self.locked[node_index]):
-            # Use a hard one-hot, detached from logits
-            j = int(self.locked_idx[node_index].item())
-            hard_probs = torch.zeros_like(logits)
-            hard_probs[j] = 1.0
-            logits = hard_probs  # no grad to logits        
-
         # Move pointer for the next node
         self._node_ptr += 1
-
-
 
         if self.use_gumbel:
             op_w = F.gumbel_softmax(logits, tau=self.tau, hard=False, dim=0)  # [K]

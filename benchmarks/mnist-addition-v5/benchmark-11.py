@@ -15,6 +15,8 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, IterableDataset, DataLoader
 from torchvision import datasets, transforms
 
+import matplotlib.pyplot as plt
+
 # Ensure local bacon package is used instead of any installed site-package
 sys.path.insert(
     0,
@@ -181,6 +183,8 @@ class BaconAdditionWithPerception(nn.Module):
             kind="arith",
             op_names=["add", "sub", "mul", "div"],
             use_gumbel=True,
+            auto_lock=True,
+            lock_threshold=0.995,
             tau=1.0,
         )
 
@@ -229,6 +233,7 @@ class BaconAdditionWithPerception(nn.Module):
         y_hat = self.bacon(bacon_in).view(-1)            # [B]
         return y_hat, p1, p2, d1_hat, d2_hat
 
+
 def dump_operator_stats(model: BaconAdditionWithPerception):
     """
     Print operator selection weights (softmax over logits) per node.
@@ -238,7 +243,7 @@ def dump_operator_stats(model: BaconAdditionWithPerception):
         return
 
     print("Operator weights:")
-    if agg.op_logits_per_node is not None:
+    if getattr(agg, "op_logits_per_node", None) is not None:
         for idx, logits in enumerate(agg.op_logits_per_node):
             w = F.softmax(logits.detach(), dim=0)
             weights_str = ", ".join(
@@ -251,6 +256,8 @@ def dump_operator_stats(model: BaconAdditionWithPerception):
             f"{name}={w[i]:.3f}" for i, name in enumerate(agg.op_names)
         )
         print(f"  global: {weights_str}")
+
+
 # ============================================================
 # Loss helpers & diagnostics
 # ============================================================
@@ -329,15 +336,15 @@ def evaluate_and_print(
         f"acc_d2={acc_d2*100:.2f}%"
     )
 
-    # Print operator weights per node if available
+    # (Optional) older-style operator print; you now also have dump_operator_stats
     if print_ops:
         agg = getattr(model.bacon, "aggregator", None)
         if agg is not None and hasattr(agg, "op_logits"):
             with torch.no_grad():
                 op_logits = agg.op_logits  # [num_nodes, num_ops]
                 op_probs = F.softmax(op_logits, dim=-1)
-                if hasattr(agg, "operator_names"):
-                    op_names = agg.operator_names
+                if hasattr(agg, "op_names"):
+                    op_names = agg.op_names
                 else:
                     op_names = [f"op{i}" for i in range(op_probs.size(1))]
 
@@ -348,6 +355,158 @@ def evaluate_and_print(
                     print(f"  node {i}: " + ", ".join(parts))
 
     return mse, mae, acc_sum, acc_d1, acc_d2
+
+
+# ============================================================
+# Visualization helpers
+# ============================================================
+
+def _denorm_mnist(x: torch.Tensor) -> torch.Tensor:
+    """
+    Reverse the MNIST normalization: x_norm = (x - 0.1307) / 0.3081
+    So x = x_norm * 0.3081 + 0.1307
+    """
+    mean = 0.1307
+    std = 0.3081
+    return torch.clamp(x * std + mean, 0.0, 1.0)
+
+
+def save_sample_grid(
+    model: BaconAdditionWithPerception,
+    loader: DataLoader,
+    device: torch.device,
+    tau_eval: float,
+    filename: str,
+    max_samples: int = 32,
+    only_errors: bool = False,
+):
+    """
+    Save a grid of sample pairs.
+
+    If only_errors=True, saves only mispredicted sum pairs (up to max_samples).
+    Otherwise just takes the first max_samples from the loader.
+    """
+    model.eval()
+
+    imgs = []
+    titles = []
+
+    with torch.no_grad():
+        for (x1, x2), (d1, d2, s) in loader:
+            x1 = x1.to(device)
+            x2 = x2.to(device)
+            d1 = d1.to(device).long()
+            d2 = d2.to(device).long()
+            s = s.to(device).long()
+
+            y_hat_norm, _, _, d1_hat, d2_hat = model(x1, x2, tau=tau_eval, hard=True)
+            s_hat = (y_hat_norm * 18.0).clamp(0.0, 18.0).round().long()
+            d1_pred = d1_hat.clamp(0.0, 9.0).round().long()
+            d2_pred = d2_hat.clamp(0.0, 9.0).round().long()
+
+            # Move to CPU for plotting
+            x1_cpu = _denorm_mnist(x1.detach().cpu())
+            x2_cpu = _denorm_mnist(x2.detach().cpu())
+            d1_cpu = d1.detach().cpu()
+            d2_cpu = d2.detach().cpu()
+            s_cpu = s.detach().cpu()
+            s_hat_cpu = s_hat.detach().cpu()
+            d1_pred_cpu = d1_pred.detach().cpu()
+            d2_pred_cpu = d2_pred.detach().cpu()
+
+            for i in range(x1_cpu.size(0)):
+                correct = (s_hat_cpu[i] == s_cpu[i])
+                if only_errors and correct:
+                    continue
+                # Concatenate the two digits horizontally: [1, 28, 56]
+                pair_img = torch.cat([x1_cpu[i], x2_cpu[i]], dim=2)
+
+                imgs.append(pair_img)
+                titles.append(
+                    f"{int(d1_cpu[i])}+{int(d2_cpu[i])}={int(s_cpu[i])} → "
+                    f"{int(s_hat_cpu[i])}  "
+                    f"({int(d1_pred_cpu[i])},{int(d2_pred_cpu[i])})"
+                )
+
+                if len(imgs) >= max_samples:
+                    break
+            if len(imgs) >= max_samples:
+                break
+
+    if len(imgs) == 0:
+        if only_errors:
+            print("No mispredicted samples found; skipping error grid.")
+        else:
+            print("No samples collected for visualization (unexpected).")
+        return
+
+    # Build grid
+    n = len(imgs)
+    cols = min(8, n)
+    rows = math.ceil(n / cols)
+
+    plt.figure(figsize=(cols * 2.0, rows * 2.0))
+    for idx, img in enumerate(imgs):
+        ax = plt.subplot(rows, cols, idx + 1)
+        ax.imshow(img.squeeze(0), cmap="gray")
+        ax.axis("off")
+
+        # Color titles red if wrong, green if correct
+        true_sum = titles[idx].split("→")[0].strip()
+        pred_part = titles[idx].split("→")[1].strip()
+        # quick correctness check from string is messy; recompute directly:
+        # but we can piggyback on comparison we already had:
+        # Instead, compute correctness again here:
+        # Not strictly necessary for visualization, so just color all black or red when only_errors.
+        color = "red" if only_errors else "black"
+
+        ax.set_title(titles[idx], fontsize=8, color=color)
+
+    plt.tight_layout()
+    out_dir = os.path.dirname(filename)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(filename, dpi=150)
+    plt.close()
+    print(f"Saved grid to {filename}")
+
+
+def visualize_examples(
+    model: BaconAdditionWithPerception,
+    loader: DataLoader,
+    device: torch.device,
+    tau_eval: float,
+    out_prefix: str,
+):
+    """
+    Convenience wrapper: save
+      - a grid of random samples
+      - a grid of mispredicted samples (if any)
+    """
+    samples_path = out_prefix + "_samples.png"
+    errors_path = out_prefix + "_errors.png"
+
+    print("Saving sample grid...")
+    save_sample_grid(
+        model,
+        loader,
+        device,
+        tau_eval=tau_eval,
+        filename=samples_path,
+        max_samples=32,
+        only_errors=False,
+    )
+
+    print("Saving error grid (if any mispredictions)...")
+    save_sample_grid(
+        model,
+        loader,
+        device,
+        tau_eval=tau_eval,
+        filename=errors_path,
+        max_samples=32,
+        only_errors=True,
+    )
 
 
 # ============================================================
@@ -426,6 +585,11 @@ def main():
 
         evaluate_and_print(model, test_loader, tau_eval=args.tau_end, device=device,
                            prefix="Pretrained eval", print_ops=True)
+        dump_operator_stats(model)
+
+        # Also visualize examples for a pretrained run
+        out_prefix = os.path.splitext(args.pretrained)[0]
+        visualize_examples(model, test_loader, device, tau_eval=args.tau_end, out_prefix=out_prefix)
         return
 
     # ------- Training setup -------
@@ -485,7 +649,7 @@ def main():
 
             opt.zero_grad(set_to_none=True)
             loss.backward()
-            
+
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
 
@@ -538,6 +702,11 @@ def main():
         prefix="Final eval",
         print_ops=True,
     )
+    dump_operator_stats(model)
+
+    # Visualizations: samples + mispredictions
+    out_prefix = os.path.splitext(save_path)[0]
+    visualize_examples(model, test_loader, device, tau_eval=args.tau_end, out_prefix=out_prefix)
 
 
 if __name__ == "__main__":
