@@ -107,7 +107,8 @@ class binaryTreeLogicNet(nn.Module):
         self._auto_freeze_tolerance = self.lock_loss_tolerance       
         if hasattr(self.aggregator, "attach_to_tree"):
             self.aggregator.attach_to_tree(self.num_layers)      
-            self.add_module("aggregator", self.aggregator)   
+            self.add_module("aggregator", self.aggregator)
+
     def reset_optimizer(self, learning_rate=0.2):
         """Reset the optimizer for the model.
         Args:
