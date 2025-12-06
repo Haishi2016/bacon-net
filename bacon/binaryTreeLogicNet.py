@@ -3,6 +3,7 @@ import torch.nn as nn
 from bacon.inputToLeafSinkhorn import inputToLeafSinkhorn
 from bacon.frozonInputToLeaf import frozenInputToLeaf
 from bacon.inputToCombinationSinkhorn import inputToCombinationSinkhorn
+from bacon.transformationLayer import TransformationLayer
 import torch.optim as optim
 import numpy as np
 import copy
@@ -60,6 +61,9 @@ class binaryTreeLogicNet(nn.Module):
                  early_stop_threshold = 0.01,
                  combination_mode: str = "none",
                  combination_split: int = None,
+                 use_transformation_layer: bool = False,
+                 transformation_temperature: float = 1.0,
+                 transformation_use_gumbel: bool = False,
                  device=None):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
@@ -95,6 +99,19 @@ class binaryTreeLogicNet(nn.Module):
             self.combination_split = input_size // 2
         else:
             self.combination_split = combination_split
+        
+        # Transformation layer (optional)
+        self.use_transformation_layer = use_transformation_layer
+        if self.use_transformation_layer:
+            self.transformation_layer = TransformationLayer(
+                num_features=input_size,
+                temperature=transformation_temperature,
+                use_gumbel=transformation_use_gumbel
+            ).to(self.device)
+            self.add_module("transformation_layer", self.transformation_layer)
+        else:
+            self.transformation_layer = None
+        
         self._reinitialize(weight_mode, weight_value, weight_range, weight_choices, self.is_frozen)
         self.reset_optimizer()  # Initialize optimizer
         # Auto refine (sample_best_permutation) during forward
@@ -327,6 +344,13 @@ class binaryTreeLogicNet(nn.Module):
             if torch.isnan(leaf_values).any():
                 raise ValueError("[DEBUG] NaNs detected in leaf_values!")
             
+            # 🔹 Apply transformation layer if enabled
+            if self.transformation_layer is not None:
+                leaf_values = self.transformation_layer(leaf_values)
+                
+                if torch.isnan(leaf_values).any():
+                    raise ValueError("[DEBUG] NaNs detected after transformation layer!")
+            
             if hasattr(self.aggregator, "start_forward"):
                 self.aggregator.start_forward()
 
@@ -390,20 +414,27 @@ class binaryTreeLogicNet(nn.Module):
             if self.training and self.auto_refine and (targets is not None):
                 self._batches_since_refine += 1
                 if self._batches_since_refine >= self._auto_refine_every and not self.is_frozen:
-                    # Run a small permutation search on current batch
-                    criterion = nn.BCELoss()
-                    best_model, best_perm, best_loss, best_index = self.sample_best_permutation(
-                        model_template=self,
-                        topk=self._auto_refine_topk,
-                        X=x.detach(),
-                        Y=targets.detach(),
-                        noise_std=self._auto_refine_noise
-                    )
-                    if best_model is not None:
-                        # Freeze if good enough
-                        if best_loss < self._auto_freeze_threshold + self._auto_freeze_tolerance:
-                            self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
-                            self.input_to_leaf = frozenInputToLeaf(self.locked_perm, self.original_input_size).to(self.device)
+                    # Check if transformation layer has converged before doing permutation search
+                    can_search_permutations = True
+                    if self.transformation_layer is not None:
+                        if not self.transformation_layer.has_converged(confidence_threshold=0.75):
+                            can_search_permutations = False
+                    
+                    if can_search_permutations:
+                        # Run a small permutation search on current batch
+                        criterion = nn.BCELoss()
+                        best_model, best_perm, best_loss, best_index = self.sample_best_permutation(
+                            model_template=self,
+                            topk=self._auto_refine_topk,
+                            X=x.detach(),
+                            Y=targets.detach(),
+                            noise_std=self._auto_refine_noise
+                        )
+                        if best_model is not None:
+                            # Freeze if good enough
+                            if best_loss < self._auto_freeze_threshold + self._auto_freeze_tolerance:
+                                self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
+                                self.input_to_leaf = frozenInputToLeaf(self.locked_perm, self.original_input_size).to(self.device)
                             self.is_frozen = True
                             # Optionally reduce LR externally after this point
                     # Reset counter regardless
@@ -590,6 +621,12 @@ class binaryTreeLogicNet(nn.Module):
                 perm_tensor = torch.tensor(perm, dtype=torch.long).clone().detach()
                 temp_model = copy.deepcopy(model_template)
                 temp_model.input_to_leaf = frozenInputToLeaf(perm_tensor, temp_model.original_input_size)
+                
+                # Important: Copy transformation layer state from template to preserve learned transformations
+                if hasattr(model_template, 'transformation_layer') and model_template.transformation_layer is not None:
+                    if hasattr(temp_model, 'transformation_layer') and temp_model.transformation_layer is not None:
+                        temp_model.transformation_layer.logits.data.copy_(model_template.transformation_layer.logits.data)
+                
                 temp_loss = criterion(temp_model(X), Y)
                 print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
 
