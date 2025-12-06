@@ -254,6 +254,18 @@ def visualize_tree_structure(model, labels=None, layout=None):
             leaf_names = labels
     else:
         leaf_names = [f"Leaf {i+1}" for i in range(model.num_leaves)]
+    
+    # Check for transformation layer and apply negations to labels
+    if hasattr(model, 'transformation_layer') and model.transformation_layer is not None:
+        selected_transforms = model.transformation_layer.get_selected_transformations()
+        original_leaf_names = leaf_names.copy()
+        leaf_names = []
+        for i, name in enumerate(original_leaf_names):
+            if selected_transforms[i].item() == 1:  # negation
+                leaf_names.append(f"NOT {name}")
+            else:  # identity
+                leaf_names.append(name)
+
 
     node_dict = {}
     node_labels = {}
@@ -381,6 +393,18 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
             leaf_names = labels
     else:
         leaf_names = [f"feature{i+1}" for i in range(model.num_leaves)]
+    
+    # Check for transformation layer and apply negations to labels
+    if hasattr(model, 'transformation_layer') and model.transformation_layer is not None:
+        selected_transforms = model.transformation_layer.get_selected_transformations()
+        original_leaf_names = leaf_names.copy()
+        leaf_names = []
+        for i, name in enumerate(original_leaf_names):
+            if selected_transforms[i].item() == 1:  # negation
+                leaf_names.append(f"NOT {name}")
+            else:  # identity
+                leaf_names.append(name)
+
 
     max_label_length = max(len(name) for name in leaf_names)
     label_width = max_label_length + 2

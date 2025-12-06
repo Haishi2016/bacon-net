@@ -39,7 +39,10 @@ class baconNet(nn.Module):
                  aggregator="lsp.full_weight",
                  normalize_andness=True,
                  max_permutations=10000,
-                 is_frozen=False):
+                 is_frozen=False,
+                 use_transformation_layer=False,
+                 transformation_temperature=1.0,
+                 transformation_use_gumbel=False):
         super(baconNet, self).__init__()        
         if aggregator not in _aggregator_registry:
             raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
@@ -60,6 +63,9 @@ class baconNet(nn.Module):
                                             weight_normalization=weight_normalization,
                                             aggregator=aggregator,
                                             weight_penalty_strength = weight_penalty_strength,
+                                            use_transformation_layer=use_transformation_layer,
+                                            transformation_temperature=transformation_temperature,
+                                            transformation_use_gumbel=transformation_use_gumbel,
                                             weight_choices=None)
     def forward(self, x):
         """ Forward pass through the BACON network.
@@ -218,6 +224,9 @@ class baconNet(nn.Module):
                     early_stop_patience=cfg.early_stop_patience,
                     early_stop_min_delta=cfg.early_stop_min_delta,
                     early_stop_threshold=cfg.early_stop_threshold,
+                    use_transformation_layer=cfg.use_transformation_layer,
+                    transformation_temperature=cfg.transformation_layer.temperature if cfg.transformation_layer else 1.0,
+                    transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
                     device=cfg.device,
                 )
 
@@ -228,6 +237,7 @@ class baconNet(nn.Module):
                 optimizer = torch.optim.Adam(self.assembler.parameters(), lr=0.1)
                 criterion = nn.BCELoss()
 
+                transformation_converged = False
                 for epoch in range(max_epochs):
                     self.assembler.train()
                     optimizer.zero_grad(set_to_none=True)
@@ -243,6 +253,12 @@ class baconNet(nn.Module):
 
                     loss.backward()
                     optimizer.step()
+                    
+                    # Check if transformation layer has converged
+                    if not transformation_converged and self.assembler.transformation_layer is not None:
+                        if self.assembler.transformation_layer.has_converged(confidence_threshold=0.75):
+                            transformation_converged = True
+                            logging.info(f"   ✅ Transformation layer converged at epoch {epoch + 1}")
 
                     # Simple early stop when frozen and loss small
                     if self.assembler.is_frozen and loss.item() < (self.assembler.early_stop_threshold * self.assembler.loss_amplifier):
