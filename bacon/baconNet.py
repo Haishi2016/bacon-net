@@ -27,6 +27,15 @@ class baconNet(nn.Module):
         aggregator (str, optional): Aggregator to be used. Defaults to "lsp.full_weight".
         max_permutations (int, optional): Maximum permutations to explore. Defaults to 10000.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
+        early_stop_threshold_large_inputs (float, optional): Early stop threshold for transformation layers with 10+ inputs. Defaults to 0.1. Lower values require more training but achieve higher accuracy.
+        reheat_plateau_window (int, optional): Number of epochs to check for plateau detection. Defaults to 200. Smaller = more aggressive reheating.
+        reheat_improvement_threshold (float, optional): Minimum loss improvement over plateau_window to avoid reheating. Defaults to 1.0. Smaller = more aggressive.
+        reheat_cooldown (int, optional): Minimum epochs between reheats. Defaults to 300. Prevents oscillation.
+        reheat_temperature (float, optional): Temperature to use when reheating. Defaults to 10.0. Higher = more exploration.
+        permutation_initial_temperature (float, optional): Starting temperature for permutation annealing. Defaults to 5.0. Higher = more initial exploration.
+        permutation_final_temperature (float, optional): Final temperature for permutation annealing. Defaults to 0.1. Lower = harder final permutation.
+        transformation_initial_temperature (float, optional): Starting temperature for transformation layer. Defaults to 1.0. Should be lower than permutation since transformation is simpler (2^n vs n! states).
+        transformation_final_temperature (float, optional): Final temperature for transformation layer. Defaults to 0.1. Same as permutation final temp.
     """
     def __init__(self, input_size, 
                  freeze_loss_threshold=0.07, 
@@ -42,13 +51,31 @@ class baconNet(nn.Module):
                  is_frozen=False,
                  use_transformation_layer=False,
                  transformation_temperature=1.0,
-                 transformation_use_gumbel=False):
+                 transformation_use_gumbel=False,
+                 early_stop_threshold_large_inputs=0.1,
+                 reheat_plateau_window=200,
+                 reheat_improvement_threshold=1.0,
+                 reheat_cooldown=300,
+                 reheat_temperature=10.0,
+                 permutation_initial_temperature=5.0,
+                 permutation_final_temperature=0.1,
+                 transformation_initial_temperature=1.0,
+                 transformation_final_temperature=0.1):
         super(baconNet, self).__init__()        
         if aggregator not in _aggregator_registry:
             raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
         aggregator_class = _aggregator_registry[aggregator]
         aggregator = aggregator_class()
         self.is_frozen = is_frozen
+        self.early_stop_threshold_large_inputs = early_stop_threshold_large_inputs
+        self.reheat_plateau_window = reheat_plateau_window
+        self.reheat_improvement_threshold = reheat_improvement_threshold
+        self.reheat_cooldown = reheat_cooldown
+        self.reheat_temperature = reheat_temperature
+        self.permutation_initial_temperature = permutation_initial_temperature
+        self.permutation_final_temperature = permutation_final_temperature
+        self.transformation_initial_temperature = transformation_initial_temperature
+        self.transformation_final_temperature = transformation_final_temperature
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
                                             weight_mode=weight_mode,
@@ -163,7 +190,10 @@ class baconNet(nn.Module):
                         acceptance_threshold = 0.95, 
                         save_path = "./assembler.pth", 
                         max_epochs = 12000, 
-                        save_model = True):
+                        save_model = True,
+                        use_hierarchical_permutation = False,
+                        hierarchical_group_size = 3,
+                        hierarchical_epochs_per_attempt = None):
         """ Find the best model by training multiple times and evaluating accuracy.
 
         Args:
@@ -176,6 +206,9 @@ class baconNet(nn.Module):
             save_path (str, optional): Path to save the best model. Defaults to "./assembler.pth".
             max_epochs (int, optional): Maximum epochs for training. Defaults to 12000.
             save_model (bool, optional): Whether to save the best model. Defaults to True.
+            use_hierarchical_permutation (bool, optional): Use coarse-grained permutation exploration. Defaults to False.
+            hierarchical_group_size (int, optional): Group size for hierarchical permutation (e.g., 3 for 10 inputs → 4x4 coarse matrix). Defaults to 3.
+            hierarchical_epochs_per_attempt (int, optional): Epochs to run for each coarse permutation. If None, uses max_epochs. Defaults to None.
         Returns:
             tuple: Best model state dictionary and its accuracy.
         """
@@ -193,8 +226,25 @@ class baconNet(nn.Module):
             except Exception as e:
                 logging.warning(f"⚠️ Failed to load model from {save_path}: {e}")
 
-        for attempt in range(attempts):
-            logging.info(f"🔥 Attempting to find the best model... {attempt + 1}/{attempts}")
+        # Determine how many attempts to run and what permutations to use
+        if use_hierarchical_permutation and hasattr(self.assembler, 'input_to_leaf'):
+            from bacon.inputToLeafSinkhorn import inputToLeafSinkhorn
+            n = self.assembler.original_input_size
+            coarse_perms = inputToLeafSinkhorn.generate_all_coarse_permutations(n, hierarchical_group_size)
+            total_attempts = len(coarse_perms)
+            epochs_per_attempt = hierarchical_epochs_per_attempt if hierarchical_epochs_per_attempt else max_epochs
+            logging.info(f"🔀 Hierarchical permutation mode: {total_attempts} coarse permutations (group_size={hierarchical_group_size})")
+            logging.info(f"   Each coarse permutation will train for {epochs_per_attempt} epochs")
+        else:
+            coarse_perms = [None] * attempts  # No hierarchical structure, use random init
+            total_attempts = attempts
+            epochs_per_attempt = max_epochs
+
+        for attempt in range(total_attempts):
+            if use_hierarchical_permutation and coarse_perms[attempt] is not None:
+                logging.info(f"🔥 Attempting coarse permutation {attempt + 1}/{total_attempts}: {coarse_perms[attempt]}")
+            else:
+                logging.info(f"🔥 Attempting to find the best model... {attempt + 1}/{total_attempts}")
 
             torch.manual_seed(torch.initial_seed() + attempt)
 
@@ -230,15 +280,65 @@ class baconNet(nn.Module):
                     device=cfg.device,
                 )
 
-                # Enable light auto-refinement inside forward
-                self.assembler.auto_refine = True
+                # Initialize permutation matrix with coarse-grained structure if using hierarchical mode
+                if use_hierarchical_permutation and coarse_perms[attempt] is not None:
+                    if hasattr(self.assembler, 'input_to_leaf') and hasattr(self.assembler.input_to_leaf, 'initialize_from_coarse_permutation'):
+                        self.assembler.input_to_leaf.initialize_from_coarse_permutation(
+                            coarse_perms[attempt], 
+                            group_size=hierarchical_group_size,
+                            block_std=0.5
+                        )
+                        logging.info(f"   🎯 Initialized permutation matrix with coarse structure")
+
+                # If using transformation layer, disable auto-refine initially
+                # We'll enable it after transformations converge
+                if self.assembler.transformation_layer is not None:
+                    self.assembler.auto_refine = False
+                else:
+                    self.assembler.auto_refine = True
                 self.assembler._auto_refine_every = 10
 
                 optimizer = torch.optim.Adam(self.assembler.parameters(), lr=0.1)
                 criterion = nn.BCELoss()
 
+                # Use epochs_per_attempt instead of max_epochs for hierarchical mode
+                actual_max_epochs = epochs_per_attempt
+
                 transformation_converged = False
-                for epoch in range(max_epochs):
+                loss_history = []
+                accuracy_history = []  # Track accuracy for smarter plateau detection
+                last_reheat_epoch = -1000  # Track when we last reheated
+                min_epochs_between_reheats = 500  # Minimum gap between reheating attempts
+                
+                # Temperature annealing setup
+                use_temperature_annealing = (hasattr(self.assembler, 'input_to_leaf') and 
+                                            hasattr(self.assembler.input_to_leaf, 'temperature') and
+                                            hasattr(self.assembler.input_to_leaf, 'logits'))
+                
+                if use_temperature_annealing:
+                    # Permutation temperature schedule
+                    self.assembler.input_to_leaf.temperature = self.permutation_initial_temperature
+                    perm_initial_temp = self.permutation_initial_temperature
+                    perm_final_temp = self.permutation_final_temperature
+                    perm_temp_decay_rate = (perm_final_temp / perm_initial_temp) ** (1.0 / actual_max_epochs)
+                    logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {actual_max_epochs} epochs (decay: {perm_temp_decay_rate:.6f})")
+                    
+                    # Transformation temperature schedule (faster cooling for simpler problem)
+                    # Transformation has 2^n states, permutation has n! states
+                    # So transformation should converge faster
+                    if self.assembler.transformation_layer is not None:
+                        trans_initial_temp = self.transformation_initial_temperature
+                        trans_final_temp = self.transformation_final_temperature
+                        trans_temp_decay_rate = (trans_final_temp / trans_initial_temp) ** (1.0 / actual_max_epochs)
+                        self.assembler.transformation_layer.temperature = trans_initial_temp
+                        logging.info(f"   🔗 Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {actual_max_epochs} epochs (decay: {trans_temp_decay_rate:.6f})")
+                    else:
+                        trans_temp_decay_rate = None
+                    
+                    # Disable Hungarian search when using annealing
+                    self.assembler.auto_refine = False
+                
+                for epoch in range(actual_max_epochs):
                     self.assembler.train()
                     optimizer.zero_grad(set_to_none=True)
                     outputs = self.assembler(x, targets=y)
@@ -254,15 +354,175 @@ class baconNet(nn.Module):
                     loss.backward()
                     optimizer.step()
                     
+                    # Track loss and accuracy for smarter plateau detection
+                    loss_history.append(loss.item())
+                    
+                    # Compute training accuracy every epoch for plateau detection
+                    # This is cheap since we already have outputs
+                    with torch.no_grad():
+                        train_predictions = (outputs > 0.5).float()
+                        train_accuracy = (train_predictions == y).float().mean().item()
+                        accuracy_history.append(train_accuracy)
+                    
+                    # Display epoch progress every 100 epochs
+                    if (epoch + 1) % 100 == 0:
+                        if use_temperature_annealing:
+                            perm_temp = self.assembler.input_to_leaf.temperature
+                            if self.assembler.transformation_layer is not None:
+                                trans_temp = self.assembler.transformation_layer.temperature
+                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Perm: {perm_temp:.3f}, Trans: {trans_temp:.3f}")
+                            else:
+                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Temp: {perm_temp:.3f}")
+                        else:
+                            logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}")
+                    
+                    # TEMPERATURE ANNEALING: Gradually cool down both layers
+                    if use_temperature_annealing and not self.assembler.is_frozen:
+                        # Cool permutation layer
+                        self.assembler.input_to_leaf.temperature *= perm_temp_decay_rate
+                        
+                        # Cool transformation layer independently (faster cooling)
+                        if self.assembler.transformation_layer is not None and trans_temp_decay_rate is not None:
+                            self.assembler.transformation_layer.temperature *= trans_temp_decay_rate
+                            # Don't let transformation temp go below permutation temp
+                            if self.assembler.transformation_layer.temperature < self.assembler.input_to_leaf.temperature:
+                                self.assembler.transformation_layer.temperature = self.assembler.input_to_leaf.temperature
+                        
+                        # Freeze when permutation temperature is very low (nearly hard)
+                        if self.assembler.input_to_leaf.temperature < perm_final_temp * 1.1:
+                            self.assembler.is_frozen = True
+                            logging.info(f"   ❄️  Permutation hardened at epoch {epoch + 1} (temp: {self.assembler.input_to_leaf.temperature:.3f})")
+                    
+                    # ADAPTIVE REHEATING: Check periodically if we should escape current basin
+                    # Key insight: Don't wait for plateau - proactively check if we're making good enough progress
+                    # Check if we have a learnable permutation layer with temperature
+                    can_reheat = False  # DISABLED: Testing if natural annealing works better than reheating
+                    
+                    # Periodic accuracy check: every N epochs, assess if progress is adequate
+                    reheat_check_interval = 500  # Check every 500 epochs (less frequent than window size)
+                    
+                    if can_reheat and (epoch + 1) % reheat_check_interval == 0:
+                        if (epoch - last_reheat_epoch) >= min_epochs_between_reheats and not self.assembler.is_frozen:
+                            # Check recent progress over a larger window for more stable detection
+                            window_size = min(300, len(accuracy_history))  # Use 300 epochs for smoother trend
+                            
+                            if window_size > 0:
+                                old_accuracy = accuracy_history[-window_size]
+                                new_accuracy = accuracy_history[-1]
+                                accuracy_improvement = new_accuracy - old_accuracy
+                                
+                                old_loss = loss_history[-window_size]
+                                new_loss = loss_history[-1]
+                                loss_improvement = old_loss - new_loss
+                                
+                                # Debug: Log what we're checking
+                                if (epoch + 1) % (reheat_check_interval * 5) == 0:  # Every 500 epochs
+                                    logging.info(f"   📊 Reheat check @ epoch {epoch+1}: Acc {new_accuracy:.1%} (Δ{accuracy_improvement:+.1%}), Loss {new_loss:.1f} (Δ{loss_improvement:+.1f})")
+                                
+                                # Proactive reheating strategy:
+                                # Reheat when accuracy plateaus (< 1% improvement over window)
+                                # BUT NOT if we've already achieved high accuracy (≥ 99%)
+                                # If accuracy stops improving, we're likely stuck in a local optimum
+                                
+                                accuracy_plateau = accuracy_improvement < 0.01  # Less than 1% improvement
+                                loss_plateau = loss_improvement < self.reheat_improvement_threshold
+                                accuracy_already_good = new_accuracy >= 0.99  # Don't reheat if we're already at target!
+                                
+                                # Reheat if BOTH loss and accuracy have plateaued AND accuracy isn't already good
+                                # (If accuracy is 99%+, we've found a great solution - don't destroy it!)
+                                both_stuck = accuracy_plateau and loss_plateau and not accuracy_already_good
+                                
+                                should_reheat = both_stuck and epoch > 500  # Give it time to settle first
+                                
+                                # Debug logging to diagnose reheating
+                                if (epoch + 1) % (reheat_check_interval * 5) == 0 and both_stuck:
+                                    logging.info(f"   🔍 Conditions: both_stuck={both_stuck}, epoch>{500}={epoch > 500}")
+                                    logging.info(f"   🔍 Should reheat: {should_reheat}")
+                                
+                                if should_reheat:
+                                    # ADAPTIVE REHEATING: Temperature based on how stuck we are
+                                    # Key insight: If we're close to optimal (high accuracy), gentle reheat
+                                    #              If we're far from optimal (low accuracy), strong reheat
+                                    old_temp = self.assembler.input_to_leaf.temperature
+                                    
+                                    # Calculate adaptive reheat temperature using continuous formula
+                                    # Multiplier formula: 2.0 + 8.0 * (1 - accuracy)^2
+                                    # This gives smooth scaling:
+                                    #   accuracy=1.00 → 2.0x (very gentle)
+                                    #   accuracy=0.95 → 2.2x (gentle)
+                                    #   accuracy=0.90 → 2.8x (moderate)
+                                    #   accuracy=0.80 → 4.32x (stronger)
+                                    #   accuracy=0.70 → 6.72x (strong)
+                                    #   accuracy=0.50 → 10.0x (maximum)
+                                    reheat_multiplier = 2.0 + 8.0 * ((1.0 - new_accuracy) ** 2)
+                                    adaptive_reheat_temp = min(old_temp * reheat_multiplier, self.reheat_temperature)
+                                    
+                                    self.assembler.input_to_leaf.temperature = adaptive_reheat_temp
+                                    
+                                    # Synchronize transformation layer temperature when reheating
+                                    # Both layers should re-explore together
+                                    if self.assembler.transformation_layer is not None:
+                                        self.assembler.transformation_layer.temperature = adaptive_reheat_temp
+                                    
+                                    self.assembler.is_frozen = False
+                                    last_reheat_epoch = epoch
+                                    
+                                    # Log why we're reheating
+                                    logging.info(f"   🔥 Accuracy plateau detected! Acc: {new_accuracy:.1%}, improvement: {accuracy_improvement:.1%} over {window_size} epochs")
+                                    logging.info(f"   🔥 Adaptive reheating: temp {old_temp:.3f} → {adaptive_reheat_temp:.1f} (multiplier: {reheat_multiplier if reheat_multiplier else 'max'})")
+                                    
+                                    # Clear some loss/accuracy history to avoid immediate re-trigger
+                                    loss_history = loss_history[-100:]
+                                    accuracy_history = accuracy_history[-100:]
+                    elif len(loss_history) == self.reheat_plateau_window and not use_temperature_annealing:
+                        # Debug: log once why reheating is disabled (only if not using annealing)
+                        logging.info(f"   ℹ️  Reheating disabled: input_to_leaf type = {type(self.assembler.input_to_leaf).__name__}")
+                    
                     # Check if transformation layer has converged
+                    # Only check transformation convergence when transformation temperature is low
+                    # This ensures transformation converges based on its own schedule, not permutation
                     if not transformation_converged and self.assembler.transformation_layer is not None:
-                        if self.assembler.transformation_layer.has_converged(confidence_threshold=0.75):
-                            transformation_converged = True
-                            logging.info(f"   ✅ Transformation layer converged at epoch {epoch + 1}")
+                        # Check if transformation temperature is near its final value
+                        transformation_is_cool = False
+                        if use_temperature_annealing:
+                            trans_temp = self.assembler.transformation_layer.temperature
+                            # Consider transformation cool when temp is within 2x of final (e.g., < 0.2 for final 0.1)
+                            transformation_is_cool = trans_temp < (self.transformation_final_temperature * 2.0)
+                        else:
+                            # For Hungarian search, wait for permutation to freeze
+                            transformation_is_cool = self.assembler.is_frozen
+                        
+                        if transformation_is_cool:
+                            # Use adaptive convergence: 65% confidence for 70% of features
+                            if self.assembler.transformation_layer.has_converged(confidence_threshold=0.65, min_converged_ratio=0.7):
+                                transformation_converged = True
+                                logging.info(f"   ✅ Transformation layer converged at epoch {epoch + 1} (permutation hardened)")
 
-                    # Simple early stop when frozen and loss small
-                    if self.assembler.is_frozen and loss.item() < (self.assembler.early_stop_threshold * self.assembler.loss_amplifier):
+                    # Early stop when frozen/hardened and loss is small
+                    early_stop_threshold = self.assembler.early_stop_threshold
+                    if self.assembler.transformation_layer is not None and self.assembler.original_input_size >= 10:
+                        early_stop_threshold = self.early_stop_threshold_large_inputs  # Configurable threshold for large inputs with transformations
+                    
+                    if self.assembler.is_frozen and loss.item() < (early_stop_threshold * self.assembler.loss_amplifier):
+                        logging.info(f"   ✅ Early stop: loss {loss.item():.4f} < threshold {early_stop_threshold * self.assembler.loss_amplifier:.4f}")
                         break
+                    
+                    # Also early stop if we achieve perfect training accuracy (no need to continue)
+                    # BUT only if temperature is low enough that the solution is stable
+                    if len(accuracy_history) > 0 and accuracy_history[-1] >= 0.999:
+                        # Check if permutation is stable (temperature low or frozen)
+                        if use_temperature_annealing:
+                            current_perm_temp = self.assembler.input_to_leaf.temperature
+                            permutation_stable = current_perm_temp < 1.0  # Temperature cool enough for stable solution
+                        else:
+                            permutation_stable = self.assembler.is_frozen
+                        
+                        if permutation_stable:
+                            logging.info(f"   ✅ Early stop: perfect training accuracy (100.0%) with stable permutation")
+                            # Freeze the model to mark it as ready
+                            self.assembler.is_frozen = True
+                            break
+                        # else: accuracy is 100% but temperature still high - might be transient, keep training
 
                 logging.info(f"✅ Permutation is frozen: {self.assembler.is_frozen}")
                 if self.assembler.is_frozen:

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import itertools
 
 class inputToLeafSinkhorn(nn.Module):
     def __init__(self, num_inputs, num_leaves, temperature=3.0, sinkhorn_iters=20, use_gumbel=True):
@@ -12,6 +13,55 @@ class inputToLeafSinkhorn(nn.Module):
         self.gumbel_noise_scale = 1.0  # You can anneal this
 
         self.logits = nn.Parameter(torch.randn(num_leaves, num_inputs))
+    
+    def initialize_from_coarse_permutation(self, coarse_perm, group_size=3, block_std=0.5):
+        """
+        Initialize the permutation matrix using a coarse-grained hard permutation.
+        
+        Args:
+            coarse_perm: A permutation array for the coarse matrix (e.g., [2, 0, 1] for 3x3)
+            group_size: How many rows/cols of the full matrix each coarse element represents
+            block_std: Standard deviation for the normal distribution within each block
+        """
+        n = self.num_leaves
+        k = len(coarse_perm)  # Size of coarse matrix
+        
+        # Initialize logits to large negative values (soft zeros)
+        new_logits = torch.ones(n, n) * (-5.0)
+        
+        # For each coarse permutation mapping
+        for coarse_row in range(k):
+            coarse_col = coarse_perm[coarse_row]
+            
+            # Determine the block boundaries in the full matrix
+            row_start = coarse_row * group_size
+            row_end = min((coarse_row + 1) * group_size, n)
+            col_start = coarse_col * group_size
+            col_end = min((coarse_col + 1) * group_size, n)
+            
+            # Fill this block with normally distributed values (soft assignment within block)
+            block_height = row_end - row_start
+            block_width = col_end - col_start
+            new_logits[row_start:row_end, col_start:col_end] = torch.randn(block_height, block_width) * block_std
+        
+        # Update the parameter
+        with torch.no_grad():
+            self.logits.copy_(new_logits)
+    
+    @staticmethod
+    def generate_all_coarse_permutations(n, group_size=3):
+        """
+        Generate all possible permutations for a coarse-grained matrix.
+        
+        Args:
+            n: Size of the full matrix
+            group_size: How many elements per group
+        
+        Returns:
+            List of all permutation arrays for the coarse matrix
+        """
+        k = (n + group_size - 1) // group_size  # Ceiling division
+        return list(itertools.permutations(range(k)))
 
     def forward(self, x):
         if self.use_gumbel:

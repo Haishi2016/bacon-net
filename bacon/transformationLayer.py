@@ -146,24 +146,31 @@ class TransformationLayer(nn.Module):
         probs = self.get_transformation_probabilities()
         return torch.argmax(probs, dim=-1)
     
-    def has_converged(self, confidence_threshold=0.8):
+    def has_converged(self, confidence_threshold=0.8, min_converged_ratio=0.8):
         """
         Check if the transformation layer has converged.
         
-        A transformation layer is considered converged when each feature has
-        selected a transformation with confidence above the threshold.
+        A transformation layer is considered converged when a sufficient proportion
+        of features have selected a transformation with confidence above the threshold.
+        This is more flexible than requiring all features to converge, which can be
+        too strict for larger feature sets where some features may not affect the output.
         
         Args:
             confidence_threshold (float): Minimum probability for a transformation
                 to be considered "selected" (default: 0.8 = 80% confidence).
+            min_converged_ratio (float): Minimum ratio of features that must have
+                converged (default: 0.8 = 80% of features).
         
         Returns:
-            bool: True if all features have selected transformations with high
+            bool: True if enough features have selected transformations with high
                 confidence, False otherwise.
         """
         probs = self.get_transformation_probabilities()
         max_probs = torch.max(probs, dim=-1)[0]  # Maximum probability for each feature
-        return torch.all(max_probs >= confidence_threshold).item()
+        converged_features = (max_probs >= confidence_threshold).sum().item()
+        total_features = len(max_probs)
+        converged_ratio = converged_features / total_features
+        return converged_ratio >= min_converged_ratio
     
     def freeze_transformations(self):
         """
