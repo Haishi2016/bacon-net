@@ -417,7 +417,8 @@ class binaryTreeLogicNet(nn.Module):
                     # Check if transformation layer has converged before doing permutation search
                     can_search_permutations = True
                     if self.transformation_layer is not None:
-                        if not self.transformation_layer.has_converged(confidence_threshold=0.75):
+                        # Use adaptive thresholds: lower confidence requirement, allow 70% of features to converge
+                        if not self.transformation_layer.has_converged(confidence_threshold=0.65, min_converged_ratio=0.7):
                             can_search_permutations = False
                     
                     if can_search_permutations:
@@ -436,6 +437,8 @@ class binaryTreeLogicNet(nn.Module):
                                 self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
                                 self.input_to_leaf = frozenInputToLeaf(self.locked_perm, self.original_input_size).to(self.device)
                             self.is_frozen = True
+                            # Disable auto-refine once frozen to avoid repeated permutation searches
+                            self.auto_refine = False
                             # Optionally reduce LR externally after this point
                     # Reset counter regardless
                     self._batches_since_refine = 0

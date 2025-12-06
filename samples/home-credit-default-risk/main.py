@@ -255,7 +255,7 @@ bacon = baconNet(
 (best_model, best_accuracy) = bacon.find_best_model(
     X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor,
     attempts=30,
-    acceptance_threshold=0.15,  # Lower threshold due to complexity
+    acceptance_threshold=0.85,  # Lower threshold due to complexity
     max_epochs=15000,
     save_path="./assembler-credit-risk.pth"
 )

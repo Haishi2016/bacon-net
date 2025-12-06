@@ -102,7 +102,7 @@ def generate_boolean_data_with_negation(num_vars=3, repeat_factor=100, randomize
 
 
 # Generate data with negation
-input_size = 3
+input_size = 10
 x, y, expr_info = generate_boolean_data_with_negation(
     input_size, 
     repeat_factor=100, 
@@ -122,6 +122,25 @@ else:
 # Create BACON model with transformation layer
 # The transformation layer can learn to negate inputs, which should help
 # discover the correct expression
+#
+# For larger input sizes (10+), we limit max_permutations to speed up training
+# while still allowing the model to find good solutions
+#
+# early_stop_threshold_large_inputs controls when to stop training after finding
+# a good permutation. Lower values = more training = higher accuracy.
+# Default 0.1 is a good balance. Use 0.05 for higher accuracy, 0.2 for faster training.
+#
+# Adaptive reheating helps escape local optima:
+# - reheat_plateau_window: epochs to check for plateau (smaller = more aggressive)
+# - reheat_improvement_threshold: min improvement to avoid reheat (smaller = more aggressive)
+# - reheat_cooldown: min epochs between reheats (prevents oscillation)
+# - reheat_temperature: temperature when reheating (higher = more exploration)
+#
+# Temperature annealing (when using Sinkhorn permutations):
+# - permutation_initial_temperature: start hot for broad exploration (default 5.0)
+# - permutation_final_temperature: end cool for hard commitment (default 0.1)
+# - transformation_initial_temperature: start cooler since transformation is simpler (default 1.0)
+# - transformation_final_temperature: end same as permutation (default 0.1)
 bacon = baconNet(
     input_size, 
     aggregator='bool.min_max', 
@@ -130,19 +149,55 @@ bacon = baconNet(
     normalize_andness=False,
     use_transformation_layer=True,  # Enable transformation layer
     transformation_temperature=1.0,
-    transformation_use_gumbel=False
+    transformation_use_gumbel=False,
+    max_permutations=100 if input_size >= 10 else None,  # Speed up for large inputs
+    early_stop_threshold_large_inputs=0.05,  # Balance between speed and accuracy
+    # Adaptive reheating for steep landscapes
+    reheat_plateau_window=100,      # Aggressive: check last 100 epochs
+    reheat_improvement_threshold=0.5,  # Aggressive: reheat if < 0.5 improvement
+    reheat_cooldown=200,            # Allow reheating every 200 epochs
+    reheat_temperature=10.0,        # High temp for strong exploration
+    # Temperature annealing schedule
+    permutation_initial_temperature=5.0,   # Start hot for permutation exploration
+    permutation_final_temperature=0.1,     # Cool to hard permutation
+    transformation_initial_temperature=1.0,  # Start cooler (simpler: 2^n vs n! states)
+    transformation_final_temperature=0.1   # Same final temp
 )
 
 print("\n🎯 Training with transformation layer enabled...")
 print("   The model can learn to negate features if needed.\n")
 
-# Train the model
+# Train the model using hierarchical permutation strategy
+# For 10 inputs with group_size=3: 10÷3 = 4 groups → 4! = 24 coarse permutations
+# Each coarse permutation initializes the full 10×10 matrix with block structure
+# This gives us 24 structured attempts instead of random initialization
+#
+# HIERARCHICAL PERMUTATION STRATEGY:
+#   - Enumerate ALL hard permutations at coarse level (feasible: 3!=6, 4!=24, 5!=120)
+#   - Each coarse perm gives block-structured initialization of full matrix
+#   - Train each for subset of epochs
+#   - Much better coverage of permutation space than random restarts
+#
+# Example for 10 inputs, group_size=3:
+#   - 4 groups (10÷3 rounded up)
+#   - 4! = 24 possible coarse permutations
+#   - Each trains for epochs_per_attempt
+#   - Total computation = 24 * epochs_per_attempt
+#
+# Reduced epochs: Wrong coarse permutations won't converge anyway,
+# so give each less time to avoid wasting computation on bad choices
+
+max_epochs_value = min(input_size * 1000, 10000) if input_size >= 10 else min(input_size * 1500, 12000)
+epochs_per_coarse_perm = 4000  # Each coarse permutation gets 1000 epochs (reduced from 2000)
+
 (best_model, best_accuracy) = bacon.find_best_model(
     x, y, x, y, 
     acceptance_threshold=0.95, 
-    attempts=10, 
-    max_epochs=min(input_size * 1000, 8000), 
-    save_model=False
+    max_epochs=max_epochs_value,  # Not used in hierarchical mode
+    save_model=False,
+    use_hierarchical_permutation=True,
+    hierarchical_group_size=3,
+    hierarchical_epochs_per_attempt=epochs_per_coarse_perm
 )
 
 print(f"\n🏆 Best accuracy: {best_accuracy * 100:.2f}%")
@@ -185,6 +240,55 @@ if bacon.assembler.transformation_layer is not None:
 # Print tree structure with transformations applied
 print("\n🌳 Logical Tree Structure:")
 print_tree_structure(bacon.assembler, expr_info['var_names'], classic_boolean=True)
+
+# Verify logical equivalence
+print("\n🔍 Logical Equivalence Verification")
+print("=" * 70)
+
+# Generate all possible input combinations
+import itertools
+num_test_cases = 2 ** input_size
+print(f"📊 Testing all {num_test_cases} possible input combinations...")
+
+# Skip verification if too many combinations
+if num_test_cases > 2048:
+    print(f"⚠️  Skipping verification: {num_test_cases} combinations is too many")
+    print(f"   (For {input_size} inputs, exhaustive testing would take too long)")
+else:
+    all_inputs = list(itertools.product([0, 1], repeat=input_size))
+    
+    # Evaluate original expression
+    print("🔄 Evaluating original expression...")
+    original_outputs = []
+    for test_input in all_inputs:
+        # Pass the input as 'x' for the eval expression
+        x = list(test_input)
+        result = eval(expr_info['eval_expr'], {"__builtins__": {}}, {"x": x})
+        original_outputs.append(result)
+    
+    # Evaluate learned model
+    print("🔄 Evaluating learned model...")
+    learned_inputs = torch.tensor(all_inputs, dtype=torch.float32, device=device)
+    with torch.no_grad():
+        bacon.assembler.eval()
+        learned_outputs = bacon.assembler(learned_inputs).squeeze().cpu().numpy()
+        learned_outputs = (learned_outputs > 0.5).astype(int)
+    
+    # Compare
+    print("🔄 Comparing results...")
+    matches = sum(1 for orig, learned in zip(original_outputs, learned_outputs) if orig == learned)
+    equivalence_rate = matches / num_test_cases * 100
+    
+    print(f"✅ Tested {num_test_cases} input combinations")
+    print(f"✅ Logical equivalence: {matches}/{num_test_cases} ({equivalence_rate:.1f}%)")
+    
+    if equivalence_rate == 100:
+        print("✅ VERIFIED: Learned expression is logically equivalent to original!")
+        print("   (Even though some transformations differ, the permutation compensates)")
+    else:
+        print(f"⚠️  WARNING: Only {equivalence_rate:.1f}% equivalent - model may have errors")
+
+print("=" * 70)
 
 # Visualize
 visualize_tree_structure(bacon.assembler, expr_info['var_names'])
