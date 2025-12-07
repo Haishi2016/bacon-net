@@ -1,0 +1,23 @@
+# UCI Credit Card Default - BACON Benchmark
+# Python dependencies
+
+# Core dependencies
+torch>=2.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+
+# Excel file support
+xlrd>=2.0.1
+openpyxl>=3.1.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Optional: Gradient Boosting models for benchmarking
+xgboost>=2.0.0
+lightgbm>=4.0.0
+
+# Optional: Additional ML tools
+scipy>=1.11.0

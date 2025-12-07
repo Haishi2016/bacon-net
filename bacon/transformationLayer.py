@@ -7,6 +7,9 @@ selected using a softmax mechanism, similar to the operator selection in aggrega
 
 The layer learns which features should be transformed (e.g., negated) to improve
 the network's ability to learn complex logical relationships.
+
+Supports parameterized transformations where each transformation can have
+learnable parameters (e.g., peak location for Gaussian-like transformations).
 """
 
 import torch
@@ -14,18 +17,128 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class ParameterizedTransformation:
+    """
+    Base class for parameterized transformations.
+    
+    Each transformation can have its own learnable parameters that are
+    optimized during training.
+    
+    Args:
+        num_features (int): Number of features this transformation applies to.
+        name (str): Human-readable name for this transformation.
+    """
+    def __init__(self, num_features, name):
+        self.num_features = num_features
+        self.name = name
+    
+    def initialize_parameters(self, device='cpu'):
+        """
+        Initialize learnable parameters for this transformation.
+        
+        Returns:
+            dict: Dictionary of parameter names to nn.Parameter objects.
+                  Empty dict if no parameters needed.
+        """
+        return {}
+    
+    def forward(self, x, params):
+        """
+        Apply the transformation to input features.
+        
+        Args:
+            x (torch.Tensor): Input of shape (batch_size, num_features).
+            params (dict): Dictionary of parameter tensors.
+        
+        Returns:
+            torch.Tensor: Transformed input of same shape.
+        """
+        raise NotImplementedError("Subclasses must implement forward()")
+    
+    def get_param_summary(self, params, feature_idx):
+        """
+        Get human-readable summary of parameters for a specific feature.
+        
+        Args:
+            params (dict): Dictionary of parameter tensors.
+            feature_idx (int): Index of the feature.
+        
+        Returns:
+            dict: Summary of parameter values for this feature.
+        """
+        return {}
+
+
+class IdentityTransformation(ParameterizedTransformation):
+    """Identity transformation: f(x) = x"""
+    def __init__(self, num_features):
+        super().__init__(num_features, 'identity')
+    
+    def forward(self, x, params):
+        return x
+
+
+class NegationTransformation(ParameterizedTransformation):
+    """Negation transformation: f(x) = 1 - x"""
+    def __init__(self, num_features):
+        super().__init__(num_features, 'negation')
+    
+    def forward(self, x, params):
+        return 1.0 - x
+
+
+class PeakTransformation(ParameterizedTransformation):
+    """
+    Peak transformation: High when x is near learned peak location t, low otherwise.
+    
+    Formula: f(x) = 1 - |x - t|
+    
+    This models features where an optimal value exists in the middle range,
+    not at the extremes (e.g., age, income level).
+    
+    Each feature has its own learnable peak location t ∈ [0, 1].
+    """
+    def __init__(self, num_features):
+        super().__init__(num_features, 'peak')
+    
+    def initialize_parameters(self, device='cpu'):
+        # Initialize peak locations at 0.5 (middle of range)
+        peak_locs = nn.Parameter(torch.ones(self.num_features, device=device) * 0.5)
+        return {'peak_loc': peak_locs}
+    
+    def forward(self, x, params):
+        # Get peak location for each feature
+        # peak_loc shape: (num_features,)
+        # x shape: (batch_size, num_features)
+        peak_loc = params['peak_loc']
+        
+        # Compute distance from peak: |x - t|
+        # Result shape: (batch_size, num_features)
+        distance = torch.abs(x - peak_loc.unsqueeze(0))
+        
+        # Transform: 1 - |x - t|
+        # High when near peak, low when far
+        return 1.0 - distance
+    
+    def get_param_summary(self, params, feature_idx):
+        peak_loc = params['peak_loc'][feature_idx].item()
+        return {'peak_location': f"{peak_loc:.3f}"}
+
+
 class TransformationLayer(nn.Module):
     """
     Learnable transformation layer that applies transformations to features.
     
     For each feature, the layer can select from a set of candidate transformations
-    (e.g., identity x or negation 1-x) using a softmax-weighted combination.
+    (e.g., identity x, negation 1-x, peak) using a softmax-weighted combination.
+    
+    Supports parameterized transformations where each transformation can have
+    learnable parameters (e.g., peak locations).
     
     Args:
         num_features (int): Number of input features to transform.
-        transformations (list[callable], optional): List of transformation functions.
-            Each function should take a tensor and return a transformed tensor.
-            Default: [identity, negation]
+        transformations (list[ParameterizedTransformation], optional): List of transformation objects.
+            Default: [IdentityTransformation, NegationTransformation]
         temperature (float, optional): Temperature for softmax selection.
             Lower values make selection more discrete. Default: 1.0
         use_gumbel (bool, optional): Whether to use Gumbel-Softmax for sampling
@@ -38,9 +151,20 @@ class TransformationLayer(nn.Module):
             Shape: (num_features, num_transforms)
         temperature (float): Softmax temperature.
         use_gumbel (bool): Whether to use Gumbel-Softmax.
+        transform_params (nn.ParameterDict): Learnable parameters for each transformation.
     
     Example:
+        >>> # Default: identity and negation
         >>> layer = TransformationLayer(num_features=10)
+        >>> 
+        >>> # With peak transformation
+        >>> from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation
+        >>> transforms = [
+        ...     IdentityTransformation(10),
+        ...     NegationTransformation(10),
+        ...     PeakTransformation(10)
+        ... ]
+        >>> layer = TransformationLayer(num_features=10, transformations=transforms)
         >>> x = torch.rand(32, 10)  # batch_size=32, features=10
         >>> transformed = layer(x)
         >>> transformed.shape
@@ -52,17 +176,19 @@ class TransformationLayer(nn.Module):
         num_features,
         transformations=None,
         temperature=1.0,
-        use_gumbel=False
+        use_gumbel=False,
+        device='cpu'
     ):
         super(TransformationLayer, self).__init__()
         
         self.num_features = num_features
+        self.device = device
         
         # Default transformations: identity and negation
         if transformations is None:
             self.transformations = [
-                lambda x: x,           # Identity: x
-                lambda x: 1.0 - x,     # Negation: 1-x
+                IdentityTransformation(num_features),
+                NegationTransformation(num_features)
             ]
         else:
             self.transformations = transformations
@@ -76,51 +202,75 @@ class TransformationLayer(nn.Module):
         # Each row represents the logits for selecting a transformation for that feature
         # Initialize with slight bias toward identity (first transformation)
         # This gives the model a stable starting point during permutation search
-        initial_logits = torch.zeros(num_features, self.num_transforms)
+        initial_logits = torch.zeros(num_features, self.num_transforms, device=device)
         initial_logits[:, 0] = 0.5  # Slight bias toward identity transformation
         self.logits = nn.Parameter(initial_logits)
+        
+        # Initialize parameters for each transformation
+        # Use ParameterDict to properly register all parameters
+        self.transform_params = nn.ParameterDict()
+        for t_idx, transform in enumerate(self.transformations):
+            params = transform.initialize_parameters(device=device)
+            for param_name, param_tensor in params.items():
+                # Store with unique key: "transform_{idx}_{param_name}"
+                key = f"t{t_idx}_{param_name}"
+                self.transform_params[key] = param_tensor
     
     def forward(self, x):
         """
-        Apply transformations to input features.
+        Apply learned transformations to input features.
+        
+        For each feature, selects from available transformations using softmax weights
+        and computes a weighted combination of all transformation outputs.
         
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, num_features).
+                Each feature value should be in [0, 1].
         
         Returns:
-            torch.Tensor: Transformed tensor of shape (batch_size, num_features).
+            torch.Tensor: Transformed features of shape (batch_size, num_features).
+        
+        Note:
+            During training with use_gumbel=True, uses Gumbel-Softmax for discrete sampling.
+            During evaluation, uses regular softmax for smooth interpolation.
         """
         batch_size = x.size(0)
         
-        # Compute softmax weights for transformation selection
-        # Shape: (num_features, num_transforms)
+        # Compute selection probabilities for each feature's transformation
         if self.training and self.use_gumbel:
-            # Use Gumbel-Softmax for differentiable discrete sampling
-            weights = F.gumbel_softmax(
-                self.logits,
-                tau=self.temperature,
-                hard=False,
-                dim=-1
-            )
+            # Gumbel-Softmax for discrete sampling during training
+            weights = F.gumbel_softmax(self.logits, tau=self.temperature, hard=False, dim=1)
         else:
-            # Standard softmax
-            weights = F.softmax(self.logits / self.temperature, dim=-1)
+            # Regular softmax for smooth interpolation
+            weights = F.softmax(self.logits / self.temperature, dim=1)
         
-        # Apply each transformation and combine using softmax weights
-        # For each feature, compute weighted sum of all transformations
-        transformed = torch.zeros_like(x)
+        # weights shape: (num_features, num_transforms)
         
-        for t_idx, transform_fn in enumerate(self.transformations):
-            # Apply transformation to all features
-            transformed_x = transform_fn(x)
+        # Apply each transformation and accumulate weighted results
+        result = torch.zeros_like(x)
+        
+        for t_idx, transform in enumerate(self.transformations):
+            # Get parameters for this transformation
+            params = {}
+            prefix = f"t{t_idx}_"
+            for key, value in self.transform_params.items():
+                if key.startswith(prefix):
+                    param_name = key[len(prefix):]  # Remove prefix
+                    params[param_name] = value
             
-            # Weight by softmax probabilities for this transformation
-            # Broadcasting: weights[:, t_idx] is (num_features,)
-            # transformed_x is (batch_size, num_features)
-            # Result: each feature is weighted by its selection probability
-            transformed += transformed_x * weights[:, t_idx].unsqueeze(0)
+            # Apply transformation
+            # Shape: (batch_size, num_features)
+            transformed = transform.forward(x, params)
+            
+            # Weight by selection probability for this transformation
+            # weights[:, t_idx] has shape (num_features,)
+            # Broadcast across batch: (batch_size, num_features)
+            weighted_transformed = transformed * weights[:, t_idx].unsqueeze(0)
+            
+            # Accumulate
+            result += weighted_transformed
         
-        return transformed
+        return result
     
     def get_transformation_probabilities(self):
         """
@@ -207,26 +357,48 @@ class TransformationLayer(nn.Module):
                 and probability. Format:
                 {
                     feature_idx: {
-                        'transformation': 'identity' or 'negation',
+                        'transformation': transformation name,
                         'probability': float,
-                        'all_probs': list of probabilities for all transformations
+                        'all_probs': list of probabilities for all transformations,
+                        'params': dict of learned parameters (if any)
                     }
                 }
         """
         probs = self.get_transformation_probabilities()
         selected = self.get_selected_transformations()
         
-        transformation_names = ['identity', 'negation'] if self.num_transforms == 2 else [
-            f'transform_{i}' for i in range(self.num_transforms)
-        ]
+        # Get transformation names from the transformation objects
+        transformation_names = []
+        for transform in self.transformations:
+            name = transform.__class__.__name__.replace('Transformation', '').lower()
+            transformation_names.append(name)
         
         summary = {}
         for feat_idx in range(self.num_features):
             selected_idx = selected[feat_idx].item()
+            
+            # Get parameters for the selected transformation
+            params = {}
+            prefix = f"t{selected_idx}_"
+            transform_params = {}
+            for key, value in self.transform_params.items():
+                if key.startswith(prefix):
+                    param_name = key[len(prefix):]  # Remove prefix
+                    transform_params[param_name] = value
+            
+            # Get parameter summary from the transformation
+            if transform_params:
+                param_summary = self.transformations[selected_idx].get_param_summary(
+                    transform_params, feat_idx
+                )
+            else:
+                param_summary = {}
+            
             summary[feat_idx] = {
                 'transformation': transformation_names[selected_idx],
                 'probability': probs[feat_idx, selected_idx].item(),
-                'all_probs': probs[feat_idx].tolist()
+                'all_probs': probs[feat_idx].tolist(),
+                'params': param_summary
             }
         
         return summary

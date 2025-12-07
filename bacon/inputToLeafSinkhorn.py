@@ -14,35 +14,73 @@ class inputToLeafSinkhorn(nn.Module):
 
         self.logits = nn.Parameter(torch.randn(num_leaves, num_inputs))
     
-    def initialize_from_coarse_permutation(self, coarse_perm, group_size=3, block_std=0.5):
+    def initialize_from_coarse_permutation(self, coarse_perm, group_size=3, block_std=0.5,
+                                          bleed_ratio=0.1, bleed_decay=2.0):
         """
-        Initialize the permutation matrix using a coarse-grained hard permutation.
+        Initialize the permutation matrix using a coarse-grained permutation with soft boundaries.
+        
+        This creates a hierarchical structure where:
+        - Primary blocks (on the coarse diagonal) get the strongest signal
+        - Adjacent blocks get weaker signal (bleeding)
+        - Distant blocks get very weak signal
         
         Args:
             coarse_perm: A permutation array for the coarse matrix (e.g., [2, 0, 1] for 3x3)
             group_size: How many rows/cols of the full matrix each coarse element represents
-            block_std: Standard deviation for the normal distribution within each block
+            block_std: Standard deviation for the normal distribution within primary blocks
+            bleed_ratio: Ratio of std for adjacent blocks relative to primary (0.0 = hard, 1.0 = full bleed)
+                        E.g., 0.1 means adjacent blocks get 10% of the primary block's std
+            bleed_decay: How quickly the bleeding decays with distance (higher = faster decay)
+                        E.g., 2.0 means distance-2 blocks get (bleed_ratio^2) * block_std
+        
+        Examples:
+            Hard blocks (original): bleed_ratio=0.0
+            Soft boundaries: bleed_ratio=0.1, bleed_decay=2.0
+            Very soft: bleed_ratio=0.3, bleed_decay=1.5
         """
         n = self.num_leaves
         k = len(coarse_perm)  # Size of coarse matrix
         
-        # Initialize logits to large negative values (soft zeros)
-        new_logits = torch.ones(n, n) * (-5.0)
+        # Initialize logits to very small values (baseline noise)
+        baseline_std = block_std * (bleed_ratio ** bleed_decay) if bleed_ratio > 0 else 0.001
+        new_logits = torch.randn(n, n) * baseline_std
         
         # For each coarse permutation mapping
         for coarse_row in range(k):
             coarse_col = coarse_perm[coarse_row]
             
-            # Determine the block boundaries in the full matrix
+            # Determine the primary block boundaries
             row_start = coarse_row * group_size
             row_end = min((coarse_row + 1) * group_size, n)
             col_start = coarse_col * group_size
             col_end = min((coarse_col + 1) * group_size, n)
             
-            # Fill this block with normally distributed values (soft assignment within block)
+            # Fill primary block with strong signal
             block_height = row_end - row_start
             block_width = col_end - col_start
             new_logits[row_start:row_end, col_start:col_end] = torch.randn(block_height, block_width) * block_std
+            
+            # Add bleeding to nearby blocks if bleed_ratio > 0
+            if bleed_ratio > 0:
+                # For each coarse column, add bleeding proportional to distance
+                for other_coarse_col in range(k):
+                    if other_coarse_col == coarse_col:
+                        continue  # Skip primary block (already filled)
+                    
+                    # Calculate coarse distance
+                    coarse_distance = abs(other_coarse_col - coarse_col)
+                    
+                    # Calculate bleeding strength: bleed_ratio^(distance^bleed_decay)
+                    bleed_strength = bleed_ratio ** (coarse_distance ** bleed_decay)
+                    bleed_std = block_std * bleed_strength
+                    
+                    # Fill bleeding block
+                    other_col_start = other_coarse_col * group_size
+                    other_col_end = min((other_coarse_col + 1) * group_size, n)
+                    other_width = other_col_end - other_col_start
+                    
+                    new_logits[row_start:row_end, other_col_start:other_col_end] = \
+                        torch.randn(block_height, other_width) * bleed_std
         
         # Update the parameter
         with torch.no_grad():

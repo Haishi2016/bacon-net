@@ -3,7 +3,12 @@ import torch.nn as nn
 from bacon.inputToLeafSinkhorn import inputToLeafSinkhorn
 from bacon.frozonInputToLeaf import frozenInputToLeaf
 from bacon.inputToCombinationSinkhorn import inputToCombinationSinkhorn
-from bacon.transformationLayer import TransformationLayer
+from bacon.transformationLayer import (
+    TransformationLayer,
+    IdentityTransformation,
+    NegationTransformation,
+    PeakTransformation
+)
 import torch.optim as optim
 import numpy as np
 import copy
@@ -64,6 +69,7 @@ class binaryTreeLogicNet(nn.Module):
                  use_transformation_layer: bool = False,
                  transformation_temperature: float = 1.0,
                  transformation_use_gumbel: bool = False,
+                 transformations = None,
                  device=None):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
@@ -103,10 +109,20 @@ class binaryTreeLogicNet(nn.Module):
         # Transformation layer (optional)
         self.use_transformation_layer = use_transformation_layer
         if self.use_transformation_layer:
+            # Create default transformations if none provided
+            if transformations is None:
+                transformations = [
+                    IdentityTransformation(input_size),
+                    NegationTransformation(input_size),
+                    PeakTransformation(input_size)
+                ]
+            
             self.transformation_layer = TransformationLayer(
                 num_features=input_size,
+                transformations=transformations,
                 temperature=transformation_temperature,
-                use_gumbel=transformation_use_gumbel
+                use_gumbel=transformation_use_gumbel,
+                device=self.device
             ).to(self.device)
             self.add_module("transformation_layer", self.transformation_layer)
         else:
