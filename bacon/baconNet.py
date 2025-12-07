@@ -193,7 +193,9 @@ class baconNet(nn.Module):
                         save_model = True,
                         use_hierarchical_permutation = False,
                         hierarchical_group_size = 3,
-                        hierarchical_epochs_per_attempt = None):
+                        hierarchical_epochs_per_attempt = None,
+                        hierarchical_bleed_ratio = 0.1,
+                        hierarchical_bleed_decay = 2.0):
         """ Find the best model by training multiple times and evaluating accuracy.
 
         Args:
@@ -209,6 +211,8 @@ class baconNet(nn.Module):
             use_hierarchical_permutation (bool, optional): Use coarse-grained permutation exploration. Defaults to False.
             hierarchical_group_size (int, optional): Group size for hierarchical permutation (e.g., 3 for 10 inputs → 4x4 coarse matrix). Defaults to 3.
             hierarchical_epochs_per_attempt (int, optional): Epochs to run for each coarse permutation. If None, uses max_epochs. Defaults to None.
+            hierarchical_bleed_ratio (float, optional): Ratio of std for adjacent blocks (0.0=hard blocks, 0.1=10% bleed, 1.0=full bleed). Defaults to 0.1.
+            hierarchical_bleed_decay (float, optional): How quickly bleeding decays with distance (higher=faster decay). Defaults to 2.0.
         Returns:
             tuple: Best model state dictionary and its accuracy.
         """
@@ -239,6 +243,10 @@ class baconNet(nn.Module):
             coarse_perms = [None] * attempts  # No hierarchical structure, use random init
             total_attempts = attempts
             epochs_per_attempt = max_epochs
+
+        # Track best frozen state across all attempts
+        best_is_frozen = False
+        best_locked_perm = None
 
         for attempt in range(total_attempts):
             if use_hierarchical_permutation and coarse_perms[attempt] is not None:
@@ -286,9 +294,12 @@ class baconNet(nn.Module):
                         self.assembler.input_to_leaf.initialize_from_coarse_permutation(
                             coarse_perms[attempt], 
                             group_size=hierarchical_group_size,
-                            block_std=0.5
+                            block_std=0.5,
+                            bleed_ratio=hierarchical_bleed_ratio,
+                            bleed_decay=hierarchical_bleed_decay
                         )
-                        logging.info(f"   🎯 Initialized permutation matrix with coarse structure")
+                        bleed_desc = "hard blocks" if hierarchical_bleed_ratio == 0 else f"bleed={hierarchical_bleed_ratio:.2f}"
+                        logging.info(f"   🎯 Initialized permutation matrix with coarse structure ({bleed_desc})")
 
                 # If using transformation layer, disable auto-refine initially
                 # We'll enable it after transformations converge
@@ -524,20 +535,85 @@ class baconNet(nn.Module):
                             break
                         # else: accuracy is 100% but temperature still high - might be transient, keep training
 
-                logging.info(f"✅ Permutation is frozen: {self.assembler.is_frozen}")
-                if self.assembler.is_frozen:
-                    accuracy = self.evaluate(x_test, y_test)
-                    logging.info(f"✅ Attempt {attempt + 1} accuracy: {accuracy:.4f}")
-                    if accuracy > best_accuracy:
-                        best_accuracy = accuracy
-                        best_model = self.assembler.state_dict()
-                        if best_accuracy >= acceptance_threshold:
-                            break
+                # Force freeze if not already frozen (for pruning and analysis)
+                if not self.assembler.is_frozen:
+                    if hasattr(self.assembler.input_to_leaf, 'logits'):
+                        logging.info(f"   🔒 Force-freezing model (loss threshold not reached)")
+                        from bacon.frozonInputToLeaf import frozenInputToLeaf
+                        # Get hard assignment from current soft permutation
+                        soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                        hard_perm = torch.argmax(soft_perm, dim=1)
+                        self.assembler.locked_perm = hard_perm.clone().detach()
+                        self.assembler.is_frozen = True
+                        # Replace with frozen layer
+                        self.assembler.input_to_leaf = frozenInputToLeaf(
+                            self.assembler.locked_perm,
+                            self.assembler.original_input_size
+                        ).to(self.assembler.device)
+
+                # Always evaluate each attempt, regardless of freeze status
+                # This ensures we track the best permutation even if it didn't fully freeze
+                accuracy = self.evaluate(x_test, y_test)
+                frozen_status = "frozen" if self.assembler.is_frozen else "unfrozen"
+                logging.info(f"✅ Attempt {attempt + 1} accuracy: {accuracy:.4f} ({frozen_status})")
+                
+                if accuracy > best_accuracy:
+                    best_accuracy = accuracy
+                    best_model = self.assembler.state_dict()
+                    best_is_frozen = self.assembler.is_frozen
+                    best_locked_perm = self.assembler.locked_perm.clone() if self.assembler.locked_perm is not None else None
+                    logging.info(f"   🏆 New best model! Accuracy: {best_accuracy:.4f}")
+                    
+                    # Save intermediate best model after each improvement
+                    if save_model and save_path:
+                        # Temporarily store current state before loading best
+                        temp_state = self.assembler.state_dict()
+                        temp_is_frozen = self.assembler.is_frozen
+                        temp_locked_perm = self.assembler.locked_perm.clone() if self.assembler.locked_perm is not None else None
+                        temp_input_layer = self.assembler.input_to_leaf
+                        
+                        # Load best model and restore its frozen state
+                        self.assembler.load_state_dict(best_model)
+                        if best_is_frozen and best_locked_perm is not None:
+                            self.assembler.is_frozen = True
+                            self.assembler.locked_perm = best_locked_perm
+                            # Recreate frozen input layer
+                            from bacon.frozonInputToLeaf import frozenInputToLeaf
+                            self.assembler.input_to_leaf = frozenInputToLeaf(
+                                best_locked_perm,
+                                self.assembler.original_input_size
+                            ).to(self.assembler.device)
+                        
+                        logging.info(f"   💾 Saving intermediate best model to {save_path}")
+                        self.save_model(save_path)
+                        
+                        # Restore current training state completely
+                        self.assembler.load_state_dict(temp_state)
+                        self.assembler.is_frozen = temp_is_frozen
+                        self.assembler.locked_perm = temp_locked_perm
+                        self.assembler.input_to_leaf = temp_input_layer
+                    
+                    if best_accuracy >= acceptance_threshold:
+                        logging.info(f"   ✅ Acceptance threshold reached ({acceptance_threshold:.4f})")
+                        break
+                        
             except RuntimeError as e:
                 logging.error(f"🔥 Attempt {attempt + 1} failed with error: {e}")
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
+        
+        # Load best model and restore its frozen state
         self.assembler.load_state_dict(best_model)
+        if best_is_frozen and best_locked_perm is not None:
+            self.assembler.is_frozen = True
+            self.assembler.locked_perm = best_locked_perm
+            # Recreate frozen input layer
+            from bacon.frozonInputToLeaf import frozenInputToLeaf
+            self.assembler.input_to_leaf = frozenInputToLeaf(
+                best_locked_perm,
+                self.assembler.original_input_size
+            ).to(self.assembler.device)
+        
         if save_model:
             logging.info(f"✅ Saving the best model with accuracy {best_accuracy:.4f} to {save_path}")
             self.save_model(save_path)

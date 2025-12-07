@@ -213,32 +213,6 @@ class BaconAdditionModel(nn.Module):
 
         return y_prob, concepts
 
-    def forward_single_sum(self, x1, x2, tau: float, sum_k: int, hard: bool = False):
-        """
-        Forward pass for a *single* sum head k.
-
-        x1, x2: [B,1,28,28]
-        sum_k: int in [0..18]
-        Returns:
-            y_prob_k: [B]   (prob that sum == sum_k)
-            c_prob:  [B,20] concept distribution
-        """
-        concepts = self._concepts_from_images(x1, x2, tau, hard)  # [B,20]
-
-        if self.single_sum is None:
-            bacon_k = self.bacons[sum_k]
-            yk = bacon_k(concepts)          # [B] or [B,1]
-            y_prob_k = yk.view(-1)          # [B]
-        else:
-            # If the model was constructed in true single-sum mode,
-            # we expect self.single_sum == sum_k; otherwise it's a misuse.
-            assert self.single_sum == sum_k, \
-                f"Model single_sum={self.single_sum}, but got sum_k={sum_k}"
-            yk = self.bacon_single(concepts)  # [B] or [B,1]
-            y_prob_k = yk.view(-1)            # [B]
-
-        return y_prob_k, concepts
-
 
 # ============================================================
 # Loss helpers & rule visualization

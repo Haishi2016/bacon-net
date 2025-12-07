@@ -37,8 +37,19 @@ def generate_boolean_data_with_negation(num_vars=3, repeat_factor=100, randomize
     # Generate random operators between variables
     ops = [random.choice(["and", "or"]) for _ in range(num_vars - 1)]
     
-    # Generate variable names
-    var_names = [chr(ord('A') + i) for i in range(num_vars)]
+    # Generate variable names: A-Z, then emojis for 26+
+    # This supports up to 26 + many emojis (avoiding ASCII range issues)
+    def get_var_name(idx):
+        if idx < 26:
+            return chr(ord('A') + idx)
+        else:
+            # Use emoji range starting from index 26
+            # Common emoji ranges that work well: 🌀-🌿, 🍀-🍺, 🎀-🎯, 🏀-🏺, 🐀-🐿, 👀-👿, 💀-💿
+            emoji_idx = idx - 26
+            emoji_start = 0x1F300  # 🌀
+            return chr(emoji_start + emoji_idx)
+    
+    var_names = [get_var_name(i) for i in range(num_vars)]
     
     # Decide which variables should be negated
     is_negated = [random.random() < negation_prob for _ in range(num_vars)]
@@ -54,28 +65,49 @@ def generate_boolean_data_with_negation(num_vars=3, repeat_factor=100, randomize
     
     # Build the expression
     symbolic_parts = []
-    eval_parts = []
     
     for i in range(num_vars):
-        sym, ev = var_expr(i)
-        symbolic_parts.append(sym)
-        eval_parts.append(ev)
+        base_var = var_names[i]
+        if is_negated[i]:
+            symbolic_parts.append(f"NOT {base_var}")
+        else:
+            symbolic_parts.append(base_var)
     
-    # Combine with operators
+    # Combine with operators to build symbolic expression (for display)
     symbolic_expr = symbolic_parts[0]
-    eval_expr = eval_parts[0]
-    
     for i in range(1, num_vars):
         op = ops[i - 1]
         symbolic_expr = f"({symbolic_expr} {op} {symbolic_parts[i]})"
-        eval_expr = f"({eval_expr} {op} {eval_parts[i]})"
+    
+    # For evaluation, compute directly instead of building nested string expression
+    def evaluate_expr(x):
+        """Evaluate the expression directly without building a nested string"""
+        # Start with first variable
+        if is_negated[0]:
+            result = 1 - x[0]
+        else:
+            result = x[0]
+        
+        # Apply operators sequentially
+        for i in range(1, num_vars):
+            if is_negated[i]:
+                operand = 1 - x[i]
+            else:
+                operand = x[i]
+            
+            if ops[i - 1] == "and":
+                result = result and operand
+            else:  # "or"
+                result = result or operand
+        
+        return int(result)
     
     if randomize:
         logging.info("⚡ Randomized input generation mode enabled.")
         num_samples = repeat_factor
         for _ in range(num_samples):
             x = [random.randint(0, 1) for _ in range(num_vars)]
-            y = int(eval(eval_expr))
+            y = evaluate_expr(x)
             data.append(x)
             labels.append([y])
     else:
@@ -83,7 +115,7 @@ def generate_boolean_data_with_negation(num_vars=3, repeat_factor=100, randomize
         base_cases = list(itertools.product([0, 1], repeat=num_vars))
         for _ in range(repeat_factor):
             for x in base_cases:
-                y = int(eval(eval_expr))
+                y = evaluate_expr(list(x))
                 data.append(list(x))
                 labels.append([y])
     
@@ -92,7 +124,6 @@ def generate_boolean_data_with_negation(num_vars=3, repeat_factor=100, randomize
         torch.tensor(labels, dtype=torch.float32, device=device),
         {
             "expression_text": symbolic_expr,
-            "eval_expr": eval_expr,
             "ops": ops,
             "num_vars": num_vars,
             "var_names": var_names,
@@ -102,7 +133,8 @@ def generate_boolean_data_with_negation(num_vars=3, repeat_factor=100, randomize
 
 
 # Generate data with negation
-input_size = 10
+input_size = 1000
+group_size = 200
 x, y, expr_info = generate_boolean_data_with_negation(
     input_size, 
     repeat_factor=100, 
@@ -196,7 +228,7 @@ epochs_per_coarse_perm = 4000  # Each coarse permutation gets 1000 epochs (reduc
     max_epochs=max_epochs_value,  # Not used in hierarchical mode
     save_model=False,
     use_hierarchical_permutation=True,
-    hierarchical_group_size=3,
+    hierarchical_group_size=group_size,
     hierarchical_epochs_per_attempt=epochs_per_coarse_perm
 )
 

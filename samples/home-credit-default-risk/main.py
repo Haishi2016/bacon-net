@@ -13,7 +13,11 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# ========== Configuration ==========
+USE_CATEGORICAL_FEATURES = False  # Set to False to exclude categorical features
+
 print("📂 Loading Home Credit Default Risk dataset...")
+print(f"⚙️  Use categorical features: {USE_CATEGORICAL_FEATURES}")
 
 # Load the dataset
 if not pd.io.common.file_exists('./application_train.csv'):
@@ -84,18 +88,22 @@ print(f"  Total applications: {len(df):,}")
 print(f"  Default rate: {df['TARGET'].mean() * 100:.2f}%")
 
 # ========== Handle Categorical Features ==========
-print("\n🔄 One-hot encoding categorical features...")
 df_encoded = df.copy()
 categorical_columns = []
 
-for cat_feature in existing_categorical:
-    # Fill missing values with "Missing"
-    df_encoded[cat_feature] = df_encoded[cat_feature].fillna("Missing").astype(str)
-    # One-hot encode
-    dummies = pd.get_dummies(df_encoded[cat_feature], prefix=cat_feature, drop_first=False)
-    df_encoded = pd.concat([df_encoded, dummies], axis=1)
-    categorical_columns.extend(dummies.columns.tolist())
-    print(f"  ✅ {cat_feature}: {len(dummies.columns)} categories")
+if USE_CATEGORICAL_FEATURES:
+    print("\n🔄 One-hot encoding categorical features...")
+    for cat_feature in existing_categorical:
+        # Fill missing values with "Missing"
+        df_encoded[cat_feature] = df_encoded[cat_feature].fillna("Missing").astype(str)
+        # One-hot encode
+        dummies = pd.get_dummies(df_encoded[cat_feature], prefix=cat_feature, drop_first=False)
+        df_encoded = pd.concat([df_encoded, dummies], axis=1)
+        categorical_columns.extend(dummies.columns.tolist())
+        print(f"  ✅ {cat_feature}: {len(dummies.columns)} categories")
+    print(f"\n✅ Created {len(categorical_columns)} one-hot encoded features")
+else:
+    print("\n⏭️  Skipping categorical features (USE_CATEGORICAL_FEATURES=False)")
 
 # Binary features: convert Y/N to 1/0 if needed
 for bin_feature in existing_binary:
@@ -105,10 +113,36 @@ for bin_feature in existing_binary:
         else:
             df_encoded[bin_feature] = df_encoded[bin_feature].astype(float)
 
-print(f"\n✅ Created {len(categorical_columns)} one-hot encoded features")
-
 # ========== Normalize to "Level of Truth" [0,1] ==========
 print("\n🔄 Normalizing features to [0,1] as 'level of truth'...")
+
+# Helper function for robust amount normalization
+def normalize_amount_feature(series, feature_name, percentile_cap=0.99):
+    """
+    Normalize financial amount features with outlier handling.
+    
+    Args:
+        series: pandas Series with amount values
+        feature_name: name for logging
+        percentile_cap: cap outliers at this percentile (default 0.99)
+    
+    Returns:
+        Normalized series in [0,1] range
+    """
+    # Cap extreme outliers at 99th percentile
+    cap_value = series.quantile(percentile_cap)
+    series_capped = series.clip(upper=cap_value)
+    
+    # Log transform (financial data is typically log-normal)
+    series_log = np.log1p(series_capped)
+    
+    # Min-max normalize to [0,1]
+    min_val = series_log.min()
+    max_val = series_log.max()
+    series_normalized = (series_log - min_val) / (max_val - min_val + 1e-8)
+    
+    print(f"  ✅ {feature_name}: outliers capped at {cap_value:.0f}, log-transformed, normalized to [0,1]")
+    return series_normalized
 
 # Days features: Convert negative days to positive, then normalize
 # DAYS_BIRTH: younger age → higher truth value (lower risk)
@@ -125,7 +159,7 @@ if 'DAYS_EMPLOYED' in existing_numeric:
     employed_years = -employed_days / 365
     employed_years = employed_years.clip(0, 50)  # Cap at 50 years
     df_encoded['DAYS_EMPLOYED'] = (employed_years - employed_years.min()) / (employed_years.max() - employed_years.min() + 1e-8)
-    df_encoded['DAYS_EMPLOYED'] = df_encoded['DAYS_EMPLOYED'].fillna(0.5)  # Missing = unknown
+    df_encoded['DAYS_EMPLOYED'] = df_encoded['DAYS_EMPLOYED'].fillna(0.0)  # Missing = unknown
     print(f"  ✅ DAYS_EMPLOYED: long employment = high truth")
 
 # Other DAYS features: more recent → higher truth
@@ -136,12 +170,10 @@ for days_feat in ['DAYS_REGISTRATION', 'DAYS_ID_PUBLISH', 'DAYS_LAST_PHONE_CHANG
         df_encoded[days_feat] = 1 - ((days_val - days_val.min()) / (days_val.max() - days_val.min() + 1e-8))
         print(f"  ✅ {days_feat}: recent = high truth")
 
-# AMT features: Normalize min-max
+# AMT features: Apply robust normalization with outlier handling
 for amt_feat in ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']:
     if amt_feat in existing_numeric:
-        val = df_encoded[amt_feat]
-        df_encoded[amt_feat] = (val - val.min()) / (val.max() - val.min() + 1e-8)
-        print(f"  ✅ {amt_feat}: normalized to [0,1]")
+        df_encoded[amt_feat] = normalize_amount_feature(df_encoded[amt_feat], amt_feat)
 
 # CNT_CHILDREN: Normalize
 if 'CNT_CHILDREN' in existing_numeric:
@@ -149,12 +181,13 @@ if 'CNT_CHILDREN' in existing_numeric:
     df_encoded['CNT_CHILDREN'] = val / (val.max() + 1e-8)
     print(f"  ✅ CNT_CHILDREN: normalized")
 
-# EXT_SOURCE: Already [0,1], but higher EXT_SOURCE = lower risk
-# Invert so high value = high risk (consistent semantics)
+# EXT_SOURCE: Already [0,1], higher EXT_SOURCE = lower risk (good creditworthiness)
+# Keep as-is since high value = approve (low risk)
+# Missing score = 0 (no credit history = higher risk, less likely to approve)
 for ext_feat in ['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3']:
     if ext_feat in existing_numeric:
-        df_encoded[ext_feat] = 1 - df_encoded[ext_feat].fillna(0.5)  # Missing = 0.5 (unknown)
-        print(f"  ✅ {ext_feat}: inverted (high = high risk)")
+        df_encoded[ext_feat] = df_encoded[ext_feat].fillna(0)  # Missing = 0 (no credit info)
+        print(f"  ✅ {ext_feat}: kept as-is (high = low risk = approve)")
 
 # Credit bureau requests: Normalize
 for bureau_feat in ['AMT_REQ_CREDIT_BUREAU_HOUR', 'AMT_REQ_CREDIT_BUREAU_DAY',
@@ -237,7 +270,24 @@ print(f"\n📊 Training set: {len(X_train):,} samples")
 print(f"📊 Test set: {len(X_test):,} samples")
 print(f"📊 Feature dimension: {X_train.shape[1]}")
 
-print("\n🧠 Training BACON model...")
+# Calculate hierarchical permutation parameters
+num_features = X_train.shape[1]
+hierarchical_group_size = 10
+hierarchical_epochs = 15000
+
+num_groups = (num_features + hierarchical_group_size - 1) // hierarchical_group_size
+import math
+num_coarse_perms = math.factorial(num_groups)
+
+print(f"\n🔀 Hierarchical Permutation Configuration:")
+print(f"   Features: {num_features}")
+print(f"   Group size: {hierarchical_group_size}")
+print(f"   Coarse matrix: {num_groups}×{num_groups}")
+print(f"   Total coarse permutations: {num_coarse_perms}")
+print(f"   Epochs per permutation: {hierarchical_epochs}")
+print(f"   Total computation: {num_coarse_perms} × {hierarchical_epochs} = {num_coarse_perms * hierarchical_epochs:,} epoch-equivalents")
+
+print("\n🧠 Training BACON model with hierarchical permutation exploration...")
 print("⏳ This may take a few minutes...\n")
 
 # Initialize and train the BACON model with transformation layer
@@ -254,10 +304,14 @@ bacon = baconNet(
 
 (best_model, best_accuracy) = bacon.find_best_model(
     X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor,
-    attempts=30,
     acceptance_threshold=0.85,  # Lower threshold due to complexity
-    max_epochs=15000,
-    save_path="./assembler-credit-risk.pth"
+    max_epochs=15000,  # Not used in hierarchical mode
+    save_path="./assembler-credit-risk.pth",
+    use_hierarchical_permutation=True,
+    hierarchical_group_size=hierarchical_group_size,
+    hierarchical_epochs_per_attempt=hierarchical_epochs,
+    hierarchical_bleed_ratio=0.5,  # 10% bleeding into adjacent blocks
+    hierarchical_bleed_decay=2.0   # Distance-based decay
 )
 
 print(f"\n🏆 Best accuracy: {best_accuracy * 100:.2f}%\n")
@@ -274,13 +328,28 @@ if bacon.assembler.transformation_layer is not None:
     trans_summary = bacon.assembler.transformation_layer.get_transformation_summary()
     selected_transforms = bacon.assembler.transformation_layer.get_selected_transformations()
     
-    # Count transformations
+    # Count transformations (now including peak)
     identity_count = (selected_transforms == 0).sum().item()
     negation_count = (selected_transforms == 1).sum().item()
+    peak_count = (selected_transforms == 2).sum().item()
     
     print(f"\n📊 Transformation Statistics:")
     print(f"   Identity (x):        {identity_count} features ({identity_count/len(all_features)*100:.1f}%)")
     print(f"   Negation (1-x):      {negation_count} features ({negation_count/len(all_features)*100:.1f}%)")
+    print(f"   Peak (1-|x-t|):      {peak_count} features ({peak_count/len(all_features)*100:.1f}%)")
+    
+    # Show peak transformations with learned parameters
+    if peak_count > 0:
+        print(f"\n🎯 Features Using Peak Transformation (1-|x-t|):")
+        peak_features = []
+        for feat_idx, summary in trans_summary.items():
+            if summary['transformation'] == 'peak':
+                peak_loc = summary['params'].get('peak_location', 'N/A')
+                peak_features.append((all_features[feat_idx], summary['probability'], peak_loc))
+        
+        peak_features.sort(key=lambda x: x[1], reverse=True)
+        for feature_name, prob, peak_loc in peak_features:
+            print(f"   {feature_name:30s} (confidence: {prob*100:.1f}%, peak: {peak_loc})")
     
     print(f"\n🎯 Top Features Using Negation (1-x):")
     negated_features = []
