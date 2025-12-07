@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print("=" * 80)
-print("UCI Credit Card Default (Taiwan) - BACON Benchmark")
+print("UCI Credit Card Default (Taiwan) - BACON Benchmark (No Transformation)")
 print("=" * 80)
 
 # ========== Load Dataset ==========
@@ -59,47 +59,50 @@ print(f"   Payment Status: PAY_0 to PAY_6 (6 months)")
 print(f"   Bill Amounts: BILL_AMT1 to BILL_AMT6 (6 months)")
 print(f"   Payment Amounts: PAY_AMT1 to PAY_AMT6 (6 months)")
 
-# ========== Preprocessing to [0,1] "Level of Truth" ==========
-print("\n🔄 Normalizing features to [0,1] 'level of truth' values...")
+# ========== Preprocessing to [0,1] - Higher = Higher Default Risk ==========
+print("\n🔄 Normalizing features to [0,1] where HIGHER values = HIGHER default risk...")
+print("   (Consistent semantic: all features point in same direction)")
 
 df_norm = df.copy()
 
-# LIMIT_BAL: Higher limit → lower default risk → negate later
-# Normalize to [0,1]
+# LIMIT_BAL: Higher limit → LOWER risk → REVERSE (1 - normalized)
 df_norm['LIMIT_BAL'] = (df['LIMIT_BAL'] - df['LIMIT_BAL'].min()) / (df['LIMIT_BAL'].max() - df['LIMIT_BAL'].min() + 1e-8)
-print(f"  ✅ LIMIT_BAL: normalized (higher = more creditworthy)")
+df_norm['LIMIT_BAL'] = 1 - df_norm['LIMIT_BAL']  # REVERSED: higher value = lower limit = higher risk
+print(f"  ✅ LIMIT_BAL: REVERSED (1=low limit/high risk, 0=high limit/low risk)")
 
-# SEX: 1=male, 2=female → Convert to binary
+# SEX: 1=male, 2=female → Convert to binary (keep as-is, no clear risk direction)
 df_norm['SEX'] = (df['SEX'] == 1).astype(float)  # 1 if male, 0 if female
 print(f"  ✅ SEX: binary (1=male, 0=female)")
 
 # EDUCATION: 1=graduate, 2=university, 3=high school, 4=others
-# Higher education → lower risk → reverse scale
-df_norm['EDUCATION'] = df['EDUCATION'].replace({0: 4, 5: 4, 6: 4})  # Consolidate unknowns to 'others'
-df_norm['EDUCATION'] = 1 - ((df_norm['EDUCATION'] - 1) / 3)  # Reverse: grad=1, others=0
-print(f"  ✅ EDUCATION: reversed (1=graduate, 0=others)")
+# Higher education → LOWER risk → REVERSE
+df_norm['EDUCATION'] = df['EDUCATION'].replace({0: 4, 5: 4, 6: 4})  # Consolidate unknowns
+df_norm['EDUCATION'] = (df_norm['EDUCATION'] - 1) / 3  # grad=0, others=1
+print(f"  ✅ EDUCATION: normalized (1=others/high risk, 0=graduate/low risk)")
 
-# MARRIAGE: 1=married, 2=single, 3=others → One-hot or binary
-df_norm['MARRIAGE'] = (df['MARRIAGE'] == 1).astype(float)  # 1 if married
-print(f"  ✅ MARRIAGE: binary (1=married, 0=single/others)")
+# MARRIAGE: 1=married, 2=single, 3=others
+# Married typically has lower risk → reverse
+df_norm['MARRIAGE'] = (df['MARRIAGE'] != 1).astype(float)  # 0 if married, 1 if single/others
+print(f"  ✅ MARRIAGE: binary (1=single/high risk, 0=married/low risk)")
 
-# AGE: Normalize
+# AGE: Normalize (assuming middle-age has lower risk, but keeping monotonic)
+# For simplicity, normalize as-is (older age interpretation varies)
 df_norm['AGE'] = (df['AGE'] - df['AGE'].min()) / (df['AGE'].max() - df['AGE'].min() + 1e-8)
 print(f"  ✅ AGE: normalized to [0,1]")
 
 # PAY_0 to PAY_6: Payment delay status
 # -2=no consumption, -1=pay duly, 0=revolving credit, 1+=months of delay
-# Higher delay → higher risk → normalize to [0,1] where 1=high delay
+# Higher delay → HIGHER risk (already monotonic, just normalize)
 for i in range(7):
     pay_col = f'PAY_{i}' if i > 0 else 'PAY_0'
     if pay_col in df.columns:
         # Clip extreme values and normalize
         df_norm[pay_col] = df[pay_col].clip(-2, 8)  # Cap at 8 months delay
         df_norm[pay_col] = (df_norm[pay_col] + 2) / 10  # Range [-2, 8] → [0, 1]
-        print(f"  ✅ {pay_col}: normalized (1=high delay, 0=pay duly)")
+        print(f"  ✅ {pay_col}: normalized (1=high delay/high risk, 0=pay duly/low risk)")
 
 # BILL_AMT1 to BILL_AMT6: Bill statement amounts
-# Use robust normalization (log transform + min-max)
+# Higher bills → HIGHER risk (use as-is after normalization)
 for i in range(1, 7):
     bill_col = f'BILL_AMT{i}'
     if bill_col in df.columns:
@@ -107,16 +110,19 @@ for i in range(1, 7):
         shifted = df[bill_col] - df[bill_col].min() + 1
         log_transformed = np.log1p(shifted)
         df_norm[bill_col] = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
-        print(f"  ✅ {bill_col}: log-transformed, normalized")
+        print(f"  ✅ {bill_col}: normalized (1=high bill/high risk, 0=low bill/low risk)")
 
 # PAY_AMT1 to PAY_AMT6: Payment amounts
-# Higher payment → lower risk → will negate if needed
+# Higher payment → LOWER risk → REVERSE
 for i in range(1, 7):
     pay_amt_col = f'PAY_AMT{i}'
     if pay_amt_col in df.columns:
         log_transformed = np.log1p(df[pay_amt_col])
-        df_norm[pay_amt_col] = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
-        print(f"  ✅ {pay_amt_col}: log-transformed, normalized")
+        normalized = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
+        df_norm[pay_amt_col] = 1 - normalized  # REVERSED: higher value = lower payment = higher risk
+        print(f"  ✅ {pay_amt_col}: REVERSED (1=low payment/high risk, 0=high payment/low risk)")
+
+print("\n✅ All features normalized consistently: HIGHER value = HIGHER default risk")
 
 # ========== Train/Test Split ==========
 print("\n📊 Splitting dataset...")
@@ -135,28 +141,24 @@ Y_test_tensor = torch.tensor(y_test.values.reshape(-1, 1), dtype=torch.float32).
 
 # ========== BACON Model Training ==========
 print("\n" + "=" * 80)
-print("🧠 Training BACON Model")
+print("🧠 Training BACON Model (No Transformation Layer)")
 print("=" * 80)
 
 import os
-model_path = "./best_bacon_credit_card.pth"
+model_path = "./best_bacon_credit_card_notrans.pth"
 
 # Check if trained model exists
 if os.path.exists(model_path):
     print("\n✅ Found existing trained model!")
     print(f"   Loading from: {model_path}")
     print("   (Delete this file to retrain from scratch)")
-    print("\n   ⚠️  NOTE: If pruning analysis is failing, delete the .pth file")
-    print("   The latest code includes force-freeze logic that ensures models are frozen.")
     
     bacon = baconNet(
         input_size=X_train.shape[1],
-        freeze_loss_threshold=0.15,
+        freeze_loss_threshold=0.25,
         weight_mode='fixed',
         aggregator='lsp.half_weight',
-        use_transformation_layer=True,
-        transformation_temperature=1.0,
-        transformation_use_gumbel=False,
+        use_transformation_layer=False,  # DISABLED
         max_permutations=400,
     )
     
@@ -197,37 +199,21 @@ if os.path.exists(model_path):
     skip_training = True
 else:
     print("\n⚙️  Configuration:")
-    print("   - Transformation Layer: Enabled (identity, negation, peak)")
-    print("   - Hierarchical Permutation: Enabled")
+    print("   - Transformation Layer: DISABLED")
+    print("   - Hierarchical Permutation: DISABLED (random search)")
     print("   - Aggregator: LSP (half_weight)")
-    print("   - Soft boundaries: 10% bleed ratio")
-    print("   - Freeze threshold: 0.25 (lower = easier to freeze)")
+    print("   - Freeze threshold: 0.25")
+    print("   - Max attempts: 100")
 
     bacon = baconNet(
         input_size=X_train.shape[1],
-        freeze_loss_threshold=0.25,  # Increased from 0.15 to make freezing easier
+        freeze_loss_threshold=0.25,
         weight_mode='fixed',
         aggregator='lsp.half_weight',
-        use_transformation_layer=True,
-        transformation_temperature=1.0,
-        transformation_use_gumbel=False,
+        use_transformation_layer=False,  # DISABLED
         max_permutations=40,
     )
     skip_training = False
-
-print("\n🔀 Hierarchical Permutation Search:")
-hierarchical_group_size = 6
-hierarchical_epochs = 8000
-num_features = X_train.shape[1]
-num_groups = (num_features + hierarchical_group_size - 1) // hierarchical_group_size
-import math
-num_coarse_perms = min(math.factorial(num_groups), 120)  # Cap at 120 permutations
-
-print(f"   Features: {num_features}")
-print(f"   Group size: {hierarchical_group_size}")
-print(f"   Groups: {num_groups}")
-print(f"   Permutations to try: {num_coarse_perms}")
-print(f"   Epochs per permutation: {hierarchical_epochs}")
 
 if not skip_training:
     print("\n⏳ Training (this may take several minutes)...\n")
@@ -237,11 +223,8 @@ if not skip_training:
         acceptance_threshold=0.90,
         max_epochs=15000,
         save_path=model_path,
-        use_hierarchical_permutation=True,
-        hierarchical_group_size=hierarchical_group_size,
-        hierarchical_epochs_per_attempt=hierarchical_epochs,
-        hierarchical_bleed_ratio=0.5,
-        hierarchical_bleed_decay=2.0
+        use_hierarchical_permutation=False,  # Random search
+        attempts=100,
     )
     
     # Force freeze if not already frozen (for pruning analysis)
@@ -321,7 +304,7 @@ print(f"\n📈 Comparison with Published Baselines:")
 print(f"   Logistic Regression:  ~0.77-0.78 AUC")
 print(f"   Random Forest:        ~0.76-0.78 AUC")
 print(f"   XGBoost:              ~0.77-0.80 AUC")
-print(f"   BACON:                 {test_auc:.4f} AUC")
+print(f"   BACON (no trans):      {test_auc:.4f} AUC")
 
 # ========== Interpretability Analysis ==========
 print("\n" + "=" * 80)
@@ -332,48 +315,12 @@ print("=" * 80)
 print("\n🌳 Learned Logical Tree Structure:\n")
 print_tree_structure(bacon.assembler, feature_names)
 
-# Transformation analysis
-if bacon.assembler.transformation_layer is not None:
-    print("\n🔄 Transformation Layer Analysis:")
-    print("=" * 80)
-    
-    trans_summary = bacon.assembler.transformation_layer.get_transformation_summary()
-    selected_transforms = bacon.assembler.transformation_layer.get_selected_transformations()
-    
-    identity_count = (selected_transforms == 0).sum().item()
-    negation_count = (selected_transforms == 1).sum().item()
-    peak_count = (selected_transforms == 2).sum().item()
-    
-    print(f"\n📊 Transformation Distribution:")
-    print(f"   Identity (x):        {identity_count} features ({identity_count/len(feature_names)*100:.1f}%)")
-    print(f"   Negation (1-x):      {negation_count} features ({negation_count/len(feature_names)*100:.1f}%)")
-    print(f"   Peak (1-|x-t|):      {peak_count} features ({peak_count/len(feature_names)*100:.1f}%)")
-    
-    # Top features by transformation
-    if negation_count > 0:
-        print(f"\n🔄 Features Using Negation (1-x):")
-        negated = [(feature_names[i], trans_summary[i]['probability']) 
-                   for i in range(len(feature_names)) 
-                   if trans_summary[i]['transformation'] == 'negation']
-        negated.sort(key=lambda x: x[1], reverse=True)
-        for feat, prob in negated[:10]:
-            print(f"   {feat:<20} (confidence: {prob*100:.1f}%)")
-    
-    if peak_count > 0:
-        print(f"\n🎯 Features Using Peak Transformation (1-|x-t|):")
-        peaks = [(feature_names[i], trans_summary[i]['probability'], trans_summary[i]['params'].get('peak_location', 'N/A'))
-                 for i in range(len(feature_names)) 
-                 if trans_summary[i]['transformation'] == 'peak']
-        peaks.sort(key=lambda x: x[1], reverse=True)
-        for feat, prob, peak_loc in peaks:
-            print(f"   {feat:<20} peak={peak_loc} (confidence: {prob*100:.1f}%)")
-
 # Feature importance through pruning
 print("\n🔍 Feature Importance (Progressive Pruning):")
 print("=" * 80)
 
 # Choose pruning metric
-PRUNING_METRIC = 'auc'  # Options: 'accuracy', 'auc'
+PRUNING_METRIC = 'accuracy'  # Options: 'accuracy', 'auc'
 print(f"   Metric: {PRUNING_METRIC.upper()}")
 print(f"   Removing features one-by-one to assess impact...\n")
 
@@ -426,12 +373,12 @@ if len(pruning_results) > 0:
                 label=f'Full Model {metric_label}: {baseline_metric:.4f}')
     plt.xlabel('Number of Features Removed', fontsize=12)
     plt.ylabel(f'Test {metric_label}', fontsize=12)
-    plt.title(f'Feature Pruning Impact on Model Performance ({metric_label})', fontsize=14)
+    plt.title(f'Feature Pruning Impact ({metric_label}, No Transformation)', fontsize=14)
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('feature_pruning_analysis.png', dpi=300)
-    print("💾 Saved: feature_pruning_analysis.png")
+    plt.savefig('feature_pruning_analysis_notrans.png', dpi=300)
+    print("💾 Saved: feature_pruning_analysis_notrans.png")
 
 print("\n" + "=" * 80)
 print("✅ Training and Analysis Complete!")

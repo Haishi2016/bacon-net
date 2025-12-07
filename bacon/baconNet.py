@@ -377,7 +377,7 @@ class baconNet(nn.Module):
                     
                     # Display epoch progress every 100 epochs
                     if (epoch + 1) % 100 == 0:
-                        if use_temperature_annealing:
+                        if use_temperature_annealing and not self.assembler.is_frozen:
                             perm_temp = self.assembler.input_to_leaf.temperature
                             if self.assembler.transformation_layer is not None:
                                 trans_temp = self.assembler.transformation_layer.temperature
@@ -396,13 +396,30 @@ class baconNet(nn.Module):
                         if self.assembler.transformation_layer is not None and trans_temp_decay_rate is not None:
                             self.assembler.transformation_layer.temperature *= trans_temp_decay_rate
                             # Don't let transformation temp go below permutation temp
-                            if self.assembler.transformation_layer.temperature < self.assembler.input_to_leaf.temperature:
-                                self.assembler.transformation_layer.temperature = self.assembler.input_to_leaf.temperature
+                            perm_temp = self.assembler.input_to_leaf.temperature
+                            if self.assembler.transformation_layer.temperature < perm_temp:
+                                self.assembler.transformation_layer.temperature = perm_temp
                         
                         # Freeze when permutation temperature is very low (nearly hard)
                         if self.assembler.input_to_leaf.temperature < perm_final_temp * 1.1:
-                            self.assembler.is_frozen = True
-                            logging.info(f"   ❄️  Permutation hardened at epoch {epoch + 1} (temp: {self.assembler.input_to_leaf.temperature:.3f})")
+                            if not self.assembler.is_frozen and hasattr(self.assembler.input_to_leaf, 'logits'):
+                                try:
+                                    logging.info(f"   ❄️  Permutation hardened at epoch {epoch + 1} (temp: {self.assembler.input_to_leaf.temperature:.3f})")
+                                    from bacon.frozonInputToLeaf import frozenInputToLeaf
+                                    # Get hard assignment from current soft permutation
+                                    soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                                    hard_perm = torch.argmax(soft_perm, dim=1)
+                                    self.assembler.locked_perm = hard_perm.clone().detach()
+                                    self.assembler.is_frozen = True
+                                    # Replace with frozen layer
+                                    self.assembler.input_to_leaf = frozenInputToLeaf(
+                                        self.assembler.locked_perm,
+                                        self.assembler.original_input_size
+                                    ).to(self.assembler.device)
+                                    logging.info(f"   🔒 Successfully frozen model (locked_perm created)")
+                                except Exception as e:
+                                    logging.warning(f"   ⚠️ Failed to freeze on hardening: {e}")
+                                    self.assembler.is_frozen = True  # Set flag anyway
                     
                     # ADAPTIVE REHEATING: Check periodically if we should escape current basin
                     # Key insight: Don't wait for plateau - proactively check if we're making good enough progress
@@ -522,7 +539,7 @@ class baconNet(nn.Module):
                     # BUT only if temperature is low enough that the solution is stable
                     if len(accuracy_history) > 0 and accuracy_history[-1] >= 0.999:
                         # Check if permutation is stable (temperature low or frozen)
-                        if use_temperature_annealing:
+                        if use_temperature_annealing and not self.assembler.is_frozen:
                             current_perm_temp = self.assembler.input_to_leaf.temperature
                             permutation_stable = current_perm_temp < 1.0  # Temperature cool enough for stable solution
                         else:
@@ -537,19 +554,28 @@ class baconNet(nn.Module):
 
                 # Force freeze if not already frozen (for pruning and analysis)
                 if not self.assembler.is_frozen:
+                    logging.info(f"   📋 Model is not frozen, checking if force-freeze is possible...")
                     if hasattr(self.assembler.input_to_leaf, 'logits'):
-                        logging.info(f"   🔒 Force-freezing model (loss threshold not reached)")
-                        from bacon.frozonInputToLeaf import frozenInputToLeaf
-                        # Get hard assignment from current soft permutation
-                        soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
-                        hard_perm = torch.argmax(soft_perm, dim=1)
-                        self.assembler.locked_perm = hard_perm.clone().detach()
-                        self.assembler.is_frozen = True
-                        # Replace with frozen layer
-                        self.assembler.input_to_leaf = frozenInputToLeaf(
-                            self.assembler.locked_perm,
-                            self.assembler.original_input_size
-                        ).to(self.assembler.device)
+                        try:
+                            logging.info(f"   🔒 Force-freezing model (loss threshold not reached)")
+                            from bacon.frozonInputToLeaf import frozenInputToLeaf
+                            # Get hard assignment from current soft permutation
+                            soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                            hard_perm = torch.argmax(soft_perm, dim=1)
+                            self.assembler.locked_perm = hard_perm.clone().detach()
+                            self.assembler.is_frozen = True
+                            # Replace with frozen layer
+                            self.assembler.input_to_leaf = frozenInputToLeaf(
+                                self.assembler.locked_perm,
+                                self.assembler.original_input_size
+                            ).to(self.assembler.device)
+                            logging.info(f"   ✅ Successfully force-frozen model")
+                        except Exception as e:
+                            logging.warning(f"   ⚠️ Failed to force-freeze model: {e}")
+                    else:
+                        logging.warning(f"   ⚠️ Cannot force-freeze: input_to_leaf has no 'logits' attribute")
+                else:
+                    logging.info(f"   ✅ Model already frozen naturally during training")
 
                 # Always evaluate each attempt, regardless of freeze status
                 # This ensures we track the best permutation even if it didn't fully freeze
