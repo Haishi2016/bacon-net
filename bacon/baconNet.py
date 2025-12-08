@@ -36,6 +36,14 @@ class baconNet(nn.Module):
         permutation_final_temperature (float, optional): Final temperature for permutation annealing. Defaults to 0.1. Lower = harder final permutation.
         transformation_initial_temperature (float, optional): Starting temperature for transformation layer. Defaults to 1.0. Should be lower than permutation since transformation is simpler (2^n vs n! states).
         transformation_final_temperature (float, optional): Final temperature for transformation layer. Defaults to 0.1. Same as permutation final temp.
+        loss_weight_main (float, optional): Weight for main BCE loss. Defaults to 1.0. 
+        loss_weight_perm_entropy (float, optional): Weight for permutation entropy regularization. Defaults to 0.0. Higher = encourage exploration. Typical range: 0.0-0.1.
+        loss_weight_trans_entropy (float, optional): Weight for transformation entropy regularization. Defaults to 0.0. Higher = encourage decisive transformation selection. Typical range: 0.0-0.1.
+        lr_permutation (float, optional): Learning rate for permutation layer. Defaults to 0.3. Higher = faster exploration of feature orderings.
+        lr_transformation (float, optional): Learning rate for transformation layer. Defaults to 0.5. Higher = faster transformation selection.
+        lr_aggregator (float, optional): Learning rate for aggregator weights. Defaults to 0.1. Lower = more stable tree structure.
+        lr_other (float, optional): Learning rate for other parameters. Defaults to 0.1.
+        use_class_weighting (bool, optional): Whether to apply class weighting for imbalanced data. Defaults to True. When True, penalizes minority class errors more heavily (pos_weight = neg_count/pos_count). When False, uses standard BCE loss (original behavior).
     """
     def __init__(self, input_size, 
                  freeze_loss_threshold=0.07, 
@@ -60,7 +68,15 @@ class baconNet(nn.Module):
                  permutation_initial_temperature=5.0,
                  permutation_final_temperature=0.1,
                  transformation_initial_temperature=1.0,
-                 transformation_final_temperature=0.1):
+                 transformation_final_temperature=0.1,
+                 loss_weight_main=1.0,
+                 loss_weight_perm_entropy=0.0,
+                 loss_weight_trans_entropy=0.0,
+                 lr_permutation=0.3,
+                 lr_transformation=0.5,
+                 lr_aggregator=0.1,
+                 lr_other=0.1,
+                 use_class_weighting=True):
         super(baconNet, self).__init__()        
         if aggregator not in _aggregator_registry:
             raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
@@ -76,6 +92,21 @@ class baconNet(nn.Module):
         self.permutation_final_temperature = permutation_final_temperature
         self.transformation_initial_temperature = transformation_initial_temperature
         self.transformation_final_temperature = transformation_final_temperature
+        
+        # Loss component weights (normalized internally during training)
+        self.loss_weight_main = loss_weight_main  # Main BCE loss
+        self.loss_weight_perm_entropy = loss_weight_perm_entropy  # Permutation entropy regularization
+        self.loss_weight_trans_entropy = loss_weight_trans_entropy  # Transformation entropy regularization
+        
+        # Learning rates for different parameter groups
+        self.lr_permutation = lr_permutation
+        self.lr_transformation = lr_transformation
+        self.lr_aggregator = lr_aggregator
+        self.lr_other = lr_other
+        
+        # Class weighting for imbalanced data
+        self.use_class_weighting = use_class_weighting
+        
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
                                             weight_mode=weight_mode,
@@ -309,8 +340,96 @@ class baconNet(nn.Module):
                     self.assembler.auto_refine = True
                 self.assembler._auto_refine_every = 10
 
-                optimizer = torch.optim.Adam(self.assembler.parameters(), lr=0.1)
-                criterion = nn.BCELoss()
+                # Separate parameter groups with different learning rates
+                # This allows adjusting learning pressure for different components
+                param_groups = []
+                
+                # Group 1: Permutation layer (input_to_leaf)
+                # Higher LR - needs to explore large combinatorial space (n! permutations)
+                if hasattr(self.assembler, 'input_to_leaf') and hasattr(self.assembler.input_to_leaf, 'logits'):
+                    param_groups.append({
+                        'params': [self.assembler.input_to_leaf.logits],
+                        'lr': self.lr_permutation,
+                        'name': 'permutation'
+                    })
+                
+                # Group 2: Transformation layer (if exists)
+                # Highest LR - simpler problem (2^n states), can move faster
+                if self.assembler.transformation_layer is not None:
+                    trans_params = list(self.assembler.transformation_layer.parameters())
+                    if trans_params:
+                        param_groups.append({
+                            'params': trans_params,
+                            'lr': self.lr_transformation,
+                            'name': 'transformation'
+                        })
+                
+                # Group 3: Aggregator weights (only if it has parameters)
+                # Lower LR - tree structure should be more stable
+                if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'parameters'):
+                    try:
+                        agg_params = list(self.assembler.aggregator.parameters())
+                        if agg_params:
+                            param_groups.append({
+                                'params': agg_params,
+                                'lr': self.lr_aggregator,
+                                'name': 'aggregator'
+                            })
+                    except:
+                        pass  # Some aggregators don't have learnable parameters
+                
+                # Group 4: Any other parameters (fallback)
+                # Conservative LR for general weights
+                registered_params = set()
+                for group in param_groups:
+                    for p in group['params']:
+                        registered_params.add(id(p))
+                
+                other_params = [p for p in self.assembler.parameters() 
+                               if id(p) not in registered_params]
+                if other_params:
+                    param_groups.append({
+                        'params': other_params,
+                        'lr': self.lr_other,
+                        'name': 'other'
+                    })
+                
+                # Create optimizer with parameter groups
+                optimizer = torch.optim.Adam(param_groups)
+                
+                # Log learning rates
+                logging.info(f"   📚 Learning rates:")
+                for group in param_groups:
+                    logging.info(f"      {group['name']}: {group['lr']}")
+                
+                # Log loss weighting configuration
+                total_weight = self.loss_weight_main + self.loss_weight_perm_entropy + self.loss_weight_trans_entropy
+                if total_weight > 0:
+                    norm_main = self.loss_weight_main / total_weight
+                    norm_perm = self.loss_weight_perm_entropy / total_weight
+                    norm_trans = self.loss_weight_trans_entropy / total_weight
+                    if self.loss_weight_perm_entropy > 0 or self.loss_weight_trans_entropy > 0:
+                        logging.info(f"   ⚖️  Loss weights (normalized): main={norm_main:.3f}, perm_entropy={norm_perm:.3f}, trans_entropy={norm_trans:.3f}")
+                
+                # Compute class weights for imbalanced data (if enabled)
+                # pos_weight = (# negative samples) / (# positive samples)
+                if self.use_class_weighting:
+                    pos_count = y.sum().item()
+                    neg_count = len(y) - pos_count
+                    if pos_count > 0:
+                        pos_weight = neg_count / pos_count
+                        logging.info(f"   ⚖️  Class weighting enabled: {pos_count} positives, {neg_count} negatives")
+                        logging.info(f"   ⚖️  Positive class weight: {pos_weight:.2f}x (penalizes defaults {pos_weight:.2f}x more)")
+                        # BCELoss doesn't support pos_weight directly, so we'll use weighted loss manually
+                        criterion = nn.BCELoss(reduction='none')
+                    else:
+                        logging.warning(f"   ⚠️  Class weighting enabled but no positive samples found, using standard BCE")
+                        criterion = nn.BCELoss()
+                        pos_weight = None
+                else:
+                    logging.info(f"   ⚖️  Class weighting disabled: using standard BCE loss (original behavior)")
+                    criterion = nn.BCELoss()
+                    pos_weight = None
 
                 # Use epochs_per_attempt instead of max_epochs for hierarchical mode
                 actual_max_epochs = epochs_per_attempt
@@ -320,6 +439,14 @@ class baconNet(nn.Module):
                 accuracy_history = []  # Track accuracy for smarter plateau detection
                 last_reheat_epoch = -1000  # Track when we last reheated
                 min_epochs_between_reheats = 500  # Minimum gap between reheating attempts
+                
+                # Adaptive temperature annealing tracking
+                best_loss = float('inf')
+                epochs_since_improvement = 0
+                improvement_patience = 150  # Pause temp decay if no improvement for this many epochs
+                improvement_window = 100  # Check improvement over this many epochs (larger = more stable)
+                min_improvement_delta = 0.005  # Minimum loss decrease over window (0.5% improvement required)
+                temp_paused = False
                 
                 # Temperature annealing setup
                 use_temperature_annealing = (hasattr(self.assembler, 'input_to_leaf') and 
@@ -353,7 +480,36 @@ class baconNet(nn.Module):
                     self.assembler.train()
                     optimizer.zero_grad(set_to_none=True)
                     outputs = self.assembler(x, targets=y)
-                    loss = criterion(outputs, y) * self.assembler.loss_amplifier
+                    
+                    # Compute main BCE loss with optional class weighting for imbalanced data
+                    if self.use_class_weighting and pos_weight is not None:
+                        # Apply class weights: penalize misclassified positives more
+                        bce_losses = criterion(outputs, y)
+                        weights = torch.where(y == 1, pos_weight, 1.0)
+                        main_loss = (bce_losses * weights).mean() * self.assembler.loss_amplifier
+                    else:
+                        main_loss = criterion(outputs, y) * self.assembler.loss_amplifier
+                    
+                    # Compute composite loss with optional regularization terms
+                    loss = self.loss_weight_main * main_loss
+                    
+                    # Add permutation entropy regularization (encourage exploration or exploitation)
+                    if self.loss_weight_perm_entropy > 0 and hasattr(self.assembler.input_to_leaf, 'logits'):
+                        # Compute entropy of soft permutation matrix
+                        # H = -sum(p * log(p)) where p = softmax(logits)
+                        perm_probs = torch.softmax(self.assembler.input_to_leaf.logits / self.assembler.input_to_leaf.temperature, dim=1)
+                        perm_entropy = -(perm_probs * torch.log(perm_probs + 1e-10)).sum(dim=1).mean()
+                        # Negative entropy = encourage decisive permutation (low entropy)
+                        # Positive weight = encourage exploration (high entropy)
+                        loss = loss - self.loss_weight_perm_entropy * perm_entropy
+                    
+                    # Add transformation entropy regularization (encourage decisive selection)
+                    if self.loss_weight_trans_entropy > 0 and self.assembler.transformation_layer is not None:
+                        # Compute entropy of transformation selection
+                        trans_probs = torch.softmax(self.assembler.transformation_layer.logits / self.assembler.transformation_layer.temperature, dim=1)
+                        trans_entropy = -(trans_probs * torch.log(trans_probs + 1e-10)).sum(dim=1).mean()
+                        # Negative entropy = encourage decisive transformation choice (low entropy)
+                        loss = loss - self.loss_weight_trans_entropy * trans_entropy
 
                     # Optional weight regularization (only if trainable)
                     if self.assembler.weight_mode == "trainable":
@@ -387,18 +543,56 @@ class baconNet(nn.Module):
                         else:
                             logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}")
                     
-                    # TEMPERATURE ANNEALING: Gradually cool down both layers
+                    # ADAPTIVE TEMPERATURE ANNEALING: Track loss improvement
                     if use_temperature_annealing and not self.assembler.is_frozen:
-                        # Cool permutation layer
-                        self.assembler.input_to_leaf.temperature *= perm_temp_decay_rate
+                        # Track if loss is improving (check over a window for gradual improvements)
+                        current_loss = loss.item()
                         
-                        # Cool transformation layer independently (faster cooling)
-                        if self.assembler.transformation_layer is not None and trans_temp_decay_rate is not None:
-                            self.assembler.transformation_layer.temperature *= trans_temp_decay_rate
-                            # Don't let transformation temp go below permutation temp
-                            perm_temp = self.assembler.input_to_leaf.temperature
-                            if self.assembler.transformation_layer.temperature < perm_temp:
-                                self.assembler.transformation_layer.temperature = perm_temp
+                        # Update best_loss if current is better (for logging)
+                        if current_loss < best_loss:
+                            best_loss = current_loss
+                        
+                        # Check improvement over a window (catches gradual progress)
+                        if len(loss_history) >= improvement_window:
+                            old_loss = loss_history[-improvement_window]
+                            loss_improvement = old_loss - current_loss
+                            
+                            if loss_improvement > min_improvement_delta:
+                                # Making progress over the window
+                                epochs_since_improvement = 0
+                                if temp_paused:
+                                    logging.info(f"   ▶️  Resuming temperature annealing (loss improved {loss_improvement:.4f} over {improvement_window} epochs)")
+                                    temp_paused = False
+                            else:
+                                # Not enough improvement over window
+                                epochs_since_improvement += 1
+                        else:
+                            # Not enough history yet, assume making progress
+                            epochs_since_improvement = 0
+                        
+                        # Only anneal temperature if making progress
+                        should_anneal = epochs_since_improvement < improvement_patience
+                        
+                        if should_anneal:
+                            # Cool permutation layer
+                            self.assembler.input_to_leaf.temperature *= perm_temp_decay_rate
+                            
+                            # Cool transformation layer independently (faster cooling)
+                            if self.assembler.transformation_layer is not None and trans_temp_decay_rate is not None:
+                                self.assembler.transformation_layer.temperature *= trans_temp_decay_rate
+                                # Don't let transformation temp go below permutation temp
+                                perm_temp = self.assembler.input_to_leaf.temperature
+                                if self.assembler.transformation_layer.temperature < perm_temp:
+                                    self.assembler.transformation_layer.temperature = perm_temp
+                        else:
+                            # Pause temperature annealing - keep exploring at current temperature
+                            if not temp_paused:
+                                perm_temp = self.assembler.input_to_leaf.temperature
+                                trans_temp = self.assembler.transformation_layer.temperature if self.assembler.transformation_layer is not None else None
+                                logging.info(f"   ⏸️  Pausing temperature annealing (no improvement for {improvement_patience} epochs)")
+                                trans_temp_str = f"{trans_temp:.3f}" if trans_temp is not None else "N/A"
+                                logging.info(f"   🌡️  Frozen temps: Perm={perm_temp:.3f}, Trans={trans_temp_str}")
+                                temp_paused = True
                         
                         # Freeze when permutation temperature is very low (nearly hard)
                         if self.assembler.input_to_leaf.temperature < perm_final_temp * 1.1:
@@ -609,6 +803,8 @@ class baconNet(nn.Module):
                                 best_locked_perm,
                                 self.assembler.original_input_size
                             ).to(self.assembler.device)
+                            # CRITICAL: Load the weights into the frozen layer
+                            self.assembler.load_state_dict(best_model)
                         
                         logging.info(f"   💾 Saving intermediate best model to {save_path}")
                         self.save_model(save_path)
