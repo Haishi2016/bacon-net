@@ -110,7 +110,8 @@ class PeakTransformation(ParameterizedTransformation):
         # Get peak location for each feature
         # peak_loc shape: (num_features,)
         # x shape: (batch_size, num_features)
-        peak_loc = params['peak_loc']
+        # Apply sigmoid to keep peak_loc in [0,1] range
+        peak_loc = torch.sigmoid(params['peak_loc'])
         
         # Compute distance from peak: |x - t|
         # Result shape: (batch_size, num_features)
@@ -121,8 +122,115 @@ class PeakTransformation(ParameterizedTransformation):
         return 1.0 - distance
     
     def get_param_summary(self, params, feature_idx):
-        peak_loc = params['peak_loc'][feature_idx].item()
+        peak_loc = torch.sigmoid(params['peak_loc'][feature_idx]).item()
         return {'peak_location': f"{peak_loc:.3f}"}
+
+
+class ValleyTransformation(ParameterizedTransformation):
+    """
+    Valley (Negative Peak) transformation: Low when x is near learned valley location t, high otherwise.
+    
+    Formula: f(x) = |x - t|
+    
+    This models features where a specific value should be avoided (e.g., moderate debt is risky,
+    very low or very high might be safer).
+    
+    Each feature has its own learnable valley location t ∈ [0, 1].
+    """
+    def __init__(self, num_features):
+        super().__init__(num_features, 'valley')
+    
+    def initialize_parameters(self, device='cpu'):
+        # Initialize valley locations at 0.5 (middle of range)
+        valley_locs = nn.Parameter(torch.ones(self.num_features, device=device) * 0.5)
+        return {'valley_loc': valley_locs}
+    
+    def forward(self, x, params):
+        # Get valley location for each feature
+        # Apply sigmoid to keep valley_loc in [0,1] range
+        valley_loc = torch.sigmoid(params['valley_loc'])
+        
+        # Compute distance from valley: |x - t|
+        distance = torch.abs(x - valley_loc.unsqueeze(0))
+        
+        # Transform: |x - t|
+        # Low when near valley, high when far
+        return distance
+    
+    def get_param_summary(self, params, feature_idx):
+        valley_loc = torch.sigmoid(params['valley_loc'][feature_idx]).item()
+        return {'valley_location': f"{valley_loc:.3f}"}
+
+
+class StepUpTransformation(ParameterizedTransformation):
+    """
+    Step Up transformation: Ramps from 0 to 1 at threshold t, then stays at 1.
+    
+    Formula: f(x) = min(x/t, 1) for x ≥ 0, where division by t creates the ramp.
+    More precisely: f(x) = 0 if x ≤ 0; (x/t) if 0 < x < t; 1 if x ≥ t
+    
+    This models features where values above a threshold are all equally important
+    (e.g., "debt exists" vs "no debt").
+    
+    Each feature has its own learnable threshold t ∈ (0, 1].
+    """
+    def __init__(self, num_features):
+        super().__init__(num_features, 'step_up')
+    
+    def initialize_parameters(self, device='cpu'):
+        # Initialize thresholds at 0.5 (middle of range)
+        # Add small epsilon to avoid division by zero
+        thresholds = nn.Parameter(torch.ones(self.num_features, device=device) * 0.5)
+        return {'threshold': thresholds}
+    
+    def forward(self, x, params):
+        # Get threshold for each feature
+        # Apply sigmoid to keep in [0,1], then scale to [0.01,1] to avoid division by zero
+        threshold = torch.sigmoid(params['threshold']) * 0.99 + 0.01
+        
+        # Ramp: x/t, clamped to [0, 1]
+        # When x < t: gradually increases from 0 to 1
+        # When x ≥ t: stays at 1
+        return torch.clamp(x / threshold.unsqueeze(0), min=0.0, max=1.0)
+    
+    def get_param_summary(self, params, feature_idx):
+        threshold = (torch.sigmoid(params['threshold'][feature_idx]) * 0.99 + 0.01).item()
+        return {'threshold': f"{threshold:.3f}"}
+
+
+class StepDownTransformation(ParameterizedTransformation):
+    """
+    Step Down transformation: Ramps from 1 to 0 at threshold t, then stays at 0.
+    
+    Formula: f(x) = max(1 - x/t, 0) for x ≥ 0
+    More precisely: f(x) = 1 if x ≤ 0; (1 - x/t) if 0 < x < t; 0 if x ≥ t
+    
+    This models features where values above a threshold are all equally unimportant
+    (e.g., "low income is risky" but "medium and high income are equally safe").
+    
+    Each feature has its own learnable threshold t ∈ (0, 1].
+    """
+    def __init__(self, num_features):
+        super().__init__(num_features, 'step_down')
+    
+    def initialize_parameters(self, device='cpu'):
+        # Initialize thresholds at 0.5 (middle of range)
+        thresholds = nn.Parameter(torch.ones(self.num_features, device=device) * 0.5)
+        return {'threshold': thresholds}
+    
+    def forward(self, x, params):
+        # Get threshold for each feature
+        # Apply sigmoid to keep in [0,1], then scale to [0.01,1] to avoid division by zero
+        threshold = torch.sigmoid(params['threshold']) * 0.99 + 0.01
+        
+        # Inverse ramp: 1 - x/t, clamped to [0, 1]
+        # When x < t: gradually decreases from 1 to 0
+        # When x ≥ t: stays at 0
+        return torch.clamp(1.0 - x / threshold.unsqueeze(0), min=0.0, max=1.0)
+    
+    def get_param_summary(self, params, feature_idx):
+        threshold = (torch.sigmoid(params['threshold'][feature_idx]) * 0.99 + 0.01).item()
+        return {'threshold': f"{threshold:.3f}"}
 
 
 class TransformationLayer(nn.Module):

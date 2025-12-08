@@ -7,7 +7,10 @@ from bacon.transformationLayer import (
     TransformationLayer,
     IdentityTransformation,
     NegationTransformation,
-    PeakTransformation
+    PeakTransformation,
+    ValleyTransformation,
+    StepUpTransformation,
+    StepDownTransformation
 )
 import torch.optim as optim
 import numpy as np
@@ -112,9 +115,12 @@ class binaryTreeLogicNet(nn.Module):
             # Create default transformations if none provided
             if transformations is None:
                 transformations = [
-                    IdentityTransformation(input_size),
-                    NegationTransformation(input_size),
-                    PeakTransformation(input_size)
+                    IdentityTransformation(input_size),      # f(x) = x
+                    NegationTransformation(input_size),      # f(x) = 1 - x
+                    PeakTransformation(input_size),          # f(x) = 1 - |x - t| (high at peak)
+                    ValleyTransformation(input_size),        # f(x) = |x - t| (low at valley)
+                    StepUpTransformation(input_size),        # f(x) ramps 0→1 at threshold
+                    StepDownTransformation(input_size)       # f(x) ramps 1→0 at threshold
                 ]
             
             self.transformation_layer = TransformationLayer(
@@ -270,7 +276,15 @@ class binaryTreeLogicNet(nn.Module):
             idx = combine.node_index
             a_scaled = biases[idx]
             w = weights[idx]
-            out = self.aggregator.aggregate(left, right, a_scaled, w, 1-w)
+            
+            # Handle weight indexing for different weight modes
+            if self.weight_mode == 'fixed':
+                # Fixed weights are stored as single values, index them properly
+                w_val = w[0] if hasattr(w, '__getitem__') and len(w.shape) > 0 else w
+                out = self.aggregator.aggregate(left, right, a_scaled, w_val, 1-w_val)
+            else:
+                # Trainable weights
+                out = self.aggregator.aggregate(left, right, a_scaled, w, 1-w)
 
             combine.node_index += 1
             return out

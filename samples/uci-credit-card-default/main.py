@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, accuracy_score, precision_recall_fscore_support, precision_recall_curve
 import torch
 from bacon.baconNet import baconNet
+from bacon.hierarchicalBaconNet import HierarchicalBaconNet
 from bacon.visualization import visualize_tree_structure, print_tree_structure
 import logging
 import matplotlib.pyplot as plt
@@ -49,8 +50,8 @@ target_col = 'default payment next month'
 y = df[target_col]
 df = df.drop(target_col, axis=1)
 
-# Feature names
-feature_names = df.columns.tolist()
+# Feature names (will be updated after feature engineering)
+original_feature_names = df.columns.tolist()
 
 print(f"\n📋 Feature Categories:")
 print(f"   Demographics: SEX, EDUCATION, MARRIAGE, AGE")
@@ -66,48 +67,48 @@ df_norm = df.copy()
 
 # LIMIT_BAL: Higher limit → lower default risk → negate later
 # Normalize to [0,1]
-df_norm['LIMIT_BAL'] = (df['LIMIT_BAL'] - df['LIMIT_BAL'].min()) / (df['LIMIT_BAL'].max() - df['LIMIT_BAL'].min() + 1e-8)
+df_norm['LIMIT_BAL'] = 1 - (df['LIMIT_BAL'] - df['LIMIT_BAL'].min()) / (df['LIMIT_BAL'].max() - df['LIMIT_BAL'].min() + 1e-8)
 print(f"  ✅ LIMIT_BAL: normalized (higher = more creditworthy)")
 
 # SEX: 1=male, 2=female → Convert to binary
-df_norm['SEX'] = (df['SEX'] == 1).astype(float)  # 1 if male, 0 if female
-print(f"  ✅ SEX: binary (1=male, 0=female)")
+df_norm['SEX'] = (df['SEX'] == 2).astype(float)  # 1 if female, 0 if male
+print(f"  ✅ SEX: binary (1=female, 0=male)")
 
 # EDUCATION: 1=graduate, 2=university, 3=high school, 4=others
 # Higher education → lower risk → reverse scale
 df_norm['EDUCATION'] = df['EDUCATION'].replace({0: 4, 5: 4, 6: 4})  # Consolidate unknowns to 'others'
-df_norm['EDUCATION'] = 1 - ((df_norm['EDUCATION'] - 1) / 3)  # Reverse: grad=1, others=0
-print(f"  ✅ EDUCATION: reversed (1=graduate, 0=others)")
+df_norm['EDUCATION'] = ((df_norm['EDUCATION'] - 1) / 3)  # Reverse: grad=1, others=0
+print(f"  ✅ EDUCATION: (0=graduate, 1=others)")
 
 # MARRIAGE: 1=married, 2=single, 3=others → One-hot or binary
-df_norm['MARRIAGE'] = (df['MARRIAGE'] == 1).astype(float)  # 1 if married
-print(f"  ✅ MARRIAGE: binary (1=married, 0=single/others)")
+df_norm['MARRIAGE'] = (df['MARRIAGE'] != 1).astype(float)  # 0 if married, 1 if single/others
+print(f"  ✅ MARRIAGE: binary (0=married, 1=single/others)")
 
 # AGE: Normalize
 df_norm['AGE'] = (df['AGE'] - df['AGE'].min()) / (df['AGE'].max() - df['AGE'].min() + 1e-8)
 print(f"  ✅ AGE: normalized to [0,1]")
 
 # PAY_0 to PAY_6: Payment delay status
-# -2=no consumption, -1=pay duly, 0=revolving credit, 1+=months of delay
+# Official scale: -1=pay duly, 1-9=months of delay (some data has 0 and -2 as anomalies)
 # Higher delay → higher risk → normalize to [0,1] where 1=high delay
 for i in range(7):
-    pay_col = f'PAY_{i}' if i > 0 else 'PAY_0'
+    pay_col = f'PAY_{i}'
     if pay_col in df.columns:
-        # Clip extreme values and normalize
-        df_norm[pay_col] = df[pay_col].clip(-2, 8)  # Cap at 8 months delay
-        df_norm[pay_col] = (df_norm[pay_col] + 2) / 10  # Range [-2, 8] → [0, 1]
+        # Clip to documented range and normalize
+        df_norm[pay_col] = df[pay_col].clip(-1, 9)  # -1 to 9 months
+        df_norm[pay_col] = (df_norm[pay_col] + 1) / 10  # Range [-1, 9] → [0, 1]
         print(f"  ✅ {pay_col}: normalized (1=high delay, 0=pay duly)")
 
 # BILL_AMT1 to BILL_AMT6: Bill statement amounts
-# Use robust normalization (log transform + min-max)
+# Negative bills = overpayment/credit balance, treat as 0 debt
 for i in range(1, 7):
     bill_col = f'BILL_AMT{i}'
     if bill_col in df.columns:
-        # Some bills can be negative (overpayment), shift to positive
-        shifted = df[bill_col] - df[bill_col].min() + 1
-        log_transformed = np.log1p(shifted)
+        # Clip negative values (overpayment) to 0, then log-transform and normalize
+        clipped = df[bill_col].clip(lower=0)
+        log_transformed = np.log1p(clipped)
         df_norm[bill_col] = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
-        print(f"  ✅ {bill_col}: log-transformed, normalized")
+        print(f"  ✅ {bill_col}: clipped at 0, log-transformed, normalized")
 
 # PAY_AMT1 to PAY_AMT6: Payment amounts
 # Higher payment → lower risk → will negate if needed
@@ -117,6 +118,110 @@ for i in range(1, 7):
         log_transformed = np.log1p(df[pay_amt_col])
         df_norm[pay_amt_col] = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
         print(f"  ✅ {pay_amt_col}: log-transformed, normalized")
+
+# ========== Payment Ratio Feature Engineering ==========
+print("\n💰 Engineering Payment Ratio Features...")
+# Create payment ratio features: PAY_AMT / BILL_AMT for each month
+# Higher ratio = paying more of the bill = lower default risk
+for i in range(1, 7):
+    bill_col = f'BILL_AMT{i}'
+    pay_col = f'PAY_AMT{i}'
+    ratio_col = f'PAY_RATIO_{i}'
+    
+    if bill_col in df_norm.columns and pay_col in df_norm.columns:
+        # Calculate ratio, handling division by zero
+        # If bill is 0 (or very small after normalization), set ratio to 1 (paid in full)
+        bill_values = df[bill_col].clip(lower=1)  # Avoid division by zero
+        pay_values = df[pay_col]
+        
+        # Ratio = payment / bill, clipped to [0, 2] (paying 2x bill is same as paying 1x)
+        ratio = (pay_values / bill_values).clip(0, 2)
+        
+        # Normalize to [0, 1]
+        df_norm[ratio_col] = ratio / 2.0
+        print(f"  ✅ {ratio_col}: PAY_AMT{i} / BILL_AMT{i}, normalized")
+
+# Update feature names
+feature_names = df_norm.columns.tolist()
+print(f"\n📊 Final feature count: {len(feature_names)}")
+
+# ========== Feature Selection ==========
+# Change this to select specific columns
+# Examples:
+#   SELECTED_COLUMNS = None  # Use all features
+#   SELECTED_COLUMNS = ['PAY_0', 'PAY_1', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6']  # Just payment status
+#   SELECTED_COLUMNS = ['LIMIT_BAL', 'AGE', 'PAY_0']  # Custom subset
+
+SELECTED_COLUMNS = None
+
+# ========== Hierarchical Structure Definition ==========
+# Define feature groups for hierarchical BACON
+# Set to None to use flat BACON instead
+USE_HIERARCHICAL = True
+
+if USE_HIERARCHICAL:
+    # Define groups based on domain knowledge
+    # Each group will be processed by a sub-tree (preserving order)
+    # Then groups are combined in global tree (learned ordering)
+    
+    # Get all feature names from df_norm
+    all_features = df_norm.columns.tolist()
+    
+    # Build feature groups with indices
+    # Only define MULTI-FEATURE groups here
+    # Single features not in any group will be added automatically as ungrouped
+    
+    # Ignore raw BILL_AMT and PAY_AMT since we're using engineered PAY_RATIO features
+    IGNORED_FEATURES = [col for col in all_features if col.startswith('BILL_AMT') or col.startswith('PAY_AMT')]
+    
+    # Remove ignored features from dataframe FIRST
+    if len(IGNORED_FEATURES) > 0:
+        df_norm = df_norm.drop(columns=IGNORED_FEATURES)
+        all_features = df_norm.columns.tolist()  # Update feature list
+        print(f"\n🗑️  Removed {len(IGNORED_FEATURES)} ignored features: {', '.join(IGNORED_FEATURES)}")
+    
+    # NOW build feature groups with corrected indices
+    FEATURE_GROUPS = {
+        'payment_history': [i for i, col in enumerate(all_features) if col.startswith('PAY_') and not col.startswith('PAY_AMT') and not col.startswith('PAY_RATIO')],
+        'payment_ratios': [i for i, col in enumerate(all_features) if col.startswith('PAY_RATIO')],
+        # 'demographics': [i for i, col in enumerate(all_features) if col in ['SEX', 'EDUCATION', 'MARRIAGE', 'AGE']],
+    }
+    
+    # Remove empty groups
+    FEATURE_GROUPS = {k: v for k, v in FEATURE_GROUPS.items() if len(v) > 0}
+    
+    # Find ungrouped features (not in any group)
+    all_grouped_indices = set()
+    for indices in FEATURE_GROUPS.values():
+        all_grouped_indices.update(indices)
+    
+    ungrouped_indices = [i for i in range(len(all_features)) if i not in all_grouped_indices]
+    ungrouped_features = [all_features[i] for i in ungrouped_indices]
+    
+    print(f"\n🌳 Hierarchical BACON Structure:")
+    print(f"   User-defined groups: {len(FEATURE_GROUPS)} (processed by sub-trees)")
+    for group_name, indices in FEATURE_GROUPS.items():
+        group_features = [all_features[i] for i in indices]
+        print(f"   - {group_name}: {len(indices)} features ({', '.join(group_features)})")
+    
+    if len(ungrouped_features) > 0:
+        print(f"   Ungrouped features: {len(ungrouped_features)} (joined directly to global tree)")
+        print(f"   - {', '.join(ungrouped_features)}")
+    
+    print(f"\n🔍 Verification:")
+    print(f"   Total features after filtering: {len(all_features)}")
+    print(f"   Features in groups: {sum(len(v) for v in FEATURE_GROUPS.values())}")
+    print(f"   Ungrouped features: {len(ungrouped_features)}")
+    print(f"   Global tree should have: {len(FEATURE_GROUPS)} groups + {len(ungrouped_features)} ungrouped = {len(FEATURE_GROUPS) + len(ungrouped_features)} inputs")
+else:
+    FEATURE_GROUPS = None
+    print(f"\n🌳 Using flat BACON (no hierarchy)")
+
+if SELECTED_COLUMNS is not None:
+    df_norm = df_norm[SELECTED_COLUMNS]
+    print(f"\n🎯 Using selected columns ({len(SELECTED_COLUMNS)}): {SELECTED_COLUMNS}")
+elif not USE_HIERARCHICAL:
+    print(f"\n🎯 Using all {len(df_norm.columns)} columns")
 
 # ========== Train/Test Split ==========
 print("\n📊 Splitting dataset...")
@@ -138,49 +243,65 @@ print("\n" + "=" * 80)
 print("🧠 Training BACON Model")
 print("=" * 80)
 
+# Define transformation sets BEFORE model creation
+# Option 1: Identity and Negation only (simple, interpretable)
+# Option 2: All transformations (identity, negation, peak, valley, step_up, step_down)
+USE_SIMPLE_TRANSFORMATIONS = True  # Set to True for identity+negation only
+
+if USE_SIMPLE_TRANSFORMATIONS:
+    from bacon.transformationLayer import IdentityTransformation, NegationTransformation
+    # Create template instances (will be recreated with correct sizes)
+    sub_tree_trans = [IdentityTransformation(1), NegationTransformation(1)]
+    global_tree_trans = [IdentityTransformation(1), NegationTransformation(1)]
+    print("\n⚙️  Transformation Configuration: Identity + Negation ONLY")
+else:
+    sub_tree_trans = None  # Use all transformations
+    global_tree_trans = None  # Use all transformations
+    print("\n⚙️  Transformation Configuration: ALL transformations enabled")
+
 import os
-model_path = "./best_bacon_credit_card.pth"
+if USE_HIERARCHICAL:
+    model_path = "./best_hierarchical_bacon_credit_card.pth"
+else:
+    model_path = "./best_bacon_credit_card.pth"
 
 # Check if trained model exists
 if os.path.exists(model_path):
     print("\n✅ Found existing trained model!")
     print(f"   Loading from: {model_path}")
-    print("   (Delete this file to retrain from scratch)")
-    print("\n   ⚠️  NOTE: If pruning analysis is failing, delete the .pth file")
-    print("   The latest code includes force-freeze logic that ensures models are frozen.")
+    print("   ⚠️  NOTE: Loaded model uses transformations from when it was trained.")
+    print("   To use the current transformation settings, delete the .pth file and retrain.")
     
-    bacon = baconNet(
-        input_size=X_train.shape[1],
-        freeze_loss_threshold=0.15,
-        weight_mode='fixed',
-        aggregator='lsp.half_weight',
-        use_transformation_layer=True,
-        transformation_temperature=1.0,
-        transformation_use_gumbel=False,
-        max_permutations=400,
-    )
-    
-    # Load the saved model
-    checkpoint = torch.load(model_path, weights_only=False)
-    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-        # Restore metadata FIRST
-        bacon.assembler.is_frozen = checkpoint.get('is_frozen', False)
-        bacon.assembler.locked_perm = checkpoint.get('locked_perm', None)
-        bacon.assembler.tree_layout = checkpoint.get('tree_layout', 'left')
-        
-        # If model was frozen, recreate frozen input layer BEFORE loading state_dict
-        if bacon.assembler.is_frozen and bacon.assembler.locked_perm is not None:
-            from bacon.frozonInputToLeaf import frozenInputToLeaf
-            bacon.assembler.input_to_leaf = frozenInputToLeaf(
-                bacon.assembler.locked_perm, 
-                bacon.assembler.original_input_size
-            ).to(device)
-        
-        # Now load model state
-        bacon.assembler.load_state_dict(checkpoint['model_state_dict'])
+    if USE_HIERARCHICAL:
+        bacon = HierarchicalBaconNet(
+            feature_groups=FEATURE_GROUPS,
+            total_features=X_train.shape[1],
+            freeze_loss_threshold=0.25,
+            weight_mode='fixed',
+            aggregator='lsp.half_weight',
+            use_sub_tree_transformation=True,
+            use_global_transformation=True,
+            sub_tree_layout='left',
+            global_tree_layout='left',
+            max_permutations=10000,
+            use_class_weighting=False,
+            sub_tree_transformations=sub_tree_trans,
+            global_tree_transformations=global_tree_trans,
+        )
     else:
-        # Old format (direct state dict)
-        bacon.assembler.load_state_dict(checkpoint)
+        bacon = baconNet(
+            input_size=X_train.shape[1],
+            freeze_loss_threshold=0.25,
+            tree_layout='left',
+            weight_mode='fixed',
+            aggregator='lsp.half_weight',
+            use_transformation_layer=True,
+            max_permutations=1,
+            is_frozen=True,
+        )
+    
+    bacon.load_model(model_path)
+    bacon = bacon.to(device)
     
     # Quick evaluation
     with torch.no_grad():
@@ -191,77 +312,103 @@ if os.path.exists(model_path):
     print(f"\n📊 Loaded Model Performance:")
     print(f"   Test AUC: {loaded_auc:.4f}")
     print(f"   Test Accuracy: {loaded_acc:.4f}")
-    print(f"   Model frozen: {bacon.assembler.is_frozen}")
     
     best_accuracy = loaded_acc
     skip_training = True
 else:
     print("\n⚙️  Configuration:")
-    print("   - Transformation Layer: Enabled (identity, negation, peak)")
-    print("   - Hierarchical Permutation: Enabled")
-    print("   - Aggregator: LSP (half_weight)")
-    print("   - Soft boundaries: 10% bleed ratio")
-    print("   - Freeze threshold: 0.25 (lower = easier to freeze)")
-
-    bacon = baconNet(
-        input_size=X_train.shape[1],
-        freeze_loss_threshold=0.25,  # Increased from 0.15 to make freezing easier
-        weight_mode='fixed',
-        aggregator='lsp.half_weight',
-        use_transformation_layer=True,
-        transformation_temperature=1.0,
-        transformation_use_gumbel=False,
-        max_permutations=40,
-    )
+    if USE_HIERARCHICAL:
+        print("   - Architecture: Hierarchical BACON")
+        print(f"   - Sub-trees: {len(FEATURE_GROUPS)} groups with fixed order")
+        print("   - Global tree: Learns group permutation + transformations")
+        print("   - Sub-tree layout: Left-skewed")
+        print("   - Global tree layout: Balanced")
+        if USE_SIMPLE_TRANSFORMATIONS:
+            print("   - Transformations: Identity + Negation only")
+        else:
+            print("   - Transformations: All (identity, negation, peak, valley, step_up, step_down)")
+        
+        bacon = HierarchicalBaconNet(
+            feature_groups=FEATURE_GROUPS,
+            total_features=X_train.shape[1],
+            freeze_loss_threshold=0.25,
+            weight_mode='fixed',
+            aggregator='lsp.half_weight',
+            use_sub_tree_transformation=True,
+            use_global_transformation=True,
+            sub_tree_layout='left',
+            global_tree_layout='left',
+            max_permutations=10000,
+            lr_permutation=0.3,
+            lr_transformation=0.1,
+            lr_aggregator=0.1,
+            lr_other=0.1,
+            use_class_weighting=False,
+            sub_tree_transformations=sub_tree_trans,
+            global_tree_transformations=global_tree_trans,
+        )
+    else:
+        print("   - Architecture: Flat BACON")
+        print("   - Tree Layout: Balanced")
+        print("   - Permutation: Frozen (identity)")
+        print("   - Transformation Layer: Enabled")
+        
+        bacon = baconNet(
+            input_size=X_train.shape[1],
+            freeze_loss_threshold=0.25,
+            tree_layout='left',
+            weight_mode='fixed',
+            aggregator='lsp.half_weight',
+            use_transformation_layer=True,
+            max_permutations=1,
+            is_frozen=True,
+            lr_permutation=0.0,
+            lr_transformation=0.1,
+            lr_aggregator=0.1,
+            lr_other=0.1,
+            use_class_weighting=False,
+        )
     skip_training = False
 
-print("\n🔀 Hierarchical Permutation Search:")
-hierarchical_group_size = 6
-hierarchical_epochs = 8000
-num_features = X_train.shape[1]
-num_groups = (num_features + hierarchical_group_size - 1) // hierarchical_group_size
-import math
-num_coarse_perms = min(math.factorial(num_groups), 120)  # Cap at 120 permutations
-
-print(f"   Features: {num_features}")
-print(f"   Group size: {hierarchical_group_size}")
-print(f"   Groups: {num_groups}")
-print(f"   Permutations to try: {num_coarse_perms}")
-print(f"   Epochs per permutation: {hierarchical_epochs}")
+print("\n🌳 Tree Structure:")
+if USE_HIERARCHICAL:
+    print(f"   Hierarchical: {len(FEATURE_GROUPS)} groups → global tree")
+    print(f"   No permutation search - groups stay in defined order within sub-trees")
+else:
+    print(f"   Flat: Balanced binary tree")
+    print(f"   Features: {X_train.shape[1]} (in original order)")
+    print(f"   No permutation search - features stay in temporal/logical order")
 
 if not skip_training:
-    print("\n⏳ Training (this may take several minutes)...\n")
+    print("\n⏳ Training...\n")
 
     (best_model, best_accuracy) = bacon.find_best_model(
         X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor,
         acceptance_threshold=0.90,
-        max_epochs=15000,
+        max_epochs=1000 if USE_HIERARCHICAL else 3000,
         save_path=model_path,
-        use_hierarchical_permutation=True,
-        hierarchical_group_size=hierarchical_group_size,
-        hierarchical_epochs_per_attempt=hierarchical_epochs,
-        hierarchical_bleed_ratio=0.5,
-        hierarchical_bleed_decay=2.0
+        attempts=1 if USE_HIERARCHICAL else 1,
+        use_hierarchical_permutation = True,
+        hierarchical_group_size = 3,
+        hierarchical_epochs_per_attempt = 8000,
+        hierarchical_bleed_ratio = 0.5,
+        hierarchical_bleed_decay = 2.0
     )
     
-    # Force freeze if not already frozen (for pruning analysis)
-    if not bacon.assembler.is_frozen:
+    # Force freeze if not already frozen (for pruning analysis) - only for flat BACON
+    if not USE_HIERARCHICAL and hasattr(bacon, 'assembler') and not bacon.assembler.is_frozen:
         print("\n🔒 Forcing model freeze for pruning analysis...")
-        # Get the current best permutation from the Sinkhorn layer
         if hasattr(bacon.assembler.input_to_leaf, 'logits'):
             from bacon.frozonInputToLeaf import frozenInputToLeaf
-            # Get hard assignment from current soft permutation
             soft_perm = torch.softmax(bacon.assembler.input_to_leaf.logits, dim=1)
             hard_perm = torch.argmax(soft_perm, dim=1)
             bacon.assembler.locked_perm = hard_perm.clone().detach()
             bacon.assembler.is_frozen = True
-            # Replace with frozen layer
             bacon.assembler.input_to_leaf = frozenInputToLeaf(
                 bacon.assembler.locked_perm,
                 bacon.assembler.original_input_size
             ).to(device)
             print(f"   ✅ Model frozen with locked permutation")
-            # Save the frozen model
             bacon.save_model(model_path)
             print(f"   💾 Saved frozen model to {model_path}")
 else:
@@ -328,89 +475,176 @@ print("\n" + "=" * 80)
 print("🔍 Interpretability Analysis")
 print("=" * 80)
 
-# Tree structure
-print("\n🌳 Learned Logical Tree Structure:\n")
-print_tree_structure(bacon.assembler, feature_names)
+if USE_HIERARCHICAL:
+    print("\n🌳 Hierarchical Structure:\n")
+    print(f"Global tree combines {len(FEATURE_GROUPS)} groups + {bacon.num_ungrouped} ungrouped features:")
+    
+    # Show global tree structure
+    print(f"\n🌲 Global Tree Structure:")
+    print(f"   Global tree is_frozen: {bacon.global_tree.is_frozen}")
+    print(f"   Global tree has locked_perm: {bacon.global_tree.locked_perm is not None}")
+    # Build feature names for global tree (groups + ungrouped features)
+    global_input_names = bacon.group_names.copy()
+    for idx in bacon.ungrouped_indices:
+        global_input_names.append(all_features[idx])
+    print_tree_structure(bacon.global_tree, global_input_names)
+    
+    # Show global tree permutation (group ordering)
+    if hasattr(bacon.global_tree, 'locked_perm') and bacon.global_tree.locked_perm is not None:
+        group_order = bacon.global_tree.locked_perm.cpu().numpy()
+        print(f"\n📊 Learned Global Input Ordering:")
+        print(f"   Raw permutation: {group_order}")
+        print(f"   Interpretation (most → least important):")
+        for rank, input_idx in enumerate(group_order):
+            input_name = global_input_names[input_idx]
+            print(f"      {rank + 1}. {input_name}")
+    
+    # Show transformations for each group's output
+    if bacon.global_tree.transformation_layer is not None:
+        print(f"\n🔄 Global Tree Transformations:")
+        trans_summary = bacon.global_tree.transformation_layer.get_transformation_summary()
+        for i, input_name in enumerate(global_input_names):
+            trans_type = trans_summary[i]['transformation']
+            trans_prob = trans_summary[i]['probability']
+            params = trans_summary[i]['params']
+            param_str = ', '.join([f"{k}={v}" for k, v in params.items()]) if params else ""
+            if param_str:
+                print(f"   {input_name}: {trans_type} {param_str} (confidence: {trans_prob*100:.1f}%)")
+            else:
+                print(f"   {input_name}: {trans_type} (confidence: {trans_prob*100:.1f}%)")
+    
+    # Show sub-tree details
+    print(f"\n📁 Sub-Tree Details:")
+    all_features = df_norm.columns.tolist()
+    for group_name, sub_tree in bacon.sub_trees.items():
+        feature_indices = FEATURE_GROUPS[group_name]
+        group_features = [all_features[i] for i in feature_indices]
+        print(f"\n   Group: {group_name}")
+        print(f"   Features: {', '.join(group_features)}")
+        
+        # Print tree structure for this sub-tree
+        print(f"   Tree Structure:")
+        print_tree_structure(sub_tree, group_features)
+        
+        if sub_tree.transformation_layer is not None:
+            sub_trans_summary = sub_tree.transformation_layer.get_transformation_summary()
+            print(f"   Transformations:")
+            for feat_idx, feat_name in enumerate(group_features):
+                trans_info = sub_trans_summary[feat_idx]
+                trans_type = trans_info['transformation']
+                trans_prob = trans_info['probability']
+                params = trans_info['params']
+                if trans_type != 'identity':
+                    param_str = ', '.join([f"{k}={v}" for k, v in params.items()]) if params else ""
+                    if param_str:
+                        print(f"      {feat_name}: {trans_type} {param_str} ({trans_prob*100:.0f}%)")
+                    else:
+                        print(f"      {feat_name}: {trans_type} ({trans_prob*100:.0f}%)")
+else:
+    # Tree structure
+    print("\n🌳 Learned Logical Tree Structure:\n")
+    print_tree_structure(bacon.assembler, df_norm.columns.tolist())
 
-# Transformation analysis
-if bacon.assembler.transformation_layer is not None:
-    print("\n🔄 Transformation Layer Analysis:")
-    print("=" * 80)
-    
-    trans_summary = bacon.assembler.transformation_layer.get_transformation_summary()
-    selected_transforms = bacon.assembler.transformation_layer.get_selected_transformations()
-    
-    identity_count = (selected_transforms == 0).sum().item()
-    negation_count = (selected_transforms == 1).sum().item()
-    peak_count = (selected_transforms == 2).sum().item()
-    
-    print(f"\n📊 Transformation Distribution:")
-    print(f"   Identity (x):        {identity_count} features ({identity_count/len(feature_names)*100:.1f}%)")
-    print(f"   Negation (1-x):      {negation_count} features ({negation_count/len(feature_names)*100:.1f}%)")
-    print(f"   Peak (1-|x-t|):      {peak_count} features ({peak_count/len(feature_names)*100:.1f}%)")
-    
-    # Top features by transformation
-    if negation_count > 0:
-        print(f"\n🔄 Features Using Negation (1-x):")
-        negated = [(feature_names[i], trans_summary[i]['probability']) 
-                   for i in range(len(feature_names)) 
-                   if trans_summary[i]['transformation'] == 'negation']
-        negated.sort(key=lambda x: x[1], reverse=True)
-        for feat, prob in negated[:10]:
-            print(f"   {feat:<20} (confidence: {prob*100:.1f}%)")
-    
-    if peak_count > 0:
-        print(f"\n🎯 Features Using Peak Transformation (1-|x-t|):")
-        peaks = [(feature_names[i], trans_summary[i]['probability'], trans_summary[i]['params'].get('peak_location', 'N/A'))
-                 for i in range(len(feature_names)) 
-                 if trans_summary[i]['transformation'] == 'peak']
-        peaks.sort(key=lambda x: x[1], reverse=True)
-        for feat, prob, peak_loc in peaks:
-            print(f"   {feat:<20} peak={peak_loc} (confidence: {prob*100:.1f}%)")
+    # Transformation analysis
+    if bacon.assembler.transformation_layer is not None:
+        print("\n🔄 Transformation Layer Analysis:")
+        print("=" * 80)
+        
+        trans_summary = bacon.assembler.transformation_layer.get_transformation_summary()
+        selected_transforms = bacon.assembler.transformation_layer.get_selected_transformations()
+        
+        # Count each transformation type
+        transform_counts = {}
+        feature_names = df_norm.columns.tolist()
+        for i in range(len(feature_names)):
+            trans_name = trans_summary[i]['transformation']
+            transform_counts[trans_name] = transform_counts.get(trans_name, 0) + 1
+        
+        print(f"\n📊 Transformation Distribution:")
+        transform_labels = {
+            'identity': 'Identity (x)',
+            'negation': 'Negation (1-x)',
+            'peak': 'Peak (1-|x-t|)',
+            'valley': 'Valley (|x-t|)',
+            'step_up': 'Step Up (ramp 0→1)',
+            'step_down': 'Step Down (ramp 1→0)'
+        }
+        
+        for trans_name in ['identity', 'negation', 'peak', 'valley', 'step_up', 'step_down']:
+            count = transform_counts.get(trans_name, 0)
+            label = transform_labels.get(trans_name, trans_name)
+            print(f"   {label:<25} {count} features ({count/len(feature_names)*100:.1f}%)")
+        
+        # Show features for each non-identity transformation
+        for trans_name in ['negation', 'peak', 'valley', 'step_up', 'step_down']:
+            features = [(feature_names[i], trans_summary[i]['probability'], trans_summary[i]['params'])
+                        for i in range(len(feature_names))
+                        if trans_summary[i]['transformation'] == trans_name]
+            
+            if len(features) > 0:
+                features.sort(key=lambda x: x[1], reverse=True)
+                
+                icons = {'negation': '🔄', 'peak': '🎯', 'valley': '🕳️', 'step_up': '📈', 'step_down': '📉'}
+                labels = {'negation': 'Negation', 'peak': 'Peak', 'valley': 'Valley', 
+                         'step_up': 'Step Up', 'step_down': 'Step Down'}
+                
+                print(f"\n{icons.get(trans_name, '•')} Features Using {labels.get(trans_name, trans_name)}:")
+                for feat, prob, params in features[:10]:  # Show top 10
+                    param_str = ', '.join([f"{k}={v}" for k, v in params.items()]) if params else ""
+                    if param_str:
+                        print(f"   {feat:<20} {param_str} (confidence: {prob*100:.1f}%)")
+                    else:
+                        print(f"   {feat:<20} (confidence: {prob*100:.1f}%)")
 
 # Feature importance through pruning
 print("\n🔍 Feature Importance (Progressive Pruning):")
 print("=" * 80)
 
-# Choose pruning metric
-PRUNING_METRIC = 'auc'  # Options: 'accuracy', 'auc'
-print(f"   Metric: {PRUNING_METRIC.upper()}")
-print(f"   Removing features one-by-one to assess impact...\n")
-
-# Ensure model is frozen and has locked_perm before pruning
-if bacon.assembler.locked_perm is None:
-    print("   ⚠️  Model does not have locked permutation.")
-    print("   Pruning analysis requires a frozen model with determined feature order.")
+if USE_HIERARCHICAL:
+    print("   ⚠️  Pruning analysis not yet implemented for hierarchical BACON.")
     print("   Skipping pruning analysis...")
     pruning_results = []
 else:
-    if not bacon.assembler.is_frozen:
-        print("   Freezing model for pruning analysis...")
-        bacon.assembler.is_frozen = True
+    # Choose pruning metric
+    PRUNING_METRIC = 'accuracy'  # Options: 'accuracy', 'auc'
+    print(f"   Metric: {PRUNING_METRIC.upper()}")
+    print(f"   Removing features one-by-one to assess impact...\n")
 
-    pruning_results = []
-    for i in range(1, len(feature_names)):  # Go through ALL features
-        func_eval = bacon.prune_features(i)
-        kept_indices = bacon.assembler.locked_perm[i:].tolist()
-        X_test_pruned = X_test_tensor[:, kept_indices]
+    # Ensure model is frozen and has locked_perm before pruning
+    if bacon.assembler.locked_perm is None:
+        print("   ⚠️  Model does not have locked permutation.")
+        print("   Pruning analysis requires a frozen model with determined feature order.")
+        print("   Skipping pruning analysis...")
+        pruning_results = []
+    else:
+        if not bacon.assembler.is_frozen:
+            print("   Freezing model for pruning analysis...")
+            bacon.assembler.is_frozen = True
+
+        pruning_results = []
+        for i in range(1, len(feature_names)):  # Go through ALL features
+            func_eval = bacon.prune_features(i)
+            kept_indices = bacon.assembler.locked_perm[i:].tolist()
+            X_test_pruned = X_test_tensor[:, kept_indices]
     
-        with torch.no_grad():
-            pruned_output = func_eval(X_test_pruned)
+            with torch.no_grad():
+                pruned_output = func_eval(X_test_pruned)
             
-            if PRUNING_METRIC == 'auc':
-                pruned_metric = roc_auc_score(y_test, pruned_output.cpu().numpy().flatten())
-            else:  # accuracy
-                pruned_metric = accuracy_score(y_test, (pruned_output.cpu().numpy().flatten() > 0.5).astype(int))
+                if PRUNING_METRIC == 'auc':
+                    pruned_metric = roc_auc_score(y_test, pruned_output.cpu().numpy().flatten())
+                else:  # accuracy
+                    pruned_metric = accuracy_score(y_test, (pruned_output.cpu().numpy().flatten() > 0.5).astype(int))
             
-            pruning_results.append((i, pruned_metric))
+                pruning_results.append((i, pruned_metric))
         
-            # Show all features removed
-            removed_idx = bacon.assembler.locked_perm[i-1].item()
-            print(f"   Removed {i:2d}: {feature_names[removed_idx]:<20} → {PRUNING_METRIC.upper()} = {pruned_metric:.4f}")
+                # Show all features removed
+                removed_idx = bacon.assembler.locked_perm[i-1].item()
+                print(f"   Removed {i:2d}: {feature_names[removed_idx]:<20} → {PRUNING_METRIC.upper()} = {pruned_metric:.4f}")
 
 # Visualization
-print("\n📊 Generating visualizations...")
-visualize_tree_structure(bacon.assembler, feature_names)
+if not USE_HIERARCHICAL:
+    print("\n📊 Generating visualizations...")
+    visualize_tree_structure(bacon.assembler, feature_names)
 
 # Plot pruning analysis
 if len(pruning_results) > 0:
