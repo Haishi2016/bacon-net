@@ -1,5 +1,8 @@
+# The following two lines are needed to refer to local package instead of published package
+
 import sys
 sys.path.insert(0, '../../')
+
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, accuracy_score, precision_recall_fscore_support, precision_recall_curve
 import torch
@@ -10,9 +13,11 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import os
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+# Choose GPU is possible
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print("=" * 80)
@@ -60,47 +65,51 @@ print(f"   Payment Status: PAY_0 to PAY_6 (6 months)")
 print(f"   Bill Amounts: BILL_AMT1 to BILL_AMT6 (6 months)")
 print(f"   Payment Amounts: PAY_AMT1 to PAY_AMT6 (6 months)")
 
-# ========== Preprocessing to [0,1] "Level of Truth" ==========
+# -------- Preprocessing to [0,1] "Level of Truth" --------
 print("\n🔄 Normalizing features to [0,1] 'level of truth' values...")
 
 df_norm = df.copy()
 
-# LIMIT_BAL: Higher limit → lower default risk → negate later
+# LIMIT_BAL: Higher limit → lower default risk
 # Normalize to [0,1]
-df_norm['LIMIT_BAL'] = 1 - (df['LIMIT_BAL'] - df['LIMIT_BAL'].min()) / (df['LIMIT_BAL'].max() - df['LIMIT_BAL'].min() + 1e-8)
-print(f"  ✅ LIMIT_BAL: normalized (higher = more creditworthy)")
+# Note 1: LIMIT_BAL is very skewed, so we use log-transform and normalize. 
+# Note 2: A low LIMIT_BAL is bad (high contribution to default risk), but we don't negate it as the model can learn to negate if needed.
+log_transformed = np.log1p(df['LIMIT_BAL'])
+df_norm['LIMIT_BAL'] = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
+print(f"   ✅ LIMIT_BAL: normalized (higher = more creditworthy)")
 
 # SEX: 1=male, 2=female → Convert to binary
+# Note: Here the choice of 1=female and 0=male is arbitrary.
 df_norm['SEX'] = (df['SEX'] == 2).astype(float)  # 1 if female, 0 if male
-print(f"  ✅ SEX: binary (1=female, 0=male)")
+print(f"   ✅ SEX: binary (1=female, 0=male)")
 
 # EDUCATION: 1=graduate, 2=university, 3=high school, 4=others
-# Higher education → lower risk → reverse scale
+# Note: Lowever value -> Higher education → Lower risk. This is left as it is for the model to learn (whether to negate or not).
 df_norm['EDUCATION'] = df['EDUCATION'].replace({0: 4, 5: 4, 6: 4})  # Consolidate unknowns to 'others'
-df_norm['EDUCATION'] = ((df_norm['EDUCATION'] - 1) / 3)  # Reverse: grad=1, others=0
-print(f"  ✅ EDUCATION: (0=graduate, 1=others)")
+df_norm['EDUCATION'] = ((df_norm['EDUCATION'] - 1) / 3) 
+print(f"   ✅ EDUCATION: (0=graduate, 1=others)")
 
 # MARRIAGE: 1=married, 2=single, 3=others → One-hot or binary
+# Note: Here the choice of 1=single and 0=married is arbitrary.
 df_norm['MARRIAGE'] = (df['MARRIAGE'] != 1).astype(float)  # 0 if married, 1 if single/others
-print(f"  ✅ MARRIAGE: binary (0=married, 1=single/others)")
+print(f"   ✅ MARRIAGE: binary (0=married, 1=single/others)")
 
 # AGE: Normalize
 df_norm['AGE'] = (df['AGE'] - df['AGE'].min()) / (df['AGE'].max() - df['AGE'].min() + 1e-8)
-print(f"  ✅ AGE: normalized to [0,1]")
-
+print(f"   ✅ AGE: normalized to [0,1]")
 # PAY_0 to PAY_6: Payment delay status
 # Official scale: -1=pay duly, 1-9=months of delay (some data has 0 and -2 as anomalies)
-# Higher delay → higher risk → normalize to [0,1] where 1=high delay
+# Note: Higher delay → higher risk → normalize to [0,1] where 1=high delay
 for i in range(7):
     pay_col = f'PAY_{i}'
     if pay_col in df.columns:
         # Clip to documented range and normalize
         df_norm[pay_col] = df[pay_col].clip(-1, 9)  # -1 to 9 months
         df_norm[pay_col] = (df_norm[pay_col] + 1) / 10  # Range [-1, 9] → [0, 1]
-        print(f"  ✅ {pay_col}: normalized (1=high delay, 0=pay duly)")
+        print(f"   ✅ {pay_col}: normalized (1=high delay, 0=pay duly)")
 
 # BILL_AMT1 to BILL_AMT6: Bill statement amounts
-# Negative bills = overpayment/credit balance, treat as 0 debt
+# Note: Negative bills = overpayment/credit balance, treat as 0 debt
 for i in range(1, 7):
     bill_col = f'BILL_AMT{i}'
     if bill_col in df.columns:
@@ -108,18 +117,17 @@ for i in range(1, 7):
         clipped = df[bill_col].clip(lower=0)
         log_transformed = np.log1p(clipped)
         df_norm[bill_col] = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
-        print(f"  ✅ {bill_col}: clipped at 0, log-transformed, normalized")
+        print(f"   ✅ {bill_col}: clipped at 0, log-transformed, normalized")
 
 # PAY_AMT1 to PAY_AMT6: Payment amounts
-# Higher payment → lower risk → will negate if needed
 for i in range(1, 7):
     pay_amt_col = f'PAY_AMT{i}'
     if pay_amt_col in df.columns:
         log_transformed = np.log1p(df[pay_amt_col])
         df_norm[pay_amt_col] = (log_transformed - log_transformed.min()) / (log_transformed.max() - log_transformed.min() + 1e-8)
-        print(f"  ✅ {pay_amt_col}: log-transformed, normalized")
+        print(f"   ✅ {pay_amt_col}: log-transformed, normalized")
 
-# ========== Payment Ratio Feature Engineering ==========
+# -------- Payment Ratio Feature Engineering --------
 print("\n💰 Engineering Payment Ratio Features...")
 # Create payment ratio features: PAY_AMT / BILL_AMT for each month
 # Higher ratio = paying more of the bill = lower default risk
@@ -128,48 +136,36 @@ for i in range(1, 7):
     pay_col = f'PAY_AMT{i}'
     ratio_col = f'PAY_RATIO_{i}'
     
-    if bill_col in df_norm.columns and pay_col in df_norm.columns:
+    if bill_col in df.columns and pay_col in df.columns:
         # Calculate ratio, handling division by zero
         # If bill is 0 (or very small after normalization), set ratio to 1 (paid in full)
         bill_values = df[bill_col].clip(lower=1)  # Avoid division by zero
         pay_values = df[pay_col]
         
         # Ratio = payment / bill, clipped to [0, 2] (paying 2x bill is same as paying 1x)
-        ratio = (pay_values / bill_values).clip(0, 2)
-        
-        # Normalize to [0, 1]
-        df_norm[ratio_col] = ratio / 2.0
-        print(f"  ✅ {ratio_col}: PAY_AMT{i} / BILL_AMT{i}, normalized")
+        # Special case: if bill is 0, set ratio to 1 (no debt to pay)
+        ratio = (pay_values / bill_values).clip(0, 1)
+        ratio = ratio.where(df[bill_col] > 0, 1.0)
+        df_norm[ratio_col] = ratio
+        print(f"   ✅ {ratio_col}: PAY_AMT{i} / BILL_AMT{i}, normalized")
 
 # Update feature names
 feature_names = df_norm.columns.tolist()
 print(f"\n📊 Final feature count: {len(feature_names)}")
 
-# ========== Feature Selection ==========
-# Change this to select specific columns
-# Examples:
-#   SELECTED_COLUMNS = None  # Use all features
-#   SELECTED_COLUMNS = ['PAY_0', 'PAY_1', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6']  # Just payment status
-#   SELECTED_COLUMNS = ['LIMIT_BAL', 'AGE', 'PAY_0']  # Custom subset
-
-SELECTED_COLUMNS = None
-
 # ========== Hierarchical Structure Definition ==========
-# Define feature groups for hierarchical BACON
-# Set to None to use flat BACON instead
+# Note: Define feature groups for hierarchical BACON. Set to None to use flat BACON instead.
 USE_HIERARCHICAL = True
 
 if USE_HIERARCHICAL:
-    # Define groups based on domain knowledge
-    # Each group will be processed by a sub-tree (preserving order)
-    # Then groups are combined in global tree (learned ordering)
+    # Define groups based on domain knowledge.
+    # Note: Each group will be processed by a sub-tree (preserving order). Then groups are combined in global tree (learned ordering).
     
     # Get all feature names from df_norm
     all_features = df_norm.columns.tolist()
     
-    # Build feature groups with indices
-    # Only define MULTI-FEATURE groups here
-    # Single features not in any group will be added automatically as ungrouped
+    # Build feature groups with indices.
+    # Note: Only define MULTI-FEATURE groups here. Features not in any group will be added automatically as ungrouped.
     
     # Ignore raw BILL_AMT and PAY_AMT since we're using engineered PAY_RATIO features
     IGNORED_FEATURES = [col for col in all_features if col.startswith('BILL_AMT') or col.startswith('PAY_AMT')]
@@ -184,7 +180,7 @@ if USE_HIERARCHICAL:
     FEATURE_GROUPS = {
         'payment_history': [i for i, col in enumerate(all_features) if col.startswith('PAY_') and not col.startswith('PAY_AMT') and not col.startswith('PAY_RATIO')],
         'payment_ratios': [i for i, col in enumerate(all_features) if col.startswith('PAY_RATIO')],
-        # 'demographics': [i for i, col in enumerate(all_features) if col in ['SEX', 'EDUCATION', 'MARRIAGE', 'AGE']],
+        'demographics': [i for i, col in enumerate(all_features) if col in ['SEX', 'EDUCATION', 'MARRIAGE', 'AGE']],
     }
     
     # Remove empty groups
@@ -199,10 +195,11 @@ if USE_HIERARCHICAL:
     ungrouped_features = [all_features[i] for i in ungrouped_indices]
     
     print(f"\n🌳 Hierarchical BACON Structure:")
-    print(f"   User-defined groups: {len(FEATURE_GROUPS)} (processed by sub-trees)")
-    for group_name, indices in FEATURE_GROUPS.items():
-        group_features = [all_features[i] for i in indices]
-        print(f"   - {group_name}: {len(indices)} features ({', '.join(group_features)})")
+    if len(FEATURE_GROUPS) > 0:
+        print(f"   User-defined groups: {len(FEATURE_GROUPS)} (processed by sub-trees)")
+        for group_name, indices in FEATURE_GROUPS.items():
+            group_features = [all_features[i] for i in indices]
+            print(f"   - {group_name}: {len(indices)} features ({', '.join(group_features)})")
     
     if len(ungrouped_features) > 0:
         print(f"   Ungrouped features: {len(ungrouped_features)} (joined directly to global tree)")
@@ -216,12 +213,6 @@ if USE_HIERARCHICAL:
 else:
     FEATURE_GROUPS = None
     print(f"\n🌳 Using flat BACON (no hierarchy)")
-
-if SELECTED_COLUMNS is not None:
-    df_norm = df_norm[SELECTED_COLUMNS]
-    print(f"\n🎯 Using selected columns ({len(SELECTED_COLUMNS)}): {SELECTED_COLUMNS}")
-elif not USE_HIERARCHICAL:
-    print(f"\n🎯 Using all {len(df_norm.columns)} columns")
 
 # ========== Train/Test Split ==========
 print("\n📊 Splitting dataset...")
@@ -249,34 +240,33 @@ print("=" * 80)
 USE_SIMPLE_TRANSFORMATIONS = True  # Set to True for identity+negation only
 
 if USE_SIMPLE_TRANSFORMATIONS:
-    from bacon.transformationLayer import IdentityTransformation, NegationTransformation
+    from bacon.transformationLayer import IdentityTransformation, NegationTransformation, ValleyTransformation, PeakTransformation, StepUpTransformation, StepDownTransformation
     # Create template instances (will be recreated with correct sizes)
     sub_tree_trans = [IdentityTransformation(1), NegationTransformation(1)]
-    global_tree_trans = [IdentityTransformation(1), NegationTransformation(1)]
-    print("\n⚙️  Transformation Configuration: Identity + Negation ONLY")
+    global_tree_trans = [IdentityTransformation(1), NegationTransformation(1), ValleyTransformation(1), PeakTransformation(1), StepUpTransformation(1), StepDownTransformation(1)]
+    print("\n⚙️ Transformation Configuration: Sub-trees=Identity+Negation, Global=All 6 transforms")
 else:
     sub_tree_trans = None  # Use all transformations
     global_tree_trans = None  # Use all transformations
-    print("\n⚙️  Transformation Configuration: ALL transformations enabled")
+    print("\n⚙️ Transformation Configuration: ALL transformations enabled")
 
-import os
 if USE_HIERARCHICAL:
     model_path = "./best_hierarchical_bacon_credit_card.pth"
 else:
     model_path = "./best_bacon_credit_card.pth"
 
+FREEZE_LOSS_THRESHOLD = 0.42
+
 # Check if trained model exists
 if os.path.exists(model_path):
     print("\n✅ Found existing trained model!")
     print(f"   Loading from: {model_path}")
-    print("   ⚠️  NOTE: Loaded model uses transformations from when it was trained.")
-    print("   To use the current transformation settings, delete the .pth file and retrain.")
     
     if USE_HIERARCHICAL:
         bacon = HierarchicalBaconNet(
             feature_groups=FEATURE_GROUPS,
             total_features=X_train.shape[1],
-            freeze_loss_threshold=0.25,
+            freeze_loss_threshold=FREEZE_LOSS_THRESHOLD,
             weight_mode='fixed',
             aggregator='lsp.half_weight',
             use_sub_tree_transformation=True,
@@ -287,11 +277,12 @@ if os.path.exists(model_path):
             use_class_weighting=False,
             sub_tree_transformations=sub_tree_trans,
             global_tree_transformations=global_tree_trans,
+            sub_tree_permutation_groups=['demographics'],  # Enable permutation learning only on demographics
         )
     else:
         bacon = baconNet(
             input_size=X_train.shape[1],
-            freeze_loss_threshold=0.25,
+            freeze_loss_threshold=FREEZE_LOSS_THRESHOLD,
             tree_layout='left',
             weight_mode='fixed',
             aggregator='lsp.half_weight',
@@ -300,8 +291,24 @@ if os.path.exists(model_path):
             is_frozen=True,
         )
     
+    print("\n🔍 DEBUG: Model state BEFORE load:")
+    print(f"   Global tree frozen: {bacon.global_tree.is_frozen if USE_HIERARCHICAL else 'N/A'}")
+    print(f"   Global locked_perm: {bacon.global_tree.locked_perm if USE_HIERARCHICAL else 'N/A'}")
+    if USE_HIERARCHICAL and bacon.global_tree.transformation_layer:
+        print(f"   Global has transformation layer: True")
+    else:
+        print(f"   Global has transformation layer: False")
+    
     bacon.load_model(model_path)
     bacon = bacon.to(device)
+    
+    print("\n🔍 DEBUG: Model state AFTER load:")
+    print(f"   Global tree frozen: {bacon.global_tree.is_frozen if USE_HIERARCHICAL else 'N/A'}")
+    print(f"   Global locked_perm: {bacon.global_tree.locked_perm if USE_HIERARCHICAL else 'N/A'}")
+    if USE_HIERARCHICAL and bacon.global_tree.transformation_layer:
+        trans_summary = bacon.global_tree.transformation_layer.get_transformation_summary()
+        print(f"   Global transformation layer: {len(trans_summary)} features")
+        print(f"   First transformation: {trans_summary[0]}")
     
     # Quick evaluation
     with torch.no_grad():
@@ -316,7 +323,7 @@ if os.path.exists(model_path):
     best_accuracy = loaded_acc
     skip_training = True
 else:
-    print("\n⚙️  Configuration:")
+    print("\n⚙️ Configuration:")
     if USE_HIERARCHICAL:
         print("   - Architecture: Hierarchical BACON")
         print(f"   - Sub-trees: {len(FEATURE_GROUPS)} groups with fixed order")
@@ -331,7 +338,7 @@ else:
         bacon = HierarchicalBaconNet(
             feature_groups=FEATURE_GROUPS,
             total_features=X_train.shape[1],
-            freeze_loss_threshold=0.25,
+            freeze_loss_threshold=FREEZE_LOSS_THRESHOLD,
             weight_mode='fixed',
             aggregator='lsp.half_weight',
             use_sub_tree_transformation=True,
@@ -343,9 +350,11 @@ else:
             lr_transformation=0.1,
             lr_aggregator=0.1,
             lr_other=0.1,
+            loss_amplifier=1.0,  # Default: no amplification (BCE loss is already in reasonable range)
             use_class_weighting=False,
             sub_tree_transformations=sub_tree_trans,
             global_tree_transformations=global_tree_trans,
+            sub_tree_permutation_groups=['demographics'],  # Enable permutation learning only on demographics
         )
     else:
         print("   - Architecture: Flat BACON")
@@ -385,12 +394,12 @@ if not skip_training:
     (best_model, best_accuracy) = bacon.find_best_model(
         X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor,
         acceptance_threshold=0.90,
-        max_epochs=1000 if USE_HIERARCHICAL else 3000,
+        max_epochs=8000,
         save_path=model_path,
-        attempts=1 if USE_HIERARCHICAL else 1,
+        attempts=10,
         use_hierarchical_permutation = True,
         hierarchical_group_size = 3,
-        hierarchical_epochs_per_attempt = 8000,
+        hierarchical_epochs_per_attempt = 4000,
         hierarchical_bleed_ratio = 0.5,
         hierarchical_bleed_decay = 2.0
     )
@@ -500,7 +509,7 @@ if USE_HIERARCHICAL:
             print(f"      {rank + 1}. {input_name}")
     
     # Show transformations for each group's output
-    if bacon.global_tree.transformation_layer is not None:
+    if bacon.use_global_transformation and bacon.global_tree.transformation_layer is not None:
         print(f"\n🔄 Global Tree Transformations:")
         trans_summary = bacon.global_tree.transformation_layer.get_transformation_summary()
         for i, input_name in enumerate(global_input_names):
@@ -512,6 +521,8 @@ if USE_HIERARCHICAL:
                 print(f"   {input_name}: {trans_type} {param_str} (confidence: {trans_prob*100:.1f}%)")
             else:
                 print(f"   {input_name}: {trans_type} (confidence: {trans_prob*100:.1f}%)")
+    elif not bacon.use_global_transformation:
+        print(f"\n🔄 Global Tree Transformations: DISABLED (no transformation layer)")
     
     # Show sub-tree details
     print(f"\n📁 Sub-Tree Details:")

@@ -111,10 +111,13 @@ class binaryTreeLogicNet(nn.Module):
         
         # Transformation layer (optional)
         self.use_transformation_layer = use_transformation_layer
+        self._custom_transformations = transformations  # Store for deepcopy to work correctly
+        
         if self.use_transformation_layer:
             # Create default transformations if none provided
-            if transformations is None:
-                transformations = [
+            # Use self._custom_transformations so deepcopy preserves it
+            if self._custom_transformations is None:
+                self._custom_transformations = [
                     IdentityTransformation(input_size),      # f(x) = x
                     NegationTransformation(input_size),      # f(x) = 1 - x
                     PeakTransformation(input_size),          # f(x) = 1 - |x - t| (high at peak)
@@ -125,7 +128,7 @@ class binaryTreeLogicNet(nn.Module):
             
             self.transformation_layer = TransformationLayer(
                 num_features=input_size,
-                transformations=transformations,
+                transformations=self._custom_transformations,
                 temperature=transformation_temperature,
                 use_gumbel=transformation_use_gumbel,
                 device=self.device
@@ -147,6 +150,42 @@ class binaryTreeLogicNet(nn.Module):
         if hasattr(self.aggregator, "attach_to_tree"):
             self.aggregator.attach_to_tree(self.num_layers)      
             self.add_module("aggregator", self.aggregator)
+
+    def __deepcopy__(self, memo):
+        """Custom deepcopy to preserve transformation configuration.
+        
+        Without this, deepcopy would create a new instance with default transformations
+        instead of preserving the custom transformations passed during initialization.
+        """
+        import logging
+        
+        # Log what we're copying
+        orig_trans_count = len(self.transformation_layer.transformations) if self.transformation_layer else 0
+        logging.info(f"🔄 Deep copying model with {orig_trans_count} transformations")
+        
+        # Use state_dict approach - this preserves the exact module structure
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        
+        # Copy all non-module attributes first
+        for k, v in self.__dict__.items():
+            if not isinstance(v, (nn.Module, nn.Parameter, nn.ParameterList)):
+                try:
+                    setattr(result, k, copy.deepcopy(v, memo))
+                except:
+                    setattr(result, k, v)
+        
+        # Now copy modules - this preserves their exact structure
+        for k, v in self.__dict__.items():
+            if isinstance(v, (nn.Module, nn.Parameter, nn.ParameterList)):
+                setattr(result, k, copy.deepcopy(v, memo))
+        
+        # Verify result
+        result_trans_count = len(result.transformation_layer.transformations) if result.transformation_layer else 0
+        logging.info(f"✅ Deepcopy complete: {result_trans_count} transformations")
+        
+        return result
 
     def reset_optimizer(self, learning_rate=0.2):
         """Reset the optimizer for the model.
@@ -227,24 +266,54 @@ class binaryTreeLogicNet(nn.Module):
         Args:
             file_name (str): Path to save the model.
         """
-        torch.save({
+        import logging
+        num_trans = len(self.transformation_layer.transformations) if self.transformation_layer else 0
+        
+        checkpoint = {
             'model_state_dict': self.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'is_frozen': self.is_frozen,
             'locked_perm': self.locked_perm,
             'tree_layout': self.tree_layout,
-        }, file_name)
+            # Save transformation configuration
+            'use_transformation_layer': self.use_transformation_layer,
+            'num_transformations': num_trans,
+        }
+        
+        logging.info(f"💾 Saving model to {file_name}")
+        logging.info(f"   use_transformation_layer: {self.use_transformation_layer}")
+        logging.info(f"   num_transformations: {num_trans}")
+        if self.transformation_layer:
+            logging.info(f"   transformation types: {[type(t).__name__ for t in self.transformation_layer.transformations]}")
+        
+        torch.save(checkpoint, file_name)
     def load_model(self, file_name):
         """Load the model state from a file.
 
         Args:
             file_name (str): Path to load the model from.
+            
+        Raises:
+            ValueError: If there's an architecture mismatch that would cause random reinitialization.
         """
+        import logging
         checkpoint = torch.load(file_name, weights_only=True)
         state_dict = checkpoint['model_state_dict']
         self.is_frozen = checkpoint.get('is_frozen', False)
         self.locked_perm = checkpoint.get('locked_perm', None)
         self.tree_layout = checkpoint.get('tree_layout', getattr(self, 'tree_layout', 'left'))
+        
+        # Check transformation configuration compatibility
+        saved_use_trans = checkpoint.get('use_transformation_layer', True)
+        saved_num_trans = checkpoint.get('num_transformations', 6)
+        current_num_trans = len(self.transformation_layer.transformations) if self.transformation_layer else 0
+        
+        if saved_use_trans != self.use_transformation_layer:
+            raise ValueError(f"Architecture mismatch: Checkpoint has use_transformation_layer={saved_use_trans}, current model has {self.use_transformation_layer}. Delete checkpoint and retrain.")
+        
+        if self.use_transformation_layer and saved_num_trans != current_num_trans:
+            raise ValueError(f"Transformation count mismatch: Checkpoint has {saved_num_trans} transformations, current model has {current_num_trans}. Delete checkpoint and retrain.")
+        
         if self.is_frozen:
             # Frozen → use FrozenInputToLeaf
             P_hard = state_dict['input_to_leaf.P_hard']
@@ -253,7 +322,7 @@ class binaryTreeLogicNet(nn.Module):
                 num_inputs=self.original_input_size
             )
         # Now load weights
-        self.load_state_dict(state_dict)
+        self.load_state_dict(state_dict, strict=True)
         self.to(self.device)
 
     def build_balanced_tree(self, node_outputs, weights, biases):
@@ -682,10 +751,17 @@ class binaryTreeLogicNet(nn.Module):
             return best_model, best_perm, best_loss, best_index
         
     def prune_features(self, features):
-        """Prune the features of the binary tree logic network.
+        """Prune features from the left (least important) of the binary tree.
+
+        WARNING: Pruning structurally changes the tree and causes accuracy degradation because:
+        - Aggregator 0 is trained to combine two raw inputs
+        - Other aggregators are trained to combine (aggregated_result + raw_input)
+        - After pruning, aggregators are used in contexts they weren't trained for
+        
+        For better feature importance analysis, consider masking features to zero instead.
 
         Args:
-            features (int): Number of features to prune.
+            features (int): Number of features to prune from the left.
         Returns:
             callable: Pruned forward function.
         """
@@ -694,14 +770,29 @@ class binaryTreeLogicNet(nn.Module):
         if features >= self.num_leaves:
             raise ValueError(f"Cannot prune more features than leaves. {features} > {self.num_leaves}")
 
-        pruned_weights = self.weights[features - 1:]  # start from the first remaining aggregator
-        pruned_biases = self.biases[features - 1:]
+        # When pruning K features from left, use aggregators starting at index K
+        # This aligns the remaining features with the rightmost part of the tree
+        if features == 0:
+            pruned_weights = self.weights
+            pruned_biases = self.biases
+        else:
+            pruned_weights = self.weights[features:]  # right-align: skip first K aggregators
+            pruned_biases = self.biases[features:]
 
         def pruned_forward(x):
             node_outputs = list(x.T)
             layer_outputs = []
+            
+            # Edge case: if only 1 feature remains, no aggregation needed
+            if len(node_outputs) == 1:
+                return node_outputs[0].unsqueeze(1)
+            
+            # Number of aggregators needed = number of input features - 1
+            # Use only the required number of aggregators from pruned_weights/biases
+            num_aggregators_needed = len(node_outputs) - 1
+            
             epsilon = 1e-6
-            for i in range(len(pruned_weights)):
+            for i in range(num_aggregators_needed):
                 if self.weight_mode == "fixed":
                     w = torch.tensor([self.weight_value,self.weight_value], dtype=torch.float32, device=self.device)
                 else:
@@ -731,15 +822,15 @@ class binaryTreeLogicNet(nn.Module):
                 else:
                     a = pruned_biases[i]
 
-                # w_soft = torch.softmax(w, dim=0)
+                # Mirror the normal forward logic
                 if i == 0:
-                    # Special case: apply remaining aggregator to (0, x0)
-                    left = torch.zeros_like(node_outputs[0])
-                    right = node_outputs[0]
+                    # First aggregator combines first two features
+                    left = node_outputs[0]
+                    right = node_outputs[1]
                 else:
-                    # Normal aggregator behavior
-                    left = node_outputs[-1]
-                    right = node_outputs[i]
+                    # Subsequent aggregators combine previous result with next feature
+                    left = node_outputs[-1]  # previous aggregation result
+                    right = node_outputs[i + 1]  # next feature
                 z = self.aggregator.aggregate(left, right, a, w[0], w[1])
                 node_outputs.append(z)
                 layer_outputs.append(z)

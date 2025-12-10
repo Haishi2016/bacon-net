@@ -1,12 +1,17 @@
+# The following two lines are needed to refer to local package instead of published package
+
+import sys
+sys.path.insert(0, '../../')
+
 import pandas as pd
 from sklearn.preprocessing import RobustScaler
-import sys
-sys.path.append('../../')
 import torch
 from bacon.baconNet import baconNet
+from bacon.visualization import print_tree_structure, visualize_tree_structure
 import logging
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
+from bacon.transformationLayer import IdentityTransformation, NegationTransformation
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -86,12 +91,8 @@ train_df['target'] = train_df['label'].apply(is_dos)
 test_df['target'] = test_df['label'].apply(is_dos)
 
 drop_cols = ['label', 'target', 'protocol_type', 'service', 'flag', 'difficulty']
-X_train = train_df.drop(columns=drop_cols)
-y_train = train_df['target']
 
-X_test = test_df.drop(columns=drop_cols)
-y_test = test_df['target']
-
+# Balance the training data BEFORE creating X_train/y_train
 df_majority = train_df[train_df['target'] == 1]
 df_minority = train_df[train_df['target'] == 0]
 
@@ -99,7 +100,7 @@ df_minority = train_df[train_df['target'] == 0]
 df_minority_upsampled = resample(
     df_minority,
     replace=True,                 # sample with replacement
-    n_samples=len(df_majority),  # match the majority class sizemor
+    n_samples=len(df_majority),  # match the majority class size
     random_state=42
 )
 
@@ -108,6 +109,13 @@ df_balanced = pd.concat([df_majority, df_minority_upsampled])
 df_balanced = df_balanced.sample(frac=1, random_state=42)
 
 print(df_balanced['target'].value_counts())
+
+# NOW create X_train/y_train from balanced data
+X_train = df_balanced.drop(columns=drop_cols)
+y_train = df_balanced['target']
+
+X_test = test_df.drop(columns=drop_cols)
+y_test = test_df['target']
 
 scaler = RobustScaler()
 X_train = scaler.fit_transform(X_train)
@@ -118,7 +126,22 @@ Y_train_tensor = torch.tensor(y_train.values.reshape(-1, 1), dtype=torch.float32
 X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
 Y_test_tensor = torch.tensor(y_test.values.reshape(-1, 1), dtype=torch.float32)
 
-bacon = baconNet(input_size=X_train.shape[1], freeze_loss_threshold=0.03, lock_loss_tolerance=0.04)
+# Use actual input size for transformations
+num_features = X_train.shape[1]
+
+bacon = baconNet(
+    input_size=num_features, 
+    freeze_loss_threshold=0.13, 
+    lock_loss_tolerance=0.04,
+    use_transformation_layer=True,
+    transformations=[
+        IdentityTransformation(num_features),
+        NegationTransformation(num_features)
+    ],
+    use_class_weighting=False,
+    weight_mode='fixed',
+    aggregator='lsp.half_weight',
+    transformation_temperature=1.0)
 
 X_test_tensor = X_test_tensor.to(device)
 Y_test_tensor = Y_test_tensor.to(device)    
@@ -127,27 +150,42 @@ Y_train_tensor = Y_train_tensor.to(device)
 
 best_model, best_accuracy = bacon.find_best_model(
     X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor, 
-    attempts=100, acceptance_threshold=0.90
+    use_hierarchical_permutation=True,
+    hierarchical_group_size=18,
+    hierarchical_epochs_per_attempt=500,
+    hierarchical_bleed_ratio=0.3,
+    attempts=1, acceptance_threshold=0.55,
+    max_epochs=500
 )
 print(f"✅ Best accuracy: {best_accuracy * 100:.2f}%")
 
 filtered_features = [f for f in feature_names if f not in drop_cols]
 
 # Visualize the BACON model's tree structure
-bacon.print_tree_structure(filtered_features)
-bacon.visualize_tree_structure(filtered_features)
+print_tree_structure(bacon.assembler, filtered_features)
+visualize_tree_structure(bacon.assembler, filtered_features)
 
 accuracies = []
 
+# Baseline accuracy
+with torch.no_grad():
+    baseline_output = bacon(X_test_tensor)
+    baseline_accuracy = (baseline_output.round() == Y_test_tensor).float().mean().item()
+    print(f"✅ Baseline accuracy: {baseline_accuracy * 100:.2f}%")
+
+# Feature importance by zeroing out features from left (least important)
+print("\n🔍 Testing feature importance by zeroing out features:")
 for i in range(1, X_test_tensor.shape[1]):
-    func_eval = bacon.prune_features(i)
-    kept_indices = bacon.assembler.locked_perm[i:].tolist()
-    X_test_pruned = X_test_tensor[:, kept_indices]
+    # Zero out the first i features (in permutation order)
+    X_masked = X_test_tensor.clone()
+    masked_indices = bacon.assembler.locked_perm[:i].tolist()
+    X_masked[:, masked_indices] = 0  # Zero out least important features
+    
     with torch.no_grad():
-        pruned_output = func_eval(X_test_pruned)
-        pruned_accuracy = (pruned_output.round() == Y_test_tensor).float().mean().item()
-        accuracies.append(pruned_accuracy)
-        print(f"✅ Accuracy after pruning {i} feature(s): {pruned_accuracy * 100:.2f}%")
+        masked_output = bacon(X_masked)
+        masked_accuracy = (masked_output.round() == Y_test_tensor).float().mean().item()
+        accuracies.append(masked_accuracy)
+        print(f"✅ Accuracy with {i} feature(s) zeroed: {masked_accuracy * 100:.2f}%")
 
 plt.figure(figsize=(10, 5))
 plt.plot(range(1, len(accuracies) + 1), [a * 100 for a in accuracies], marker='o')
