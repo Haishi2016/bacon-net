@@ -173,19 +173,53 @@ with torch.no_grad():
     baseline_accuracy = (baseline_output.round() == Y_test_tensor).float().mean().item()
     print(f"✅ Baseline accuracy: {baseline_accuracy * 100:.2f}%")
 
-# Feature importance by zeroing out features from left (least important)
-print("\n🔍 Testing feature importance by zeroing out features:")
-for i in range(1, X_test_tensor.shape[1]):
-    # Zero out the first i features (in permutation order)
-    X_masked = X_test_tensor.clone()
-    masked_indices = bacon.assembler.locked_perm[:i].tolist()
-    X_masked[:, masked_indices] = 0  # Zero out least important features
+# Feature importance by neutralizing features from left (least important)
+print("\n🔍 Testing feature importance by neutralizing features:")
+print("   (Setting removed features equal to their partner and andness=0.5 for passthrough)")
+
+def evaluate_with_neutralized_features(model, X, y, num_neutralized):
+    """Evaluate accuracy with the first num_neutralized features neutralized.
+    
+    Neutralization: Set weights so neutralized inputs have weight=0, keeping inputs have weight=1.
+    This makes the aggregator pass through the kept input: LSP(left, right, a, 0, 1) ≈ right
+    
+    In left-associative tree:
+    - Aggregator 0: combines input[0] (left) and input[1] (right)
+    - Aggregator i: combines result[i-1] (left) and input[i+1] (right)
+    
+    To neutralize the first k features, set weight_left=0, weight_right=1 for first k aggregators.
+    """
+    if num_neutralized == 0:
+        with torch.no_grad():
+            return (model(X).round() == y).float().mean().item()
+    
+    # Store original weight_mode and weights
+    original_weight_mode = model.assembler.weight_mode
+    original_weights = []
+    
+    # Temporarily switch to trainable mode so forward pass uses our modified weights
+    model.assembler.weight_mode = "trainable"
+    
+    for i in range(num_neutralized):
+        original_weights.append(model.assembler.weights[i].data.clone())
+        # Set left weight to 0 (neutralize), right weight to 1 (pass through)
+        model.assembler.weights[i].data[0] = 0.0  # left input weight = 0
+        model.assembler.weights[i].data[1] = 1.0  # right input weight = 1
     
     with torch.no_grad():
-        masked_output = bacon(X_masked)
-        masked_accuracy = (masked_output.round() == Y_test_tensor).float().mean().item()
-        accuracies.append(masked_accuracy)
-        print(f"✅ Accuracy with {i} feature(s) zeroed: {masked_accuracy * 100:.2f}%")
+        result = (model(X).round() == y).float().mean().item()
+    
+    # Restore original weights and weight_mode
+    for i in range(num_neutralized):
+        model.assembler.weights[i].data.copy_(original_weights[i])
+    model.assembler.weight_mode = original_weight_mode
+    
+    return result
+
+for i in range(1, X_test_tensor.shape[1]):
+    masked_accuracy = evaluate_with_neutralized_features(bacon, X_test_tensor, Y_test_tensor, i)
+    accuracies.append(masked_accuracy)
+    print(f"✅ Accuracy with {i} feature(s) neutralized: {masked_accuracy * 100:.2f}%")
 
 plt.figure(figsize=(10, 5))
 plt.plot(range(1, len(accuracies) + 1), [a * 100 for a in accuracies], marker='o')
