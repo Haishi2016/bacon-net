@@ -405,6 +405,7 @@ class HierarchicalBaconNet(nn.Module):
                         acceptance_threshold=0.95,
                         save_path="./hierarchical_bacon.pth",
                         max_epochs=12000,
+                        annealing_epochs=None,
                         save_model=True,
                         use_hierarchical_permutation=False,
                         hierarchical_group_size=3,
@@ -479,7 +480,7 @@ class HierarchicalBaconNet(nn.Module):
                 tree_layout=cfg.tree_layout,
                 aggregator=cfg.aggregator,
                 use_transformation_layer=cfg.use_transformation_layer,
-                transformation_temperature=cfg.transformation_layer.temperature if cfg.transformation_layer else 1.0,
+                transformation_temperature=self.transformation_initial_temperature,
                 transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
                 transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,  # Preserve custom transformations
                 is_frozen=False,
@@ -588,16 +589,20 @@ class HierarchicalBaconNet(nn.Module):
             # Temperature annealing for permutation learning
             perm_initial_temp = self.permutation_initial_temperature
             perm_final_temp = self.permutation_final_temperature
-            perm_temp_decay = (perm_final_temp / perm_initial_temp) ** (1.0 / epochs_per_attempt)
+            # Use annealing_epochs if specified, otherwise anneal over all epochs
+            anneal_over_epochs = annealing_epochs if annealing_epochs else epochs_per_attempt
+            perm_temp_decay = (perm_final_temp / perm_initial_temp) ** (1.0 / anneal_over_epochs)
             if hasattr(self.global_tree.input_to_leaf, 'temperature'):
                 self.global_tree.input_to_leaf.temperature = perm_initial_temp
-                logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {epochs_per_attempt} epochs")
+                logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {anneal_over_epochs} epochs (decay: {perm_temp_decay:.6f})")
+                if annealing_epochs and annealing_epochs < epochs_per_attempt:
+                    logging.info(f"   ⏱️  Frozen training: {epochs_per_attempt - anneal_over_epochs} epochs after hardening")
             
             # Temperature annealing for transformation selection (converge to single choice)
             # Transformation has 2^n states vs permutation's n! states, so starts cooler
             trans_initial_temp = self.transformation_initial_temperature
             trans_final_temp = self.transformation_final_temperature
-            trans_temp_decay = (trans_final_temp / trans_initial_temp) ** (1.0 / epochs_per_attempt)
+            trans_temp_decay = (trans_final_temp / trans_initial_temp) ** (1.0 / anneal_over_epochs)
             
             # Set initial temperature for all transformation layers
             trans_layers = []

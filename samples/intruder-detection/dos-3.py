@@ -129,10 +129,21 @@ Y_test_tensor = torch.tensor(y_test.values.reshape(-1, 1), dtype=torch.float32)
 # Use actual input size for transformations
 num_features = X_train.shape[1]
 
+# After loading the data, before training
+print("\n📊 Feature correlation with DoS attacks:")
+for col in ['src_bytes', 'logged_in']:
+    if col in df_balanced.columns:
+        dos_mean = df_balanced[df_balanced['target'] == 1.0][col].mean()
+        normal_mean = df_balanced[df_balanced['target'] == 0.0][col].mean()
+        print(f"{col}:")
+        print(f"  DoS mean: {dos_mean:.4f}")
+        print(f"  Normal mean: {normal_mean:.4f}")
+        print(f"  Correct indicator: {'identity' if dos_mean > normal_mean else 'negation'}")
+
 bacon = baconNet(
     input_size=num_features, 
     freeze_loss_threshold=0.13, 
-    lock_loss_tolerance=0.04,
+    lock_loss_tolerance=0.02,
     use_transformation_layer=True,
     transformations=[
         IdentityTransformation(num_features),
@@ -141,7 +152,10 @@ bacon = baconNet(
     use_class_weighting=False,
     weight_mode='fixed',
     aggregator='lsp.half_weight',
-    transformation_temperature=1.0)
+    permutation_final_temperature=0.05,
+    transformation_final_temperature=0.05,
+    permutation_initial_temperature=5.0,
+    transformation_initial_temperature=1.0)
 
 X_test_tensor = X_test_tensor.to(device)
 Y_test_tensor = Y_test_tensor.to(device)    
@@ -152,10 +166,11 @@ best_model, best_accuracy = bacon.find_best_model(
     X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor, 
     use_hierarchical_permutation=True,
     hierarchical_group_size=18,
-    hierarchical_epochs_per_attempt=500,
-    hierarchical_bleed_ratio=0.3,
-    attempts=1, acceptance_threshold=0.55,
-    max_epochs=500
+    hierarchical_epochs_per_attempt=1000,  # Total epochs (this overrides max_epochs)
+    annealing_epochs=500,  # Anneal for 6k epochs, then 6k frozen training
+    hierarchical_bleed_ratio=0.0,
+    attempts=1, 
+    acceptance_threshold=0.85
 )
 print(f"✅ Best accuracy: {best_accuracy * 100:.2f}%")
 

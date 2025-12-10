@@ -60,7 +60,7 @@ class baconNet(nn.Module):
                  max_permutations=10000,
                  is_frozen=False,
                  use_transformation_layer=False,
-                 transformation_temperature=1.0,
+                 transformation_temperature=None,
                  transformation_use_gumbel=False,
                  transformations=None,
                  early_stop_threshold_large_inputs=0.1,
@@ -95,6 +95,10 @@ class baconNet(nn.Module):
         self.permutation_final_temperature = permutation_final_temperature
         self.transformation_initial_temperature = transformation_initial_temperature
         self.transformation_final_temperature = transformation_final_temperature
+        
+        # Use transformation_initial_temperature if transformation_temperature not specified
+        if transformation_temperature is None:
+            transformation_temperature = transformation_initial_temperature
         
         # Loss component weights (normalized internally during training)
         self.loss_weight_main = loss_weight_main  # Main BCE loss
@@ -234,7 +238,8 @@ class baconNet(nn.Module):
                         attempts = 100, 
                         acceptance_threshold = 0.95, 
                         save_path = "./assembler.pth", 
-                        max_epochs = 12000, 
+                        max_epochs = 12000,
+                        annealing_epochs = None,
                         save_model = True,
                         use_hierarchical_permutation = False,
                         hierarchical_group_size = 3,
@@ -328,7 +333,7 @@ class baconNet(nn.Module):
                     early_stop_min_delta=cfg.early_stop_min_delta,
                     early_stop_threshold=cfg.early_stop_threshold,
                     use_transformation_layer=cfg.use_transformation_layer,
-                    transformation_temperature=cfg.transformation_layer.temperature if cfg.transformation_layer else 1.0,
+                    transformation_temperature=self.transformation_initial_temperature,
                     transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
                     transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,  # Preserve custom transformations
                     device=cfg.device,
@@ -473,8 +478,12 @@ class baconNet(nn.Module):
                     self.assembler.input_to_leaf.temperature = self.permutation_initial_temperature
                     perm_initial_temp = self.permutation_initial_temperature
                     perm_final_temp = self.permutation_final_temperature
-                    perm_temp_decay_rate = (perm_final_temp / perm_initial_temp) ** (1.0 / actual_max_epochs)
-                    logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {actual_max_epochs} epochs (decay: {perm_temp_decay_rate:.6f})")
+                    # Use annealing_epochs if specified, otherwise anneal over all epochs
+                    anneal_over_epochs = annealing_epochs if annealing_epochs else actual_max_epochs
+                    perm_temp_decay_rate = (perm_final_temp / perm_initial_temp) ** (1.0 / anneal_over_epochs)
+                    logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {anneal_over_epochs} epochs (decay: {perm_temp_decay_rate:.6f})")
+                    if annealing_epochs and annealing_epochs < actual_max_epochs:
+                        logging.info(f"   ⏱️  Frozen training: {actual_max_epochs - anneal_over_epochs} epochs after hardening")
                     
                     # Transformation temperature schedule (faster cooling for simpler problem)
                     # Transformation has 2^n states, permutation has n! states
@@ -482,9 +491,9 @@ class baconNet(nn.Module):
                     if self.assembler.transformation_layer is not None:
                         trans_initial_temp = self.transformation_initial_temperature
                         trans_final_temp = self.transformation_final_temperature
-                        trans_temp_decay_rate = (trans_final_temp / trans_initial_temp) ** (1.0 / actual_max_epochs)
+                        trans_temp_decay_rate = (trans_final_temp / trans_initial_temp) ** (1.0 / anneal_over_epochs)
                         self.assembler.transformation_layer.temperature = trans_initial_temp
-                        logging.info(f"   🔗 Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {actual_max_epochs} epochs (decay: {trans_temp_decay_rate:.6f})")
+                        logging.info(f"   🔗 Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {anneal_over_epochs} epochs (decay: {trans_temp_decay_rate:.6f})")
                     else:
                         trans_temp_decay_rate = None
                     
@@ -585,20 +594,17 @@ class baconNet(nn.Module):
                             # Not enough history yet, assume making progress
                             epochs_since_improvement = 0
                         
-                        # Only anneal temperature if making progress
-                        should_anneal = epochs_since_improvement < improvement_patience
+                        # Only anneal temperature if making progress AND within annealing period
+                        within_annealing_period = epoch < anneal_over_epochs
+                        should_anneal = epochs_since_improvement < improvement_patience and within_annealing_period
                         
                         if should_anneal:
                             # Cool permutation layer
                             self.assembler.input_to_leaf.temperature *= perm_temp_decay_rate
                             
-                            # Cool transformation layer independently (faster cooling)
+                            # Cool transformation layer independently
                             if self.assembler.transformation_layer is not None and trans_temp_decay_rate is not None:
                                 self.assembler.transformation_layer.temperature *= trans_temp_decay_rate
-                                # Don't let transformation temp go below permutation temp
-                                perm_temp = self.assembler.input_to_leaf.temperature
-                                if self.assembler.transformation_layer.temperature < perm_temp:
-                                    self.assembler.transformation_layer.temperature = perm_temp
                         else:
                             # Pause temperature annealing - keep exploring at current temperature
                             if not temp_paused:
@@ -615,9 +621,19 @@ class baconNet(nn.Module):
                                 try:
                                     logging.info(f"   ❄️  Permutation hardened at epoch {epoch + 1} (temp: {self.assembler.input_to_leaf.temperature:.3f})")
                                     from bacon.frozonInputToLeaf import frozenInputToLeaf
-                                    # Get hard assignment from current soft permutation
+                                    from scipy.optimize import linear_sum_assignment
+                                    
+                                    # Get soft permutation matrix
                                     soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
-                                    hard_perm = torch.argmax(soft_perm, dim=1)
+                                    
+                                    # Use Hungarian algorithm to find optimal hard permutation
+                                    # Hungarian minimizes cost, so negate the soft probabilities to maximize
+                                    soft_perm_np = soft_perm.detach().cpu().numpy()
+                                    row_ind, col_ind = linear_sum_assignment(-soft_perm_np)
+                                    
+                                    # Sort by row index to get the permutation vector
+                                    hard_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long, device=self.assembler.device)
+                                    
                                     self.assembler.locked_perm = hard_perm.clone().detach()
                                     self.assembler.is_frozen = True
                                     # Replace with frozen layer
@@ -625,7 +641,7 @@ class baconNet(nn.Module):
                                         self.assembler.locked_perm,
                                         self.assembler.original_input_size
                                     ).to(self.assembler.device)
-                                    logging.info(f"   🔒 Successfully frozen model (locked_perm created)")
+                                    logging.info(f"   🔒 Successfully frozen model using Hungarian algorithm (locked_perm created)")
                                 except Exception as e:
                                     logging.warning(f"   ⚠️ Failed to freeze on hardening: {e}")
                                     self.assembler.is_frozen = True  # Set flag anyway
