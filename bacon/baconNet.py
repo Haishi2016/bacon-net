@@ -28,6 +28,8 @@ class baconNet(nn.Module):
         max_permutations (int, optional): Maximum permutations to explore. Defaults to 10000.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
         early_stop_threshold_large_inputs (float, optional): Early stop threshold for transformation layers with 10+ inputs. Defaults to 0.1. Lower values require more training but achieve higher accuracy.
+        transformations (list, optional): List of transformation objects to use. If None, uses all 6 default transformations.
+                                          Example: [IdentityTransformation(n), NegationTransformation(n)] for identity+negation only.
         reheat_plateau_window (int, optional): Number of epochs to check for plateau detection. Defaults to 200. Smaller = more aggressive reheating.
         reheat_improvement_threshold (float, optional): Minimum loss improvement over plateau_window to avoid reheating. Defaults to 1.0. Smaller = more aggressive.
         reheat_cooldown (int, optional): Minimum epochs between reheats. Defaults to 300. Prevents oscillation.
@@ -60,6 +62,7 @@ class baconNet(nn.Module):
                  use_transformation_layer=False,
                  transformation_temperature=1.0,
                  transformation_use_gumbel=False,
+                 transformations=None,
                  early_stop_threshold_large_inputs=0.1,
                  reheat_plateau_window=200,
                  reheat_improvement_threshold=1.0,
@@ -107,6 +110,12 @@ class baconNet(nn.Module):
         # Class weighting for imbalanced data
         self.use_class_weighting = use_class_weighting
         
+        import logging
+        logging.info(f"🔧 Creating baconNet with transformations: {transformations}")
+        if transformations:
+            logging.info(f"   Number of custom transformations: {len(transformations)}")
+            logging.info(f"   Types: {[type(t).__name__ for t in transformations]}")
+        
         self.assembler = binaryTreeLogicNet(input_size, 
                                             freeze_loss_threshold=freeze_loss_threshold,
                                             weight_mode=weight_mode,
@@ -124,7 +133,12 @@ class baconNet(nn.Module):
                                             use_transformation_layer=use_transformation_layer,
                                             transformation_temperature=transformation_temperature,
                                             transformation_use_gumbel=transformation_use_gumbel,
+                                            transformations=transformations,
                                             weight_choices=None)
+        
+        if self.assembler.transformation_layer:
+            actual_trans = self.assembler.transformation_layer.transformations
+            logging.info(f"✅ Assembler created with {len(actual_trans)} transformations: {[type(t).__name__ for t in actual_trans]}")
     def forward(self, x):
         """ Forward pass through the BACON network.
 
@@ -316,6 +330,7 @@ class baconNet(nn.Module):
                     use_transformation_layer=cfg.use_transformation_layer,
                     transformation_temperature=cfg.transformation_layer.temperature if cfg.transformation_layer else 1.0,
                     transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
+                    transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,  # Preserve custom transformations
                     device=cfg.device,
                 )
 

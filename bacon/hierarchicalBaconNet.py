@@ -23,6 +23,7 @@ class HierarchicalBaconNet(nn.Module):
                               Example: {'payment_history': [0,1,2,3,4,5,6], 'demographics': [7,8,9,10]}
         total_features (int): Total number of input features across all groups.
         freeze_loss_threshold (float, optional): Loss threshold for freezing global permutation. Defaults to 0.25.
+                                                Note: If using loss_amplifier, this will be multiplied by it.
         weight_mode (str, optional): Weight mode for trees ('fixed' or 'trainable'). Defaults to 'fixed'.
         aggregator (str, optional): Aggregator type. Defaults to 'lsp.half_weight'.
         use_sub_tree_transformation (bool, optional): Enable transformations in sub-trees. Defaults to True.
@@ -30,6 +31,7 @@ class HierarchicalBaconNet(nn.Module):
         sub_tree_layout (str, optional): Layout for sub-trees. Defaults to 'left'.
         global_tree_layout (str, optional): Layout for global tree. Defaults to 'balanced'.
         max_permutations (int, optional): Max permutations for global tree. Defaults to 10000.
+        loss_amplifier (float, optional): Amplifier for the loss. Defaults to 1.0.
         lr_permutation (float, optional): Learning rate for global permutation. Defaults to 0.3.
         lr_transformation (float, optional): Learning rate for transformations. Defaults to 0.5.
         lr_aggregator (float, optional): Learning rate for aggregator weights. Defaults to 0.1.
@@ -40,6 +42,14 @@ class HierarchicalBaconNet(nn.Module):
                                                    Example: [IdentityTransformation(n), NegationTransformation(n)]
         global_tree_transformations (list, optional): List of transformation objects for global tree.
                                                       If None, uses all transformations.
+        sub_tree_permutation_groups (list, optional): List of group names that should learn permutations.
+                                                      If None or empty, all sub-trees use identity permutation.
+                                                      Example: ['demographics'] to enable permutation only on demographics group.
+        permutation_initial_temperature (float, optional): Starting temperature for permutation annealing. Defaults to 5.0.
+        permutation_final_temperature (float, optional): Final temperature for permutation annealing. Defaults to 0.1.
+        transformation_initial_temperature (float, optional): Starting temperature for transformation selection. Defaults to 1.0.
+                                                              Lower than permutation since transformation has 2^n vs n! states.
+        transformation_final_temperature (float, optional): Final temperature for transformation selection. Defaults to 0.1.
     """
     def __init__(self, 
                  feature_groups,
@@ -52,13 +62,19 @@ class HierarchicalBaconNet(nn.Module):
                  sub_tree_layout='left',
                  global_tree_layout='balanced',
                  max_permutations=10000,
+                 loss_amplifier=1.0,
                  lr_permutation=0.3,
                  lr_transformation=0.5,
                  lr_aggregator=0.1,
                  lr_other=0.1,
                  use_class_weighting=True,
                  sub_tree_transformations=None,
-                 global_tree_transformations=None):
+                 global_tree_transformations=None,
+                 sub_tree_permutation_groups=None,
+                 permutation_initial_temperature=5.0,
+                 permutation_final_temperature=0.1,
+                 transformation_initial_temperature=1.0,
+                 transformation_final_temperature=0.1):
         super(HierarchicalBaconNet, self).__init__()
         
         # Resolve aggregator string to object
@@ -96,6 +112,16 @@ class HierarchicalBaconNet(nn.Module):
         self.lr_aggregator = lr_aggregator
         self.lr_other = lr_other
         self.use_class_weighting = use_class_weighting
+        self.loss_amplifier = loss_amplifier
+        
+        # Temperature annealing parameters (aligned with baconNet)
+        self.permutation_initial_temperature = permutation_initial_temperature
+        self.permutation_final_temperature = permutation_final_temperature
+        self.transformation_initial_temperature = transformation_initial_temperature
+        self.transformation_final_temperature = transformation_final_temperature
+        
+        # Sub-tree permutation settings
+        self.sub_tree_permutation_groups = set(sub_tree_permutation_groups) if sub_tree_permutation_groups else set()
         
         # Create sub-trees for ALL user-defined groups
         # Ungrouped features bypass sub-tree overhead and join global tree directly
@@ -111,23 +137,27 @@ class HierarchicalBaconNet(nn.Module):
                 # Create instances with correct size for this sub-tree
                 sub_tree_trans = [trans.__class__(num_features_in_group) for trans in sub_tree_transformations]
             
-            # Each sub-tree: transformations + aggregation, NO permutation learning
+            # Determine if this group should learn permutations
+            enable_permutation = group_name in self.sub_tree_permutation_groups
+            
+            # Each sub-tree: transformations + aggregation + optional permutation learning
             sub_tree = binaryTreeLogicNet(
                 input_size=num_features_in_group,
-                freeze_loss_threshold=999.9,  # Never freeze (managed by global tree)
+                freeze_loss_threshold=freeze_loss_threshold if enable_permutation else 999.9,
                 weight_mode=weight_mode,
                 tree_layout=sub_tree_layout,
                 aggregator=aggregator,
                 use_transformation_layer=use_sub_tree_transformation,
                 transformations=sub_tree_trans,
-                is_frozen=True,  # Permutation is frozen (identity)
-                permutation_max=1,  # No permutation search
+                is_frozen=not enable_permutation,  # Frozen if NOT learning permutation
+                permutation_max=max_permutations if enable_permutation else 1,
                 normalize_andness=True,
-                weight_penalty_strength=1e-3
+                weight_penalty_strength=1e-3,
+                loss_amplifier=loss_amplifier
             )
             
-            # Force identity permutation (preserve feature order within group)
-            if hasattr(sub_tree, 'input_to_leaf'):
+            # Force identity permutation ONLY if NOT learning permutation
+            if not enable_permutation and hasattr(sub_tree, 'input_to_leaf'):
                 identity_perm = torch.arange(num_features_in_group)
                 sub_tree.input_to_leaf = frozenInputToLeaf(
                     identity_perm, 
@@ -159,7 +189,8 @@ class HierarchicalBaconNet(nn.Module):
             is_frozen=False,  # Learn permutation
             permutation_max=max_permutations,
             normalize_andness=True,
-            weight_penalty_strength=1e-3
+            weight_penalty_strength=1e-3,
+            loss_amplifier=loss_amplifier
         )
     
     def forward(self, x):
@@ -240,6 +271,7 @@ class HierarchicalBaconNet(nn.Module):
     def save_model(self, filepath):
         """Save the hierarchical BACON model."""
         import os
+        import logging
         directory = os.path.dirname(filepath)
         if directory:
             os.makedirs(directory, exist_ok=True)
@@ -252,12 +284,47 @@ class HierarchicalBaconNet(nn.Module):
             'global_locked_perm': self.global_tree.locked_perm,
             'sub_trees_frozen': {name: tree.is_frozen for name, tree in self.sub_trees.items()},
             'sub_trees_locked_perm': {name: tree.locked_perm for name, tree in self.sub_trees.items()},
+            # Save architecture configuration
+            'use_global_transformation': self.use_global_transformation,
+            'use_sub_tree_transformation': self.use_sub_tree_transformation,
+            'num_global_transforms': len(self.global_tree.transformation_layer.transformations) if self.global_tree.transformation_layer else 0,
+            'num_sub_tree_transforms': {name: len(tree.transformation_layer.transformations) if tree.transformation_layer else 0 for name, tree in self.sub_trees.items()},
         }
+        
+        logging.info(f"\n💾 SAVING MODEL TO: {filepath}")
+        logging.info(f"   Global tree frozen: {self.global_tree.is_frozen}")
+        logging.info(f"   Global locked_perm: {self.global_tree.locked_perm}")
+        logging.info(f"   use_global_transformation: {self.use_global_transformation}")
+        if self.global_tree.transformation_layer:
+            trans_summary = self.global_tree.transformation_layer.get_transformation_summary()
+            logging.info(f"   Global transformations: {len(self.global_tree.transformation_layer.transformations)} types, {len(trans_summary)} features")
+        logging.info(f"   Sub-trees frozen: {checkpoint['sub_trees_frozen']}")
+        
         torch.save(checkpoint, filepath)
+        logging.info(f"   ✅ Save complete!")
     
     def load_model(self, filepath):
         """Load the hierarchical BACON model."""
+        import logging
         checkpoint = torch.load(filepath, weights_only=False)
+        
+        logging.info(f"\n📂 LOADING MODEL FROM: {filepath}")
+        logging.info(f"   Checkpoint global frozen: {checkpoint.get('global_is_frozen', False)}")
+        logging.info(f"   Checkpoint global locked_perm: {checkpoint.get('global_locked_perm', None)}")
+        logging.info(f"   Checkpoint sub-trees frozen: {checkpoint.get('sub_trees_frozen', {})}")
+        
+        # Check architecture compatibility
+        saved_use_global_trans = checkpoint.get('use_global_transformation', True)
+        saved_num_global_trans = checkpoint.get('num_global_transforms', 6)
+        current_num_global_trans = len(self.global_tree.transformation_layer.transformations) if self.global_tree.transformation_layer else 0
+        
+        if saved_use_global_trans != self.use_global_transformation:
+            logging.warning(f"   ⚠️  ARCHITECTURE MISMATCH: Checkpoint has use_global_transformation={saved_use_global_trans}, current model has {self.use_global_transformation}")
+            logging.warning(f"       This will cause performance degradation!")
+        
+        if self.use_global_transformation and saved_num_global_trans != current_num_global_trans:
+            logging.warning(f"   ⚠️  TRANSFORMATION COUNT MISMATCH: Checkpoint has {saved_num_global_trans} global transforms, current model has {current_num_global_trans}")
+            logging.warning(f"       Transformation layer will be randomly reinitialized!")
         
         # Restore global tree
         self.global_tree.is_frozen = checkpoint.get('global_is_frozen', False)
@@ -276,11 +343,24 @@ class HierarchicalBaconNet(nn.Module):
         
         # Filter out keys that don't match in size
         filtered_state = {}
+        skipped_keys = []
         for k, v in global_state.items():
             if k in current_state:
                 if current_state[k].shape == v.shape:
                     filtered_state[k] = v
+                else:
+                    skipped_keys.append(f"{k} (shape mismatch: {v.shape} vs {current_state[k].shape})")
+            else:
+                skipped_keys.append(f"{k} (not in current model)")
         
+        if skipped_keys:
+            logging.warning(f"   ⚠️  SKIPPED {len(skipped_keys)} global tree parameters:")
+            for key in skipped_keys[:5]:  # Show first 5
+                logging.warning(f"      - {key}")
+            if len(skipped_keys) > 5:
+                logging.warning(f"      ... and {len(skipped_keys) - 5} more")
+        
+        logging.info(f"   ✅ Loading {len(filtered_state)}/{len(global_state)} global tree parameters")
         self.global_tree.load_state_dict(filtered_state, strict=False)
         
         # Restore sub-trees
@@ -304,11 +384,20 @@ class HierarchicalBaconNet(nn.Module):
             # Filter out incompatible transformation parameters
             current_sub_state = self.sub_trees[name].state_dict()
             filtered_sub_state = {}
+            sub_skipped_keys = []
             for k, v in state.items():
                 if k in current_sub_state:
                     if current_sub_state[k].shape == v.shape:
                         filtered_sub_state[k] = v
+                    else:
+                        sub_skipped_keys.append(f"{k} (shape mismatch)")
+                else:
+                    sub_skipped_keys.append(f"{k} (not in current model)")
             
+            if sub_skipped_keys:
+                logging.warning(f"   ⚠️  Sub-tree '{name}' skipped {len(sub_skipped_keys)} parameters")
+            
+            logging.info(f"   ✅ Sub-tree '{name}': loaded {len(filtered_sub_state)}/{len(state)} parameters")
             self.sub_trees[name].load_state_dict(filtered_sub_state, strict=False)
     
     def find_best_model(self, x, y, x_test, y_test,
@@ -390,6 +479,9 @@ class HierarchicalBaconNet(nn.Module):
                 tree_layout=cfg.tree_layout,
                 aggregator=cfg.aggregator,
                 use_transformation_layer=cfg.use_transformation_layer,
+                transformation_temperature=cfg.transformation_layer.temperature if cfg.transformation_layer else 1.0,
+                transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
+                transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,  # Preserve custom transformations
                 is_frozen=False,
                 permutation_max=cfg.permutation_max,
                 device=device
@@ -494,12 +586,32 @@ class HierarchicalBaconNet(nn.Module):
                 pos_weight = None
             
             # Temperature annealing for permutation learning
-            perm_initial_temp = 5.0
-            perm_final_temp = 0.1
+            perm_initial_temp = self.permutation_initial_temperature
+            perm_final_temp = self.permutation_final_temperature
             perm_temp_decay = (perm_final_temp / perm_initial_temp) ** (1.0 / epochs_per_attempt)
             if hasattr(self.global_tree.input_to_leaf, 'temperature'):
                 self.global_tree.input_to_leaf.temperature = perm_initial_temp
                 logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {epochs_per_attempt} epochs")
+            
+            # Temperature annealing for transformation selection (converge to single choice)
+            # Transformation has 2^n states vs permutation's n! states, so starts cooler
+            trans_initial_temp = self.transformation_initial_temperature
+            trans_final_temp = self.transformation_final_temperature
+            trans_temp_decay = (trans_final_temp / trans_initial_temp) ** (1.0 / epochs_per_attempt)
+            
+            # Set initial temperature for all transformation layers
+            trans_layers = []
+            if self.global_tree.transformation_layer is not None:
+                self.global_tree.transformation_layer.temperature = trans_initial_temp
+                trans_layers.append(('global', self.global_tree.transformation_layer))
+            for name, tree in self.sub_trees.items():
+                if tree.transformation_layer is not None:
+                    tree.transformation_layer.temperature = trans_initial_temp
+                    trans_layers.append((name, tree.transformation_layer))
+            
+            if trans_layers:
+                logging.info(f"   🌡️  Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {epochs_per_attempt} epochs")
+                logging.info(f"      Annealing {len(trans_layers)} transformation layers (forces single transformation per feature)")
             
             # Training loop
             for epoch in range(epochs_per_attempt):
@@ -512,9 +624,9 @@ class HierarchicalBaconNet(nn.Module):
                 if self.use_class_weighting and pos_weight is not None:
                     bce_losses = criterion(outputs, y)
                     weights = torch.where(y == 1, pos_weight, 1.0)
-                    loss = (bce_losses * weights).mean()
+                    loss = (bce_losses * weights).mean() * self.loss_amplifier
                 else:
-                    loss = criterion(outputs, y)
+                    loss = criterion(outputs, y) * self.loss_amplifier
                 
                 loss.backward()
                 optimizer.step()
@@ -522,6 +634,10 @@ class HierarchicalBaconNet(nn.Module):
                 # Anneal permutation temperature (start soft, end hard)
                 if hasattr(self.global_tree.input_to_leaf, 'temperature') and not self.global_tree.is_frozen:
                     self.global_tree.input_to_leaf.temperature *= perm_temp_decay
+                
+                # Anneal transformation temperatures (force convergence to single choice per feature)
+                for layer_name, trans_layer in trans_layers:
+                    trans_layer.temperature *= trans_temp_decay
                 
                 # Auto-freeze global tree permutation when loss threshold is reached
                 if not self.global_tree.is_frozen and loss.item() < self.global_tree.freeze_loss_threshold:
