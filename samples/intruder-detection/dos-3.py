@@ -151,7 +151,7 @@ bacon = baconNet(
     ],
     use_class_weighting=False,
     weight_mode='fixed',
-    aggregator='lsp.half_weight',
+    aggregator='lsp.half_weight',    
     permutation_final_temperature=0.05,
     transformation_final_temperature=0.05,
     permutation_initial_temperature=5.0,
@@ -165,12 +165,17 @@ Y_train_tensor = Y_train_tensor.to(device)
 best_model, best_accuracy = bacon.find_best_model(
     X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor, 
     use_hierarchical_permutation=True,
-    hierarchical_group_size=18,
-    hierarchical_epochs_per_attempt=1000,  # Total epochs (this overrides max_epochs)
-    annealing_epochs=500,  # Anneal for 6k epochs, then 6k frozen training
-    hierarchical_bleed_ratio=0.0,
+    hierarchical_group_size=17,
+    hierarchical_epochs_per_attempt=12000,  # Max epochs (safety limit)
+    annealing_epochs=2000,  # Temperature annealing period
+    frozen_training_epochs=2000,  # Train for 200 epochs after freezing
+    convergence_patience=500,  # Stop if no improvement for 500 epochs
+    convergence_delta=0.001,  # Minimum improvement threshold
+    freeze_confidence_threshold=0.80,  # Lower threshold to accept Sinkhorn constraint (was 0.90)
+    loss_weight_perm_sparsity=0.3,  # Aggressive sparsity to push toward one-hot (increased from 0.1)
+    hierarchical_bleed_ratio=0.0,        
     attempts=1, 
-    acceptance_threshold=0.85
+    acceptance_threshold=0.70
 )
 print(f"✅ Best accuracy: {best_accuracy * 100:.2f}%")
 
