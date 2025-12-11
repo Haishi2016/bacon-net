@@ -41,6 +41,7 @@ class baconNet(nn.Module):
         loss_weight_main (float, optional): Weight for main BCE loss. Defaults to 1.0. 
         loss_weight_perm_entropy (float, optional): Weight for permutation entropy regularization. Defaults to 0.0. Higher = encourage exploration. Typical range: 0.0-0.1.
         loss_weight_trans_entropy (float, optional): Weight for transformation entropy regularization. Defaults to 0.0. Higher = encourage decisive transformation selection. Typical range: 0.0-0.1.
+        loss_weight_perm_sparsity (float, optional): Weight for permutation sparsity loss. Defaults to 0.01. Penalizes high entropy (flat distributions) to encourage peaked/sparse permutations. Higher = stronger push toward confident or clear multi-modal distributions. Typical range: 0.0-0.1.
         lr_permutation (float, optional): Learning rate for permutation layer. Defaults to 0.3. Higher = faster exploration of feature orderings.
         lr_transformation (float, optional): Learning rate for transformation layer. Defaults to 0.5. Higher = faster transformation selection.
         lr_aggregator (float, optional): Learning rate for aggregator weights. Defaults to 0.1. Lower = more stable tree structure.
@@ -75,6 +76,7 @@ class baconNet(nn.Module):
                  loss_weight_main=1.0,
                  loss_weight_perm_entropy=0.0,
                  loss_weight_trans_entropy=0.0,
+                 loss_weight_perm_sparsity=0.01,
                  lr_permutation=0.3,
                  lr_transformation=0.5,
                  lr_aggregator=0.1,
@@ -104,6 +106,7 @@ class baconNet(nn.Module):
         self.loss_weight_main = loss_weight_main  # Main BCE loss
         self.loss_weight_perm_entropy = loss_weight_perm_entropy  # Permutation entropy regularization
         self.loss_weight_trans_entropy = loss_weight_trans_entropy  # Transformation entropy regularization
+        self.loss_weight_perm_sparsity = loss_weight_perm_sparsity  # Permutation sparsity loss (encourage peaked distributions)
         
         # Learning rates for different parameter groups
         self.lr_permutation = lr_permutation
@@ -240,6 +243,11 @@ class baconNet(nn.Module):
                         save_path = "./assembler.pth", 
                         max_epochs = 12000,
                         annealing_epochs = None,
+                        frozen_training_epochs = 200,
+                        convergence_patience = 500,
+                        convergence_delta = 0.001,
+                        freeze_confidence_threshold = 0.95,
+                        loss_weight_perm_sparsity = None,
                         save_model = True,
                         use_hierarchical_permutation = False,
                         hierarchical_group_size = 3,
@@ -256,7 +264,13 @@ class baconNet(nn.Module):
             attempts (int, optional): Number of attempts to find the best model. Defaults to 100.
             acceptance_threshold (float, optional): Minimum accuracy to accept a model. Defaults to 0.95.
             save_path (str, optional): Path to save the best model. Defaults to "./assembler.pth".
-            max_epochs (int, optional): Maximum epochs for training. Defaults to 12000.
+            max_epochs (int, optional): Maximum epochs for training (safety limit). Defaults to 12000.
+            annealing_epochs (int, optional): Epochs for temperature annealing. Defaults to None.
+            frozen_training_epochs (int, optional): Epochs to train after freezing. Defaults to 200.
+            convergence_patience (int, optional): Epochs without improvement before considering converged. Defaults to 500.
+            convergence_delta (float, optional): Minimum loss improvement to reset patience. Defaults to 0.001.
+            freeze_confidence_threshold (float, optional): Mean max probability threshold for freezing. Defaults to 0.95.
+            loss_weight_perm_sparsity (float, optional): Weight for permutation sparsity loss (encourages peaked distributions). If None, uses instance default. Defaults to None.
             save_model (bool, optional): Whether to save the best model. Defaults to True.
             use_hierarchical_permutation (bool, optional): Use coarse-grained permutation exploration. Defaults to False.
             hierarchical_group_size (int, optional): Group size for hierarchical permutation (e.g., 3 for 10 inputs → 4x4 coarse matrix). Defaults to 3.
@@ -423,13 +437,14 @@ class baconNet(nn.Module):
                     logging.info(f"      {group['name']}: {group['lr']}")
                 
                 # Log loss weighting configuration
-                total_weight = self.loss_weight_main + self.loss_weight_perm_entropy + self.loss_weight_trans_entropy
+                total_weight = self.loss_weight_main + self.loss_weight_perm_entropy + self.loss_weight_trans_entropy + self.loss_weight_perm_sparsity
                 if total_weight > 0:
                     norm_main = self.loss_weight_main / total_weight
                     norm_perm = self.loss_weight_perm_entropy / total_weight
                     norm_trans = self.loss_weight_trans_entropy / total_weight
-                    if self.loss_weight_perm_entropy > 0 or self.loss_weight_trans_entropy > 0:
-                        logging.info(f"   ⚖️  Loss weights (normalized): main={norm_main:.3f}, perm_entropy={norm_perm:.3f}, trans_entropy={norm_trans:.3f}")
+                    norm_sparsity = self.loss_weight_perm_sparsity / total_weight
+                    if self.loss_weight_perm_entropy > 0 or self.loss_weight_trans_entropy > 0 or self.loss_weight_perm_sparsity > 0:
+                        logging.info(f"   ⚖️  Loss weights (normalized): main={norm_main:.3f}, perm_entropy={norm_perm:.3f}, trans_entropy={norm_trans:.3f}, perm_sparsity={norm_sparsity:.3f}")
                 
                 # Compute class weights for imbalanced data (if enabled)
                 # pos_weight = (# negative samples) / (# positive samples)
@@ -451,6 +466,14 @@ class baconNet(nn.Module):
                     criterion = nn.BCELoss()
                     pos_weight = None
 
+                # Override sparsity loss weight if provided
+                if loss_weight_perm_sparsity is not None:
+                    original_sparsity_weight = self.loss_weight_perm_sparsity
+                    self.loss_weight_perm_sparsity = loss_weight_perm_sparsity
+                    logging.info(f"   🎯 Using custom sparsity loss weight: {loss_weight_perm_sparsity}")
+                else:
+                    original_sparsity_weight = None
+
                 # Use epochs_per_attempt instead of max_epochs for hierarchical mode
                 actual_max_epochs = epochs_per_attempt
 
@@ -459,6 +482,18 @@ class baconNet(nn.Module):
                 accuracy_history = []  # Track accuracy for smarter plateau detection
                 last_reheat_epoch = -1000  # Track when we last reheated
                 min_epochs_between_reheats = 500  # Minimum gap between reheating attempts
+                freeze_confidence_warning_shown = False  # Track if we've already warned about low confidence
+                
+                # Convergence tracking
+                best_loss_for_convergence = float('inf')
+                epochs_without_improvement = 0
+                epoch_when_frozen = None  # Track when we froze to count frozen training epochs
+                has_converged_before_freeze = False
+                
+                # Confidence tracking for plateau detection
+                best_confidence = 0.0
+                epochs_without_confidence_improvement = 0
+                confidence_plateau_patience = 1000  # Freeze if confidence doesn't improve for this many epochs after loss convergence
                 
                 # Adaptive temperature annealing tracking
                 best_loss = float('inf')
@@ -535,6 +570,31 @@ class baconNet(nn.Module):
                         trans_entropy = -(trans_probs * torch.log(trans_probs + 1e-10)).sum(dim=1).mean()
                         # Negative entropy = encourage decisive transformation choice (low entropy)
                         loss = loss - self.loss_weight_trans_entropy * trans_entropy
+                    
+                    # Add permutation sparsity loss (encourage peaked distributions)
+                    if self.loss_weight_perm_sparsity > 0 and use_temperature_annealing and hasattr(self.assembler.input_to_leaf, 'logits'):
+                        # Use Sinkhorn normalization to get doubly stochastic matrix
+                        if hasattr(self.assembler.input_to_leaf, 'sinkhorn'):
+                            perm_probs = self.assembler.input_to_leaf.sinkhorn(
+                                self.assembler.input_to_leaf.logits,
+                                temperature=self.assembler.input_to_leaf.temperature,
+                                n_iters=self.assembler.input_to_leaf.sinkhorn_iters
+                            )
+                        else:
+                            perm_probs = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                        
+                        # Compute entropy of soft permutation (lower entropy = more peaked/sparse)
+                        perm_sparsity_entropy = -(perm_probs * torch.log(perm_probs + 1e-10)).sum(dim=1).mean()
+                        # Add as penalty (we want to minimize entropy = maximize sparsity)
+                        sparsity_loss = self.loss_weight_perm_sparsity * perm_sparsity_entropy
+                        loss = loss + sparsity_loss
+                        
+                        # Note: Column uniqueness penalty not needed for Sinkhorn (already doubly stochastic)
+                        # But add it for non-Sinkhorn layers
+                        if not hasattr(self.assembler.input_to_leaf, 'sinkhorn'):
+                            col_sums = perm_probs.sum(dim=0)  # Sum down columns
+                            col_uniqueness_penalty = ((col_sums - 1.0) ** 2).mean()
+                            loss = loss + self.loss_weight_perm_sparsity * col_uniqueness_penalty
 
                     # Optional weight regularization (only if trainable)
                     if self.assembler.weight_mode == "trainable":
@@ -553,15 +613,56 @@ class baconNet(nn.Module):
                         train_accuracy = (train_predictions == y).float().mean().item()
                         accuracy_history.append(train_accuracy)
                     
+                    # CHECK CONVERGENCE: If frozen, count epochs. If converged before freeze, wait for freeze.
+                    current_loss = loss.item()
+                    if self.assembler.is_frozen:
+                        # Model is frozen - count epochs since freeze
+                        if epoch_when_frozen is None:
+                            epoch_when_frozen = epoch
+                            logging.info(f"   🎯 Model frozen at epoch {epoch + 1}, will train for {frozen_training_epochs} more epochs")
+                        
+                        epochs_since_freeze = epoch - epoch_when_frozen
+                        if epochs_since_freeze >= frozen_training_epochs:
+                            logging.info(f"   ✅ Completed {frozen_training_epochs} epochs of frozen training, stopping")
+                            break
+                    else:
+                        # Model not frozen yet - check if converged (waiting to freeze)
+                        if current_loss < best_loss_for_convergence - convergence_delta:
+                            best_loss_for_convergence = current_loss
+                            epochs_without_improvement = 0
+                        else:
+                            epochs_without_improvement += 1
+                        
+                        if epochs_without_improvement >= convergence_patience and not has_converged_before_freeze:
+                            has_converged_before_freeze = True
+                            logging.info(f"   📊 Training converged at epoch {epoch + 1} (no improvement for {convergence_patience} epochs)")
+                            logging.info(f"      Loss: {current_loss:.4f}, waiting for permutation confidence > {freeze_confidence_threshold:.2f} to freeze...")
+                    
                     # Display epoch progress every 100 epochs
                     if (epoch + 1) % 100 == 0:
                         if use_temperature_annealing and not self.assembler.is_frozen:
                             perm_temp = self.assembler.input_to_leaf.temperature
+                            
+                            # Calculate permutation confidence for monitoring convergence
+                            perm_confidence = 0.0
+                            if hasattr(self.assembler.input_to_leaf, 'logits'):
+                                with torch.no_grad():
+                                    # Use Sinkhorn normalization to get actual doubly stochastic matrix
+                                    if hasattr(self.assembler.input_to_leaf, 'sinkhorn'):
+                                        soft_perm = self.assembler.input_to_leaf.sinkhorn(
+                                            self.assembler.input_to_leaf.logits,
+                                            temperature=self.assembler.input_to_leaf.temperature,
+                                            n_iters=self.assembler.input_to_leaf.sinkhorn_iters
+                                        )
+                                    else:
+                                        soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                                    perm_confidence = soft_perm.max(dim=1)[0].mean().item()
+                            
                             if self.assembler.transformation_layer is not None:
                                 trans_temp = self.assembler.transformation_layer.temperature
-                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Perm: {perm_temp:.3f}, Trans: {trans_temp:.3f}")
+                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Perm: {perm_temp:.3f}, Trans: {trans_temp:.3f}, Conf: {perm_confidence:.3f}")
                             else:
-                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Temp: {perm_temp:.3f}")
+                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Temp: {perm_temp:.3f}, Conf: {perm_confidence:.3f}")
                         else:
                             logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}")
                     
@@ -583,7 +684,11 @@ class baconNet(nn.Module):
                                 # Making progress over the window
                                 epochs_since_improvement = 0
                                 if temp_paused:
-                                    logging.info(f"   ▶️  Resuming temperature annealing (loss improved {loss_improvement:.4f} over {improvement_window} epochs)")
+                                    # Only log resume if we're not already at minimum temperature
+                                    perm_temp = self.assembler.input_to_leaf.temperature
+                                    perm_at_min = perm_temp <= perm_final_temp * 1.01
+                                    if not perm_at_min:
+                                        logging.info(f"   ▶️  Resuming temperature annealing (loss improved {loss_improvement:.4f} over {improvement_window} epochs)")
                                     temp_paused = False
                             else:
                                 # Not enough improvement over window
@@ -605,8 +710,11 @@ class baconNet(nn.Module):
                                 self.assembler.transformation_layer.temperature *= trans_temp_decay_rate
                         else:
                             # Pause temperature annealing - keep exploring at current temperature
-                            if not temp_paused:
-                                perm_temp = self.assembler.input_to_leaf.temperature
+                            # Only log if we haven't paused before AND temperatures aren't already at minimum
+                            perm_temp = self.assembler.input_to_leaf.temperature
+                            perm_at_min = perm_temp <= perm_final_temp * 1.01  # Within 1% of final
+                            
+                            if not temp_paused and not perm_at_min:
                                 trans_temp = self.assembler.transformation_layer.temperature if self.assembler.transformation_layer is not None else None
                                 logging.info(f"   ⏸️  Pausing temperature annealing (no improvement for {improvement_patience} epochs)")
                                 trans_temp_str = f"{trans_temp:.3f}" if trans_temp is not None else "N/A"
@@ -615,58 +723,131 @@ class baconNet(nn.Module):
                         
                         # Freeze when permutation temperature is very low (nearly hard)
                         if self.assembler.input_to_leaf.temperature < perm_final_temp * 1.1:
-                            if not self.assembler.is_frozen and hasattr(self.assembler.input_to_leaf, 'logits'):
+                            if not self.assembler.is_frozen and not just_froze and hasattr(self.assembler.input_to_leaf, 'logits'):
                                 try:
-                                    logging.info(f"   ❄️  Permutation hardened at epoch {epoch + 1} (temp: {self.assembler.input_to_leaf.temperature:.3f})")
                                     from bacon.frozonInputToLeaf import frozenInputToLeaf
                                     from scipy.optimize import linear_sum_assignment
                                     
                                     # Get soft permutation matrix (detach to avoid gradient issues)
                                     with torch.no_grad():
-                                        soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                                        # Use Sinkhorn normalization to get doubly stochastic matrix
+                                        # (not raw softmax which only normalizes rows)
+                                        if hasattr(self.assembler.input_to_leaf, 'sinkhorn'):
+                                            soft_perm = self.assembler.input_to_leaf.sinkhorn(
+                                                self.assembler.input_to_leaf.logits,
+                                                temperature=self.assembler.input_to_leaf.temperature,
+                                                n_iters=self.assembler.input_to_leaf.sinkhorn_iters
+                                            )
+                                        else:
+                                            # Fallback to softmax for non-Sinkhorn layers
+                                            soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
                                         
                                         # For hierarchical permutations with bleed, check if this is a structured matrix
                                         # Count non-zero entries per row (threshold at 0.01 to ignore noise)
                                         significant_entries = (soft_perm > 0.01).sum(dim=1).float().mean().item()
                                     
+                                    # Check if soft permutation is actually confident enough to freeze
+                                    max_probs = soft_perm.max(dim=1)[0]
+                                    mean_confidence = max_probs.mean().item()
+                                    
+                                    # Track confidence improvement
+                                    confidence_improved = False
+                                    if mean_confidence > best_confidence + 0.001:  # 0.1% improvement threshold
+                                        best_confidence = mean_confidence
+                                        epochs_without_confidence_improvement = 0
+                                        confidence_improved = True
+                                    else:
+                                        epochs_without_confidence_improvement += 1
+                                    
+                                    # Freeze if EITHER:
+                                    # 1. Confidence reached threshold, OR
+                                    # 2. Loss converged AND confidence plateaued (not improving for confidence_plateau_patience epochs)
+                                    confidence_reached = mean_confidence >= freeze_confidence_threshold
+                                    confidence_plateaued = (has_converged_before_freeze and 
+                                                           epochs_without_confidence_improvement >= confidence_plateau_patience)
+                                    
+                                    should_freeze = confidence_reached or confidence_plateaued
+                                    
+                                    if not should_freeze:
+                                        if not freeze_confidence_warning_shown:
+                                            logging.info(f"   ⚠️  Permutation temp low ({self.assembler.input_to_leaf.temperature:.3f}) but not ready to freeze")
+                                            logging.info(f"      Mean max probability: {mean_confidence:.3f} (target: {freeze_confidence_threshold:.2f})")
+                                            if has_converged_before_freeze:
+                                                logging.info(f"      Loss converged, waiting for confidence plateau ({epochs_without_confidence_improvement}/{confidence_plateau_patience} epochs)")
+                                            else:
+                                                logging.info(f"      Waiting for loss convergence first...")
+                                            freeze_confidence_warning_shown = True
+                                        just_froze = True  # Prevent repeated checks this batch
+                                        continue
+                                    
+                                    # Ready to freeze!
+                                    if confidence_plateaued and not confidence_reached:
+                                        logging.info(f"   ⚠️  Confidence plateaued at {mean_confidence:.3f} (below target {freeze_confidence_threshold:.2f})")
+                                        logging.info(f"      Freezing anyway after {epochs_without_confidence_improvement} epochs without improvement")
+                                    
+                                    logging.info(f"   ❄️  Permutation hardened at epoch {epoch + 1} (temp: {self.assembler.input_to_leaf.temperature:.3f})")
+                                    logging.info(f"      Mean confidence: {mean_confidence:.3f} ✓")
+                                    
                                     if significant_entries > 1.5:
                                         # Multi-entry rows suggest hierarchical structure with bleed
-                                        # Use thresholding instead of Hungarian to preserve structure
-                                        logging.info(f"      Detected hierarchical structure (avg {significant_entries:.1f} entries/row), using threshold-based freezing")
-                                        # Keep entries above threshold, renormalize rows
-                                        threshold = 0.01
-                                        hard_perm_matrix = (soft_perm > threshold).float() * soft_perm
-                                        # Renormalize each row
-                                        hard_perm_matrix = hard_perm_matrix / (hard_perm_matrix.sum(dim=1, keepdim=True) + 1e-10)
-                                        
-                                        # Create a custom frozen layer using nn.Module
-                                        class SoftFrozenPermutation(torch.nn.Module):
-                                            def __init__(self, perm_matrix):
-                                                super().__init__()
-                                                self.register_buffer("P_hard", perm_matrix)
-                                            
-                                            def forward(self, x):
-                                                return torch.matmul(x, self.P_hard.t().to(x.device))
-                                        
-                                        self.assembler.input_to_leaf = SoftFrozenPermutation(hard_perm_matrix).to(self.assembler.device)
-                                        self.assembler.locked_perm = None  # No single permutation vector for hierarchical
+                                        logging.info(f"      Detected hierarchical structure (avg {significant_entries:.1f} entries/row)")
+                                        logging.info(f"      Using Hungarian algorithm for optimal assignment...")
                                     else:
-                                        # Standard permutation: use Hungarian algorithm for optimal assignment
+                                        # Standard permutation
                                         logging.info(f"      Detected standard permutation (avg {significant_entries:.1f} entries/row), using Hungarian algorithm")
+                                        
+                                    # DIAGNOSTIC: Evaluate model BEFORE freezing using test set
+                                    self.assembler.eval()
+                                    with torch.no_grad():
+                                        # Use test data for evaluation
+                                        before_output = self.assembler(x_test)
+                                        before_loss = criterion(before_output, y_test)
+                                        before_pred = (before_output > 0.5).float()
+                                        before_correct = (before_pred == y_test).sum().item()
+                                        before_accuracy = before_correct / len(y_test)
+                                        
+                                        # Show soft permutation statistics
+                                        max_probs = soft_perm.max(dim=1)[0]
+                                        logging.info(f"      📊 BEFORE FREEZE (test set):")
+                                        logging.info(f"         Loss: {before_loss.item():.4f}, Test Accuracy: {before_accuracy:.4f}")
+                                        logging.info(f"         Soft perm max probs: min={max_probs.min():.3f}, mean={max_probs.mean():.3f}, max={max_probs.max():.3f}")
+                                        
+                                        # Show top-3 probabilities for first 5 rows to understand confidence
+                                        for i in range(min(5, soft_perm.size(0))):
+                                            top_vals, top_idx = soft_perm[i].topk(3)
+                                            logging.info(f"         Row {i}: top3 = {top_vals.cpu().numpy()} at positions {top_idx.cpu().numpy()}")
+                                    
+                                    self.assembler.train()
+                                    
+                                    # Check for duplicate columns in argmax (would create invalid permutation)
+                                    argmax_perm = soft_perm.argmax(dim=1)
+                                    unique_cols = len(torch.unique(argmax_perm))
+                                    total_rows = argmax_perm.size(0)
+                                    has_duplicates = unique_cols < total_rows
+                                    
+                                    if has_duplicates:
+                                        logging.info(f"      ⚠️  Argmax creates duplicate columns: {unique_cols} unique out of {total_rows} rows")
+                                        logging.info(f"      Must use Hungarian to ensure valid permutation")
+                                    
+                                    # Choose freezing method based on confidence level and uniqueness
+                                    if mean_confidence > 0.99 and not has_duplicates:
+                                        # Very high confidence AND unique: use argmax (respect model's confident choices)
+                                        hard_perm = argmax_perm
+                                        logging.info(f"      Using argmax for freeze (confidence {mean_confidence:.3f} > 0.99, no duplicates)")
+                                    else:
+                                        # Lower confidence: use Hungarian for optimal global assignment
                                         soft_perm_np = soft_perm.detach().cpu().numpy()
                                         row_ind, col_ind = linear_sum_assignment(-soft_perm_np)
                                         hard_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long, device=self.assembler.device)
+                                        logging.info(f"      Using Hungarian algorithm (confidence {mean_confidence:.3f} ≤ 0.99)")
                                         
-                                        # Compare Hungarian vs naive argmax
+                                        # Compare Hungarian vs naive argmax for diagnostics
                                         soft_argmax = soft_perm.argmax(dim=1)
                                         perm_differences = (soft_argmax != hard_perm).sum().item()
                                         if perm_differences > 0:
                                             logging.info(f"      ⚠️  Hungarian differs from argmax in {perm_differences}/{len(hard_perm)} positions")
-                                            # Show max soft probability for each row
-                                            max_probs = soft_perm.max(dim=1)[0]
-                                            logging.info(f"      Max soft probabilities: min={max_probs.min():.3f}, mean={max_probs.mean():.3f}, max={max_probs.max():.3f}")
-                                        
-                                        self.assembler.locked_perm = hard_perm.clone().detach()
+                                    
+                                    self.assembler.locked_perm = hard_perm.clone().detach()
                                     
                                     self.assembler.is_frozen = True
                                     # Replace with frozen layer (if using standard Hungarian)
@@ -675,6 +856,31 @@ class baconNet(nn.Module):
                                             self.assembler.locked_perm,
                                             self.assembler.original_input_size
                                         ).to(self.assembler.device)
+                                    
+                                    # DIAGNOSTIC: Evaluate model AFTER freezing
+                                    self.assembler.eval()
+                                    with torch.no_grad():
+                                        # Get predictions on same test set after freeze
+                                        after_output = self.assembler(x_test)
+                                        after_loss = criterion(after_output, y_test)
+                                        after_pred = (after_output > 0.5).float()
+                                        after_correct = (after_pred == y_test).sum().item()
+                                        after_accuracy = after_correct / len(y_test)
+                                        
+                                        logging.info(f"      📊 AFTER FREEZE:")
+                                        logging.info(f"         Loss: {after_loss.item():.4f} (Δ={after_loss.item()-before_loss.item():+.4f})")
+                                        logging.info(f"         Test Accuracy: {after_accuracy:.4f} (Δ={after_accuracy-before_accuracy:+.4f})")
+                                        
+                                        # Show which predictions changed
+                                        pred_changes = (before_pred != after_pred).sum().item()
+                                        if pred_changes > 0:
+                                            logging.info(f"         ⚠️  {pred_changes}/{len(y_test)} predictions changed after freeze")
+                                            
+                                        # Show output differences (magnitude of change)
+                                        output_diff = (after_output - before_output).abs().max().item()
+                                        logging.info(f"         Max output difference: {output_diff:.6f}")
+                                    
+                                    self.assembler.train()
                                     
                                     logging.info(f"   🔒 Successfully frozen model (locked_perm created)")
                                     just_froze = True  # Skip backward for this batch
@@ -894,6 +1100,11 @@ class baconNet(nn.Module):
                         
             except RuntimeError as e:
                 logging.error(f"🔥 Attempt {attempt + 1} failed with error: {e}")
+            finally:
+                # Restore original sparsity weight if it was overridden
+                if original_sparsity_weight is not None:
+                    self.loss_weight_perm_sparsity = original_sparsity_weight
+        
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
         
