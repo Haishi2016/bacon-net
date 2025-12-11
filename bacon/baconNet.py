@@ -503,6 +503,7 @@ class baconNet(nn.Module):
                 for epoch in range(actual_max_epochs):
                     self.assembler.train()
                     optimizer.zero_grad(set_to_none=True)
+                    just_froze = False  # Flag to skip backward if we freeze during this iteration
                     outputs = self.assembler(x, targets=y)
                     
                     # Compute main BCE loss with optional class weighting for imbalanced data
@@ -541,9 +542,6 @@ class baconNet(nn.Module):
                         for w in self.assembler.weights:
                             depth_weight_penalty += self.assembler.weight_penalty_strength * ((torch.sigmoid(w) - 0.5) ** 2).mean()
                         loss = loss + depth_weight_penalty
-
-                    loss.backward()
-                    optimizer.step()
                     
                     # Track loss and accuracy for smarter plateau detection
                     loss_history.append(loss.item())
@@ -623,28 +621,72 @@ class baconNet(nn.Module):
                                     from bacon.frozonInputToLeaf import frozenInputToLeaf
                                     from scipy.optimize import linear_sum_assignment
                                     
-                                    # Get soft permutation matrix
-                                    soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                                    # Get soft permutation matrix (detach to avoid gradient issues)
+                                    with torch.no_grad():
+                                        soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
+                                        
+                                        # For hierarchical permutations with bleed, check if this is a structured matrix
+                                        # Count non-zero entries per row (threshold at 0.01 to ignore noise)
+                                        significant_entries = (soft_perm > 0.01).sum(dim=1).float().mean().item()
                                     
-                                    # Use Hungarian algorithm to find optimal hard permutation
-                                    # Hungarian minimizes cost, so negate the soft probabilities to maximize
-                                    soft_perm_np = soft_perm.detach().cpu().numpy()
-                                    row_ind, col_ind = linear_sum_assignment(-soft_perm_np)
+                                    if significant_entries > 1.5:
+                                        # Multi-entry rows suggest hierarchical structure with bleed
+                                        # Use thresholding instead of Hungarian to preserve structure
+                                        logging.info(f"      Detected hierarchical structure (avg {significant_entries:.1f} entries/row), using threshold-based freezing")
+                                        # Keep entries above threshold, renormalize rows
+                                        threshold = 0.01
+                                        hard_perm_matrix = (soft_perm > threshold).float() * soft_perm
+                                        # Renormalize each row
+                                        hard_perm_matrix = hard_perm_matrix / (hard_perm_matrix.sum(dim=1, keepdim=True) + 1e-10)
+                                        
+                                        # Create a custom frozen layer using nn.Module
+                                        class SoftFrozenPermutation(torch.nn.Module):
+                                            def __init__(self, perm_matrix):
+                                                super().__init__()
+                                                self.register_buffer("P_hard", perm_matrix)
+                                            
+                                            def forward(self, x):
+                                                return torch.matmul(x, self.P_hard.t().to(x.device))
+                                        
+                                        self.assembler.input_to_leaf = SoftFrozenPermutation(hard_perm_matrix).to(self.assembler.device)
+                                        self.assembler.locked_perm = None  # No single permutation vector for hierarchical
+                                    else:
+                                        # Standard permutation: use Hungarian algorithm for optimal assignment
+                                        logging.info(f"      Detected standard permutation (avg {significant_entries:.1f} entries/row), using Hungarian algorithm")
+                                        soft_perm_np = soft_perm.detach().cpu().numpy()
+                                        row_ind, col_ind = linear_sum_assignment(-soft_perm_np)
+                                        hard_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long, device=self.assembler.device)
+                                        
+                                        # Compare Hungarian vs naive argmax
+                                        soft_argmax = soft_perm.argmax(dim=1)
+                                        perm_differences = (soft_argmax != hard_perm).sum().item()
+                                        if perm_differences > 0:
+                                            logging.info(f"      ⚠️  Hungarian differs from argmax in {perm_differences}/{len(hard_perm)} positions")
+                                            # Show max soft probability for each row
+                                            max_probs = soft_perm.max(dim=1)[0]
+                                            logging.info(f"      Max soft probabilities: min={max_probs.min():.3f}, mean={max_probs.mean():.3f}, max={max_probs.max():.3f}")
+                                        
+                                        self.assembler.locked_perm = hard_perm.clone().detach()
                                     
-                                    # Sort by row index to get the permutation vector
-                                    hard_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long, device=self.assembler.device)
-                                    
-                                    self.assembler.locked_perm = hard_perm.clone().detach()
                                     self.assembler.is_frozen = True
-                                    # Replace with frozen layer
-                                    self.assembler.input_to_leaf = frozenInputToLeaf(
-                                        self.assembler.locked_perm,
-                                        self.assembler.original_input_size
-                                    ).to(self.assembler.device)
-                                    logging.info(f"   🔒 Successfully frozen model using Hungarian algorithm (locked_perm created)")
+                                    # Replace with frozen layer (if using standard Hungarian)
+                                    if self.assembler.locked_perm is not None:
+                                        self.assembler.input_to_leaf = frozenInputToLeaf(
+                                            self.assembler.locked_perm,
+                                            self.assembler.original_input_size
+                                        ).to(self.assembler.device)
+                                    
+                                    logging.info(f"   🔒 Successfully frozen model (locked_perm created)")
+                                    just_froze = True  # Skip backward for this batch
                                 except Exception as e:
                                     logging.warning(f"   ⚠️ Failed to freeze on hardening: {e}")
                                     self.assembler.is_frozen = True  # Set flag anyway
+                                    just_froze = True  # Skip backward anyway
+                    
+                    # Perform backward pass and optimizer step (unless we just froze)
+                    if not just_froze:
+                        loss.backward()
+                        optimizer.step()
                     
                     # ADAPTIVE REHEATING: Check periodically if we should escape current basin
                     # Key insight: Don't wait for plateau - proactively check if we're making good enough progress
