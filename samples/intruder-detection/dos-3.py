@@ -12,6 +12,7 @@ import logging
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
 from bacon.transformationLayer import IdentityTransformation, NegationTransformation
+from sklearn.preprocessing import QuantileTransformer
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,17 +76,21 @@ filtered = train_df[train_df['dst_bytes']!=0].copy()
 print(filtered.describe())
 
 
+# # Define attack types
+# dos_attacks = [
+#     'back', 'land', 'neptune', 'pod', 'smurf', 'teardrop',
+#     'apache2', 'udpstorm', 'processtable', 'worm'
+# ]
+
 # Define attack types
 dos_attacks = [
-    'back', 'land', 'neptune', 'pod', 'smurf', 'teardrop',
-    'apache2', 'udpstorm', 'processtable', 'worm'
+    'back', 'land', 'neptune', 'pod', 'smurf', 'teardrop'    
 ]
 
 # Binary labels
 def is_dos(label):
-    # return 1.0 if label in dos_attacks else 0.0
-    # return 1.0 if label == 'neptune' else 0.0
-    return 0.0 if label == 'normal' else 1.0
+    return 1.0 if label in dos_attacks else 0.0
+    # return 1.0 if label == 'neptune' else 0.0    
     
 train_df['target'] = train_df['label'].apply(is_dos)
 test_df['target'] = test_df['label'].apply(is_dos)
@@ -108,16 +113,21 @@ df_minority_upsampled = resample(
 df_balanced = pd.concat([df_majority, df_minority_upsampled])
 df_balanced = df_balanced.sample(frac=1, random_state=42)
 
-print(df_balanced['target'].value_counts())
+print(train_df['target'].value_counts())
 
-# NOW create X_train/y_train from balanced data
-X_train = df_balanced.drop(columns=drop_cols)
-y_train = df_balanced['target']
+# Use unbalanced training data
+X_train = train_df.drop(columns=drop_cols)
+y_train = train_df['target']
 
 X_test = test_df.drop(columns=drop_cols)
 y_test = test_df['target']
 
-scaler = RobustScaler()
+scaler = QuantileTransformer(
+    output_distribution="uniform",  # -> [0,1]
+    n_quantiles=1000,               # or smaller for big data
+    subsample=int(1e5),             # default
+    random_state=42
+)
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
@@ -131,14 +141,29 @@ num_features = X_train.shape[1]
 
 # After loading the data, before training
 print("\n📊 Feature correlation with DoS attacks:")
-for col in ['src_bytes', 'logged_in']:
+for col in ['src_bytes', 'dst_bytes', 'logged_in']:
     if col in df_balanced.columns:
         dos_mean = df_balanced[df_balanced['target'] == 1.0][col].mean()
         normal_mean = df_balanced[df_balanced['target'] == 0.0][col].mean()
+        dos_median = df_balanced[df_balanced['target'] == 1.0][col].median()
+        normal_median = df_balanced[df_balanced['target'] == 0.0][col].median()
         print(f"{col}:")
-        print(f"  DoS mean: {dos_mean:.4f}")
-        print(f"  Normal mean: {normal_mean:.4f}")
+        print(f"  DoS mean: {dos_mean:.4f}, median: {dos_median:.4f}")
+        print(f"  Normal mean: {normal_mean:.4f}, median: {normal_median:.4f}")
         print(f"  Correct indicator: {'identity' if dos_mean > normal_mean else 'negation'}")
+
+# Special analysis for dst_bytes
+print("\n📊 dst_bytes < 0.5 analysis:")
+low_dst = df_balanced[df_balanced['dst_bytes'] < 0.5]
+high_dst = df_balanced[df_balanced['dst_bytes'] >= 0.5]
+print(f"When dst_bytes < 0.5:")
+print(f"  Total samples: {len(low_dst)}")
+print(f"  DoS attacks: {low_dst['target'].sum():.0f} ({low_dst['target'].mean()*100:.2f}%)")
+print(f"  Normal: {(len(low_dst) - low_dst['target'].sum()):.0f} ({(1-low_dst['target'].mean())*100:.2f}%)")
+print(f"\nWhen dst_bytes >= 0.5:")
+print(f"  Total samples: {len(high_dst)}")
+print(f"  DoS attacks: {high_dst['target'].sum():.0f} ({high_dst['target'].mean()*100:.2f}%)")
+print(f"  Normal: {(len(high_dst) - high_dst['target'].sum()):.0f} ({(1-high_dst['target'].mean())*100:.2f}%)")
 
 bacon = baconNet(
     input_size=num_features, 
@@ -162,10 +187,12 @@ Y_test_tensor = Y_test_tensor.to(device)
 X_train_tensor = X_train_tensor.to(device)
 Y_train_tensor = Y_train_tensor.to(device)  
 
+# 89.23%
+#   hierarchical_group_size = 17
 best_model, best_accuracy = bacon.find_best_model(
     X_train_tensor, Y_train_tensor, X_test_tensor, Y_test_tensor, 
     use_hierarchical_permutation=True,
-    hierarchical_group_size=17,
+    hierarchical_group_size=10,
     hierarchical_epochs_per_attempt=12000,  # Max epochs (safety limit)
     annealing_epochs=2000,  # Temperature annealing period
     frozen_training_epochs=2000,  # Train for 200 epochs after freezing
@@ -174,8 +201,9 @@ best_model, best_accuracy = bacon.find_best_model(
     freeze_confidence_threshold=0.80,  # Lower threshold to accept Sinkhorn constraint (was 0.90)
     loss_weight_perm_sparsity=0.3,  # Aggressive sparsity to push toward one-hot (increased from 0.1)
     hierarchical_bleed_ratio=0.0,        
+    max_epochs=12000,
     attempts=1, 
-    acceptance_threshold=0.70
+    acceptance_threshold=0.99
 )
 print(f"✅ Best accuracy: {best_accuracy * 100:.2f}%")
 

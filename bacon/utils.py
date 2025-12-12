@@ -32,27 +32,102 @@ def generate_classic_boolean_data(num_vars=5, repeat_factor=100, randomize=False
     ops = [random.choice(["and", "or"]) for _ in range(num_vars - 1)]
 
     # generate variable names and build expression strings
-    var_names = [chr(ord('A') + i) for i in range(num_vars)]
+    # A-Z for first 26, then 1000+ unique emojis for the rest
+    emojis = [
+        # Geometric shapes & symbols (20)
+        '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '🟤', '⚫', '⚪', '🔶', '🔷', '🔸', '🔹', '🔺', '🔻', '💠', '🔘', '🔳', '🔲', '◼️',
+        # Stars & weather (40)
+        '⭐', '🌟', '✨', '💫', '🌙', '🌛', '🌜', '🌚', '🌝', '🌞', '☀️', '⛅', '⛈️', '🌤️', '🌦️', '🌧️', '🌨️', '🌩️', '🌪️', '🌫️',
+        '☃️', '⛄', '❄️', '🌬️', '💨', '🌊', '💧', '💦', '☔', '⚡', '🌈', '🌅', '🌄', '🌠', '🌌', '🌃', '🌆', '🌇', '🏙️', '🌉',
+        # Fruits (40)
+        '🍎', '🍏', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🥑', '🌶️', '🫑',
+        '🥒', '🥬', '🥦', '🧄', '🧅', '🌽', '🥕', '🥔', '🍠', '🥐', '🥖', '🥨', '🥯', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓',
+        # More food (40)
+        '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥫', '🍝', '🍜', '🍲',
+        '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚', '🍘', '🍥', '🥠', '🥮', '🍢', '🍡', '🍧', '🍨', '🍦', '🥧', '🧁', '🍰',
+        # Desserts & drinks (40)
+        '🎂', '🍮', '🍭', '🍬', '🍫', '🍿', '🍩', '🍪', '🌰', '🥜', '🍯', '🥛', '🍼', '🫖', '☕', '🍵', '🧃', '🥤', '🧋', '🍶',
+        '🍺', '🍻', '🥂', '🍷', '🥃', '🍸', '🍹', '🧉', '🍾', '🧊', '🥄', '🍴', '🍽️', '🥣', '🥡', '🥢', '🧂', '🫗', '🍱', '🥟',
+        # Animals & nature (80)
+        '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒',
+        '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞',
+        '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷️', '🕸️', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡',
+        '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘',
+        # More animals (40)
+        '🦬', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐕‍🦺', '🐈', '🐈‍⬛', '🪶', '🐓', '🦃',
+        '🦤', '🦚', '🦜', '🦢', '🦩', '🕊️', '🐇', '🦝', '🦨', '🦡', '🦫', '🦦', '🦥', '🐁', '🐀', '🐿️', '🦔', '🐾', '🐉', '🐲',
+        # Plants & flowers (40)
+        '🌵', '🎄', '🌲', '🌳', '🌴', '🪵', '🌱', '🌿', '☘️', '🍀', '🎍', '🪴', '🎋', '🍃', '🍂', '🍁', '🪺', '🪹', '🌾', '💐',
+        '🌷', '🌹', '🥀', '🌺', '🌸', '🌼', '🌻', '🏵️', '🌕', '🌖', '🌗', '🌘', '🌑', '🌒', '🌓', '🌔', '🪐', '⭐', '🌟', '💫',
+        # Objects & activities (80)
+        '⚽', '⚾', '🥎', '🏀', '🏐', '🏈', '🏉', '🎾', '🥏', '🎳', '🏏', '🏑', '🏒', '🥍', '🏓', '🏸', '🥊', '🥋', '🥅', '⛳',
+        '⛸️', '🎣', '🤿', '🎽', '🎿', '🛷', '🥌', '🎯', '🪀', '🪁', '🎱', '🔮', '🪄', '🧿', '🪬', '🎮', '🕹️', '🎰', '🎲', '🧩',
+        '🧸', '🪅', '🪩', '🪆', '♠️', '♥️', '♦️', '♣️', '♟️', '🃏', '🀄', '🎴', '🎭', '🖼️', '🎨', '🧵', '🪡', '🧶', '🪢', '👓',
+        '🕶️', '🥽', '🥼', '🦺', '👔', '👕', '👖', '🧣', '🧤', '🧥', '🧦', '👗', '👘', '🥻', '🩱', '🩲', '🩳', '👙', '👚', '👛',
+        # More objects (80)
+        '👜', '👝', '🛍️', '🎒', '🩴', '👞', '👟', '🥾', '🥿', '👠', '👡', '🩰', '👢', '👑', '👒', '🎩', '🎓', '🧢', '🪖', '⛑️',
+        '📿', '💄', '💍', '💎', '🔇', '🔈', '🔉', '🔊', '📢', '📣', '📯', '🔔', '🔕', '🎼', '🎵', '🎶', '🎙️', '🎚️', '🎛️', '🎤',
+        '🎧', '📻', '🎷', '🪗', '🎸', '🎹', '🎺', '🎻', '🪕', '🥁', '🪘', '📱', '📲', '☎️', '📞', '📟', '📠', '🔋', '🪫', '🔌',
+        '💻', '🖥️', '🖨️', '⌨️', '🖱️', '🖲️', '💽', '💾', '💿', '📀', '🧮', '🎥', '🎞️', '📽️', '🎬', '📺', '📷', '📸', '📹', '📼',
+        # Tools & tech (80)
+        '🔍', '🔎', '🕯️', '💡', '🔦', '🏮', '🪔', '📔', '📕', '📖', '📗', '📘', '📙', '📚', '📓', '📒', '📃', '📜', '📄', '📰',
+        '🗞️', '📑', '🔖', '🏷️', '💰', '🪙', '💴', '💵', '💶', '💷', '💸', '💳', '🧾', '💹', '✉️', '📧', '📨', '📩', '📤', '📥',
+        '📦', '📫', '📪', '📬', '📭', '📮', '🗳️', '✏️', '✒️', '🖋️', '🖊️', '🖌️', '🖍️', '📝', '💼', '📁', '📂', '🗂️', '📅', '📆',
+        '🗒️', '🗓️', '📇', '📈', '📉', '📊', '📋', '📌', '📍', '📎', '🖇️', '📏', '📐', '✂️', '🗃️', '🗄️', '🗑️', '🔒', '🔓', '🔏',
+        # Misc symbols (74+)
+        '🔐', '🔑', '🗝️', '🔨', '🪓', '⛏️', '⚒️', '🛠️', '🗡️', '⚔️', '🔫', '🪃', '🏹', '🛡️', '🪚', '🔧', '🪛', '🔩', '⚙️', '🗜️',
+        '⚖️', '🦯', '🔗', '⛓️', '🪝', '🧰', '🧲', '🪜', '⚗️', '🧪', '🧫', '🧬', '🔬', '🔭', '📡', '💉', '🩸', '💊', '🩹', '🩼',
+        '🩺', '🩻', '🚪', '🛗', '🪞', '🪟', '🛏️', '🛋️', '🪑', '🚽', '🪠', '🚿', '🛁', '🪤', '🪒', '🧴', '🧷', '🧹', '🧺', '🧻',
+        '🪣', '🧼', '🫧', '🪥', '🧽', '🧯', '🛒', '🚬', '⚰️', '🪦', '⚱️', '🗿', '🪧', '🪪'
+    ]
+    
+    def get_var_name(i):
+        if i < 26:
+            return chr(ord('A') + i)
+        elif i - 26 < len(emojis):
+            return emojis[i - 26]
+        else:
+            # Fallback for >1000 variables: cycle emojis with numbers
+            emoji_index = (i - 26) % len(emojis)
+            repeat = (i - 26) // len(emojis)
+            return emojis[emoji_index] + str(repeat + 1)
+    
+    var_names = [get_var_name(i) for i in range(num_vars)]
     symbolic_expr = var_names[0]
-    eval_expr = "x[0]"
     for i in range(1, num_vars):
         op = ops[i - 1]
         symbolic_expr = f"({symbolic_expr} {op} {var_names[i]})"
-        eval_expr = f"({eval_expr} {op} x[{i}])"
+    
+    # Evaluation function that avoids deeply nested eval() for large inputs
+    def evaluate_expression(x):
+        """Evaluate boolean expression iteratively to avoid stack overflow.
+        
+        Matches the eval() behavior with nested parentheses: ((((A and B) or C) and D)...)
+        This means RIGHTMOST variables have HIGHEST priority (evaluated first conceptually).
+        We build from right to left to match the original parentheses structure.
+        """
+        # Start from the rightmost variable and work backwards
+        result = bool(x[num_vars - 1])
+        for i in range(num_vars - 2, -1, -1):  # Go backwards from second-to-last to first
+            if ops[i] == "and":
+                result = bool(x[i]) and result
+            else:  # "or"
+                result = bool(x[i]) or result
+        return int(result)
 
     if randomize:
         logging.info("⚡ Randomized input generation mode enabled.")
         num_samples = repeat_factor  # reinterpret repeat_factor as sample count
         for _ in range(num_samples):
             x = [random.randint(0, 1) for _ in range(num_vars)]
-            y = int(eval(eval_expr))
+            y = evaluate_expression(x)
             data.append(x)
             labels.append([y])
     else:
         base_cases = list(itertools.product([0, 1], repeat=num_vars))
         for _ in range(repeat_factor):
             for x in base_cases:
-                y = int(eval(eval_expr))
+                y = evaluate_expression(x)
                 data.append(list(x))
                 labels.append([y])
     return (
@@ -60,7 +135,6 @@ def generate_classic_boolean_data(num_vars=5, repeat_factor=100, randomize=False
         torch.tensor(labels, dtype=torch.float32, device=device),
         {
             "expression_text": symbolic_expr,
-            "eval_expr": eval_expr,
             "ops": ops,
             "num_vars": num_vars,
             "var_names": var_names

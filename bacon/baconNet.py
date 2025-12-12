@@ -248,6 +248,8 @@ class baconNet(nn.Module):
                         convergence_delta = 0.001,
                         freeze_confidence_threshold = 0.95,
                         loss_weight_perm_sparsity = None,
+                        sparsity_schedule = None,  # (initial_weight, final_weight, transition_epochs)
+                        freeze_aggregation_epochs = 0,  # Freeze aggregation for first N epochs
                         save_model = True,
                         use_hierarchical_permutation = False,
                         hierarchical_group_size = 3,
@@ -271,6 +273,8 @@ class baconNet(nn.Module):
             convergence_delta (float, optional): Minimum loss improvement to reset patience. Defaults to 0.001.
             freeze_confidence_threshold (float, optional): Mean max probability threshold for freezing. Defaults to 0.95.
             loss_weight_perm_sparsity (float, optional): Weight for permutation sparsity loss (encourages peaked distributions). If None, uses instance default. Defaults to None.
+            sparsity_schedule (tuple, optional): Dynamic sparsity weight scheduling as (initial_weight, final_weight, transition_epochs). Example: (10.0, 0.1, 1000) starts with high sparsity emphasis (10.0) and linearly decreases to 0.1 over 1000 epochs. Defaults to None (uses constant loss_weight_perm_sparsity).
+            freeze_aggregation_epochs (int, optional): Freeze aggregation parameters for first N epochs, allowing only permutation to learn. Useful for giving permutation undiluted classification signal. Defaults to 0 (no freezing).
             save_model (bool, optional): Whether to save the best model. Defaults to True.
             use_hierarchical_permutation (bool, optional): Use coarse-grained permutation exploration. Defaults to False.
             hierarchical_group_size (int, optional): Group size for hierarchical permutation (e.g., 3 for 10 inputs → 4x4 coarse matrix). Defaults to 3.
@@ -473,6 +477,18 @@ class baconNet(nn.Module):
                     logging.info(f"   🎯 Using custom sparsity loss weight: {loss_weight_perm_sparsity}")
                 else:
                     original_sparsity_weight = None
+                
+                # Freeze aggregation parameters if requested (permutation-only training phase)
+                aggregation_frozen = False
+                if freeze_aggregation_epochs > 0:
+                    # Find and freeze aggregation parameters
+                    for group in param_groups:
+                        if group['name'] in ['aggregator', 'other']:
+                            for p in group['params']:
+                                p.requires_grad = False
+                            aggregation_frozen = True
+                    if aggregation_frozen:
+                        logging.info(f"   🧊 Aggregation frozen for first {freeze_aggregation_epochs} epochs (permutation-only learning)")
 
                 # Use epochs_per_attempt instead of max_epochs for hierarchical mode
                 actual_max_epochs = epochs_per_attempt
@@ -536,6 +552,15 @@ class baconNet(nn.Module):
                     self.assembler.auto_refine = False
                 
                 for epoch in range(actual_max_epochs):
+                    # Unfreeze aggregation after specified epochs
+                    if aggregation_frozen and epoch == freeze_aggregation_epochs:
+                        for group in param_groups:
+                            if group['name'] in ['aggregator', 'other']:
+                                for p in group['params']:
+                                    p.requires_grad = True
+                        aggregation_frozen = False
+                        logging.info(f"   🔓 Aggregation unfrozen at epoch {epoch} (joint training begins)")
+                    
                     self.assembler.train()
                     optimizer.zero_grad(set_to_none=True)
                     just_froze = False  # Flag to skip backward if we freeze during this iteration
@@ -571,8 +596,19 @@ class baconNet(nn.Module):
                         # Negative entropy = encourage decisive transformation choice (low entropy)
                         loss = loss - self.loss_weight_trans_entropy * trans_entropy
                     
+                    # Dynamic sparsity weight scheduling (if enabled)
+                    current_sparsity_weight = self.loss_weight_perm_sparsity
+                    if sparsity_schedule is not None and use_temperature_annealing:
+                        initial_weight, final_weight, transition_epochs = sparsity_schedule
+                        if epoch < transition_epochs:
+                            # Linear interpolation from initial to final weight
+                            alpha = epoch / transition_epochs
+                            current_sparsity_weight = initial_weight * (1 - alpha) + final_weight * alpha
+                        else:
+                            current_sparsity_weight = final_weight
+                    
                     # Add permutation sparsity loss (encourage peaked distributions)
-                    if self.loss_weight_perm_sparsity > 0 and use_temperature_annealing and hasattr(self.assembler.input_to_leaf, 'logits'):
+                    if current_sparsity_weight > 0 and use_temperature_annealing and hasattr(self.assembler.input_to_leaf, 'logits'):
                         # Use Sinkhorn normalization to get doubly stochastic matrix
                         if hasattr(self.assembler.input_to_leaf, 'sinkhorn'):
                             perm_probs = self.assembler.input_to_leaf.sinkhorn(
@@ -586,7 +622,7 @@ class baconNet(nn.Module):
                         # Compute entropy of soft permutation (lower entropy = more peaked/sparse)
                         perm_sparsity_entropy = -(perm_probs * torch.log(perm_probs + 1e-10)).sum(dim=1).mean()
                         # Add as penalty (we want to minimize entropy = maximize sparsity)
-                        sparsity_loss = self.loss_weight_perm_sparsity * perm_sparsity_entropy
+                        sparsity_loss = current_sparsity_weight * perm_sparsity_entropy
                         loss = loss + sparsity_loss
                         
                         # Note: Column uniqueness penalty not needed for Sinkhorn (already doubly stochastic)
@@ -594,7 +630,7 @@ class baconNet(nn.Module):
                         if not hasattr(self.assembler.input_to_leaf, 'sinkhorn'):
                             col_sums = perm_probs.sum(dim=0)  # Sum down columns
                             col_uniqueness_penalty = ((col_sums - 1.0) ** 2).mean()
-                            loss = loss + self.loss_weight_perm_sparsity * col_uniqueness_penalty
+                            loss = loss + current_sparsity_weight * col_uniqueness_penalty
 
                     # Optional weight regularization (only if trainable)
                     if self.assembler.weight_mode == "trainable":
