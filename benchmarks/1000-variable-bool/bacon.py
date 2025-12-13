@@ -17,7 +17,7 @@ print("=" * 80)
 print("🧪 BACON: 1000-Variable Boolean Expression Inference")
 print("=" * 80)
 
-input_size = 100
+input_size = 1000
 
 print(f"\n📊 Generating boolean expression with {input_size} variables...")
 print(f"   Using randomized sampling with combined dataset split")
@@ -92,7 +92,7 @@ best_model, best_accuracy = bacon.find_best_model(
     frozen_training_epochs=1000,
     convergence_patience=500,
     loss_weight_perm_sparsity=0.0,  # Overridden by sparsity_schedule
-    sparsity_schedule=(10.0, 50.0, 2000),  # Start high (10.0) → very high (50.0) to force commitment
+    sparsity_schedule=(10.0, 100.0, 2000),  # Start high (10.0) → very high (50.0) to force commitment
     freeze_aggregation_epochs=500,  # Freeze aggregation for first 500 epochs
     save_model=False
 )
