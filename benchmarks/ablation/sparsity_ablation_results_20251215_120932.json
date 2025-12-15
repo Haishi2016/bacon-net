@@ -1,0 +1,8 @@
+[
+  {
+    "sparsity_weight": 0.01,
+    "soft_accuracy": 0.546999990940094,
+    "hard_accuracy": 0.546999990940094,
+    "accuracy_drop": 0.0,
+    "relative_drop_pct": 0.0,
+    "confidence": 

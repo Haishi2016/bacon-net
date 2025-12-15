@@ -1,6 +1,6 @@
 # Note: required to import baconNet from local folder
-# import sys
-# sys.path.append('../../')
+import sys
+sys.path.insert(0, '../../')
 
 import torch
 from bacon.baconNet import baconNet
@@ -17,7 +17,8 @@ input_size = 3
 x, y,  expr_info = generate_classic_boolean_data(input_size, repeat_factor=100, randomize=True, device=device)
 print(f"➗ Expression: {expr_info['expression_text']}")
 
-bacon = baconNet(input_size, aggregator='bool.min_max', weight_mode='fixed', loss_amplifier=1000, normalize_andness=False)
+bacon = baconNet(input_size, aggregator='bool.min_max',
+                  weight_mode='fixed', loss_amplifier=1000, normalize_andness=False)
 
 # Note: for large input sizes, you may want to set `freeze_loss_threshold=0.18` to relax the freeze condition, and set `max_permutations=100` to speed up the search.
 #       For example, for input_size=100, you can use:
