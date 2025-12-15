@@ -252,6 +252,7 @@ class baconNet(nn.Module):
                         freeze_aggregation_epochs = 0,  # Freeze aggregation for first N epochs
                         save_model = True,
                         use_hierarchical_permutation = False,
+                        force_freeze = True,
                         hierarchical_group_size = 3,
                         hierarchical_epochs_per_attempt = None,
                         hierarchical_bleed_ratio = 0.1,
@@ -566,24 +567,42 @@ class baconNet(nn.Module):
                     just_froze = False  # Flag to skip backward if we freeze during this iteration
                     outputs = self.assembler(x, targets=y)
                     
+                    # Check for NaN in outputs
+                    if torch.isnan(outputs).any():
+                        logging.error(f"   ❌ NaN detected in model outputs at epoch {epoch + 1}")
+                        logging.error(f"      Output stats: min={outputs.min().item():.6f}, max={outputs.max().item():.6f}, mean={outputs.mean().item():.6f}")
+                        # Try to continue with zeros to see if we can identify the source
+                        outputs = torch.where(torch.isnan(outputs), torch.zeros_like(outputs), outputs)
+                    
                     # Compute main BCE loss with optional class weighting for imbalanced data
                     if self.use_class_weighting and pos_weight is not None:
                         # Apply class weights: penalize misclassified positives more
                         bce_losses = criterion(outputs, y)
+                        if torch.isnan(bce_losses).any():
+                            logging.error(f"   ❌ NaN in BCE losses (weighted)")
                         weights = torch.where(y == 1, pos_weight, 1.0)
                         main_loss = (bce_losses * weights).mean() * self.assembler.loss_amplifier
                     else:
                         main_loss = criterion(outputs, y) * self.assembler.loss_amplifier
                     
+                    if torch.isnan(main_loss):
+                        logging.error(f"   ❌ NaN in main_loss at epoch {epoch + 1}")
+                        logging.error(f"      BCE output: {main_loss.item()}")
+                    
                     # Compute composite loss with optional regularization terms
                     loss = self.loss_weight_main * main_loss
+                    
+                    if torch.isnan(loss):
+                        logging.error(f"   ❌ NaN in composite loss (after main_loss) at epoch {epoch + 1}")
                     
                     # Add permutation entropy regularization (encourage exploration or exploitation)
                     if self.loss_weight_perm_entropy > 0 and hasattr(self.assembler.input_to_leaf, 'logits'):
                         # Compute entropy of soft permutation matrix
                         # H = -sum(p * log(p)) where p = softmax(logits)
                         perm_probs = torch.softmax(self.assembler.input_to_leaf.logits / self.assembler.input_to_leaf.temperature, dim=1)
-                        perm_entropy = -(perm_probs * torch.log(perm_probs + 1e-10)).sum(dim=1).mean()
+                        # Clamp probabilities to avoid log(0) and ensure numerical stability
+                        perm_probs_clamped = torch.clamp(perm_probs, min=1e-8, max=1.0 - 1e-8)
+                        perm_entropy = -(perm_probs_clamped * torch.log(perm_probs_clamped)).sum(dim=1).mean()
                         # Negative entropy = encourage decisive permutation (low entropy)
                         # Positive weight = encourage exploration (high entropy)
                         loss = loss - self.loss_weight_perm_entropy * perm_entropy
@@ -592,7 +611,9 @@ class baconNet(nn.Module):
                     if self.loss_weight_trans_entropy > 0 and self.assembler.transformation_layer is not None:
                         # Compute entropy of transformation selection
                         trans_probs = torch.softmax(self.assembler.transformation_layer.logits / self.assembler.transformation_layer.temperature, dim=1)
-                        trans_entropy = -(trans_probs * torch.log(trans_probs + 1e-10)).sum(dim=1).mean()
+                        # Clamp probabilities to avoid log(0) and ensure numerical stability
+                        trans_probs_clamped = torch.clamp(trans_probs, min=1e-8, max=1.0 - 1e-8)
+                        trans_entropy = -(trans_probs_clamped * torch.log(trans_probs_clamped)).sum(dim=1).mean()
                         # Negative entropy = encourage decisive transformation choice (low entropy)
                         loss = loss - self.loss_weight_trans_entropy * trans_entropy
                     
@@ -620,10 +641,21 @@ class baconNet(nn.Module):
                             perm_probs = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
                         
                         # Compute entropy of soft permutation (lower entropy = more peaked/sparse)
-                        perm_sparsity_entropy = -(perm_probs * torch.log(perm_probs + 1e-10)).sum(dim=1).mean()
+                        # Clamp probabilities to avoid log(0) and ensure numerical stability
+                        perm_probs_clamped = torch.clamp(perm_probs, min=1e-8, max=1.0 - 1e-8)
+                        perm_sparsity_entropy = -(perm_probs_clamped * torch.log(perm_probs_clamped)).sum(dim=1).mean()
+                        
+                        if torch.isnan(perm_sparsity_entropy):
+                            logging.error(f"   ❌ NaN in perm_sparsity_entropy at epoch {epoch + 1}")
+                            logging.error(f"      perm_probs stats: min={perm_probs.min().item():.6f}, max={perm_probs.max().item():.6f}")
+                            perm_sparsity_entropy = torch.tensor(0.0, device=perm_probs.device)
+                        
                         # Add as penalty (we want to minimize entropy = maximize sparsity)
                         sparsity_loss = current_sparsity_weight * perm_sparsity_entropy
                         loss = loss + sparsity_loss
+                        
+                        if torch.isnan(loss):
+                            logging.error(f"   ❌ NaN in loss after adding sparsity at epoch {epoch + 1}")
                         
                         # Note: Column uniqueness penalty not needed for Sinkhorn (already doubly stochastic)
                         # But add it for non-Sinkhorn layers
@@ -1045,24 +1077,38 @@ class baconNet(nn.Module):
                         break
                     
                     # Also early stop if we achieve perfect training accuracy (no need to continue)
-                    # BUT only if temperature is low enough that the solution is stable
+                    # BUT only if temperature is low enough that the solution is stable AND loss is reasonable
                     if len(accuracy_history) > 0 and accuracy_history[-1] >= 0.999:
-                        # Check if permutation is stable (temperature low or frozen)
-                        if use_temperature_annealing and not self.assembler.is_frozen:
-                            current_perm_temp = self.assembler.input_to_leaf.temperature
-                            permutation_stable = current_perm_temp < 1.0  # Temperature cool enough for stable solution
-                        else:
-                            permutation_stable = self.assembler.is_frozen
+                        # Check if loss is reasonable (not just lucky predictions with bad model)
+                        # With loss_amplifier, acceptable loss threshold is early_stop_threshold * loss_amplifier
+                        loss_reasonable = loss.item() < (early_stop_threshold * self.assembler.loss_amplifier * 2.0)  # 2x margin for perfect accuracy
                         
-                        if permutation_stable:
-                            logging.info(f"   ✅ Early stop: perfect training accuracy (100.0%) with stable permutation")
-                            # Freeze the model to mark it as ready
-                            self.assembler.is_frozen = True
-                            break
-                        # else: accuracy is 100% but temperature still high - might be transient, keep training
+                        if loss_reasonable:
+                            # Check if permutation is stable AND confident (temperature low or frozen)
+                            if use_temperature_annealing and not self.assembler.is_frozen:
+                                current_perm_temp = self.assembler.input_to_leaf.temperature
+                                permutation_stable = current_perm_temp < 1.0  # Temperature cool enough for stable solution
+                                
+                                # Also check if permutation is confident (peaked distributions)
+                                # Don't freeze if permutation is flat/uniform even with low temperature
+                                if permutation_stable and hasattr(self.assembler.input_to_leaf, 'logits'):
+                                    perm_probs = torch.softmax(self.assembler.input_to_leaf.logits / current_perm_temp, dim=1)
+                                    confidence = perm_probs.max(dim=1)[0].mean().item()
+                                    permutation_confident = confidence > 0.8  # Require confident permutation
+                                    permutation_stable = permutation_stable and permutation_confident
+                            else:
+                                permutation_stable = self.assembler.is_frozen
+                            
+                            if permutation_stable:
+                                logging.info(f"   ✅ Early stop: perfect training accuracy (100.0%) with stable permutation and loss {loss.item():.2f}")
+                                # Freeze the model to mark it as ready
+                                self.assembler.is_frozen = True
+                                break
+                            # else: accuracy is 100% but temperature still high or not confident - keep training
+                        # else: accuracy is high but loss is too high - likely unstable, keep training
 
                 # Force freeze if not already frozen (for pruning and analysis)
-                if not self.assembler.is_frozen:
+                if not self.assembler.is_frozen and force_freeze:
                     logging.info(f"   📋 Model is not frozen, checking if force-freeze is possible...")
                     if hasattr(self.assembler.input_to_leaf, 'logits'):
                         try:

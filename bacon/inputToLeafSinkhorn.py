@@ -125,7 +125,7 @@ class inputToLeafSinkhorn(nn.Module):
         A = torch.exp(log_alpha)
 
         for i in range(n_iters):
-            A = A / A.sum(dim=1, keepdim=True)
-            A = A / A.sum(dim=0, keepdim=True)
+            A = A / (A.sum(dim=1, keepdim=True) + 1e-10)
+            A = A / (A.sum(dim=0, keepdim=True) + 1e-10)
 
         return A

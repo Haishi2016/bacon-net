@@ -508,6 +508,12 @@ class binaryTreeLogicNet(nn.Module):
                     final = node_outputs[-1]
 
             out = final.unsqueeze(1)
+            
+            # Clamp output to (epsilon, 1-epsilon) to ensure BCELoss compatibility and prevent NaN
+            # BCE loss has log(p) and log(1-p) terms, so p=0 or p=1 causes log(0)=-inf → NaN
+            # Aggregators should produce values in [0, 1], but we need strict bounds for numerical stability
+            epsilon = 1e-7
+            out = torch.clamp(out, min=epsilon, max=1.0-epsilon)
 
             # Optional: refine permutation inside forward (baby step integration)
             if self.training and self.auto_refine and (targets is not None):
