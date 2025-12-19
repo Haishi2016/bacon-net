@@ -53,7 +53,7 @@ y = df['target']
 feature_names = X.columns.tolist()
 
 # Train/test split
-X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X, y, test_size=0.2, random_state=None)
 
 scaler2 = SigmoidScaler(alpha=4, beta=-1)
 X_train_np = scaler2.fit_transform(X_train_np)
