@@ -37,7 +37,7 @@ print("=" * 80)
 
 # Configuration
 input_size = 100  # Start with small size to verify NaN fix, then scale up
-sparsity_values = [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0]  # Different sparsity weights to test
+end_temperatures = [5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4,3.3, 3.2, 3.1, 3.0, 2.9, 2.8, 2.7, 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05]  # Different sparsity weights to test
 num_epochs = 1000  # Moderate training duration
 annealing_epochs = 600  # Moderate annealing
 freeze_aggregation_epochs = 0  # No aggregation freezing
@@ -55,8 +55,8 @@ print(f"   Test samples: 5,000")
 # We'll generate multiple batches and filter for balance
 print(f"   Generating balanced dataset...")
 
-train_size = 40000
-test_size = 40000
+train_size = 60000
+test_size = 60000
 x, y,  expr_info = generate_classic_boolean_data(input_size, repeat_factor=(train_size+test_size), randomize=True, device=device)
 
 x_train = x[:train_size]
@@ -76,9 +76,9 @@ print("\n" + "=" * 80)
 print("🧪 ABLATION STUDY: Sparsity Weight vs Hardening Robustness")
 print("=" * 80)
 
-for sparsity_weight in sparsity_values:
+for end_temperature in end_temperatures:
     print(f"\n{'=' * 80}")
-    print(f"🔬 Testing sparsity_weight = {sparsity_weight}")
+    print(f"🔬 Testing end_temperature = {end_temperature}")
     print(f"{'=' * 80}")
     
     # # Create model
@@ -97,10 +97,14 @@ for sparsity_weight in sparsity_values:
     # )
     
     bacon = baconNet(input_size, aggregator='bool.min_max',
-                  weight_mode='fixed', loss_amplifier=1000, normalize_andness=False)
+                  weight_mode='fixed', loss_amplifier=1000, normalize_andness=False,
+                  use_class_weighting=True,
+                  permutation_initial_temperature=5.0,
+                  loss_weight_perm_sparsity=3.0,
+                permutation_final_temperature=end_temperature)
     
     # Train model WITHOUT automatic freezing (we'll evaluate before freezing)
-    print(f"\n📚 Training with sparsity_weight={sparsity_weight}...")
+    print(f"\n📚 Training with end_temperature={end_temperature}...")
     # best_model, best_accuracy = bacon.find_best_model(
     #     x_train, y_train, 
     #     x_test, y_test,
@@ -122,8 +126,9 @@ for sparsity_weight in sparsity_values:
     (best_model, best_accuracy) = bacon.find_best_model(x_train, y_train, x_test, y_test,                                                        
         acceptance_threshold=0.95, 
         force_freeze=False,
-        loss_weight_perm_sparsity=sparsity_weight,
-        attempts=1, max_epochs=2000, save_model=False)
+        loss_weight_perm_sparsity=0.3,
+        freeze_aggregation_epochs=num_epochs,
+        attempts=1, max_epochs=num_epochs, save_model=False)
 
 
     # IMPORTANT: Evaluate BEFORE any freezing happens
@@ -184,22 +189,34 @@ for sparsity_weight in sparsity_values:
         hard_perm = np.argmax(soft_perm, axis=1)
         unique_cols = len(np.unique(hard_perm))
         uniqueness = unique_cols / input_size
+        
+        # Diagnostic: Check if low confidence but high uniqueness means implicit structure
+        if confidence < 0.3 and uniqueness > 0.5:
+            print(f"\n   🔍 Debug: Low confidence ({confidence:.3f}) but high uniqueness ({uniqueness:.1%})")
+            print(f"      This suggests the permutation has implicit structure despite flat probabilities")
+            print(f"      Max probs per row: min={np.min(np.max(soft_perm, axis=1)):.3f}, max={np.max(np.max(soft_perm, axis=1)):.3f}")
+            print(f"      Hard permutation: {hard_perm[:10]}... (first 10)")
+            # Check if soft permutation is actually doing anything
+            identity_perm = np.arange(input_size)
+            is_identity = np.array_equal(hard_perm, identity_perm)
+            print(f"      Is identity permutation: {is_identity}")
+        uniqueness = unique_cols / input_size
     
-    # Store results
+    # Store results (convert numpy types to Python native types for JSON serialization)
     result = {
-        'sparsity_weight': sparsity_weight,
-        'soft_accuracy': soft_accuracy,
-        'hard_accuracy': hard_accuracy,
-        'accuracy_drop': accuracy_drop,
-        'relative_drop_pct': relative_drop,
-        'confidence': confidence,
-        'uniqueness': uniqueness,
-        'unique_columns': unique_cols
+        'end_temperature': float(end_temperature),
+        'soft_accuracy': float(soft_accuracy),
+        'hard_accuracy': float(hard_accuracy),
+        'accuracy_drop': float(accuracy_drop),
+        'relative_drop_pct': float(relative_drop),
+        'confidence': float(confidence),
+        'uniqueness': float(uniqueness),
+        'unique_columns': int(unique_cols)
     }
     results.append(result)
     
     # Print summary
-    print(f"\n📊 Results for sparsity_weight={sparsity_weight}:")
+    print(f"\n📊 Results for end_temperature={end_temperature}:")
     print(f"   Soft accuracy:  {soft_accuracy * 100:.2f}%")
     print(f"   Hard accuracy:  {hard_accuracy * 100:.2f}%")
     print(f"   Accuracy drop:  {accuracy_drop * 100:.2f}% (relative: {relative_drop:.2f}%)")
@@ -220,14 +237,14 @@ fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 # Plot 1: Soft vs Hard Accuracy
 ax1 = axes[0, 0]
-sparsity_vals = [r['sparsity_weight'] for r in results]
+end_temperature_vals = [r['end_temperature'] for r in results]
 soft_accs = [r['soft_accuracy'] * 100 for r in results]
 hard_accs = [r['hard_accuracy'] * 100 for r in results]
 
-ax1.plot(sparsity_vals, soft_accs, marker='o', label='Soft (training)', linewidth=2)
-ax1.plot(sparsity_vals, hard_accs, marker='s', label='Hard (argmax)', linewidth=2)
+ax1.plot(end_temperature_vals, soft_accs, marker='o', label='Soft (training)', linewidth=2)
+ax1.plot(end_temperature_vals, hard_accs, marker='s', label='Hard (argmax)', linewidth=2)
 ax1.set_xscale('log')
-ax1.set_xlabel('Sparsity Weight (log scale)')
+ax1.set_xlabel('End Temperature (log scale)')
 ax1.set_ylabel('Accuracy (%)')
 ax1.set_title('Soft vs Hard Accuracy')
 ax1.legend()
@@ -239,9 +256,9 @@ accuracy_drops = [r['accuracy_drop'] * 100 for r in results]
 relative_drops = [r['relative_drop_pct'] for r in results]
 
 ax2_twin = ax2.twinx()
-line1 = ax2.plot(sparsity_vals, accuracy_drops, marker='o', color='red', 
+line1 = ax2.plot(end_temperature_vals, accuracy_drops, marker='o', color='red', 
                  label='Absolute drop', linewidth=2)
-line2 = ax2_twin.plot(sparsity_vals, relative_drops, marker='s', color='orange', 
+line2 = ax2_twin.plot(end_temperature_vals, relative_drops, marker='s', color='orange', 
                       label='Relative drop (%)', linewidth=2)
 ax2.set_xscale('log')
 ax2.set_xlabel('Sparsity Weight (log scale)')
@@ -261,7 +278,7 @@ ax2.grid(True, alpha=0.3)
 ax3 = axes[1, 0]
 confidences = [r['confidence'] for r in results]
 
-ax3.plot(sparsity_vals, confidences, marker='o', color='green', linewidth=2)
+ax3.plot(end_temperature_vals, confidences, marker='o', color='green', linewidth=2)
 ax3.set_xscale('log')
 ax3.set_xlabel('Sparsity Weight (log scale)')
 ax3.set_ylabel('Average Confidence')
@@ -272,10 +289,10 @@ ax3.grid(True, alpha=0.3)
 ax4 = axes[1, 1]
 uniqueness_vals = [r['uniqueness'] * 100 for r in results]
 
-ax4.plot(sparsity_vals, uniqueness_vals, marker='o', color='purple', linewidth=2)
+ax4.plot(end_temperature_vals, uniqueness_vals, marker='o', color='purple', linewidth=2)
 ax4.axhline(y=100, color='gray', linestyle='--', alpha=0.5, label='Perfect (100%)')
 ax4.set_xscale('log')
-ax4.set_xlabel('Sparsity Weight (log scale)')
+ax4.set_xlabel('End Temperature (log scale)')
 ax4.set_ylabel('Unique Columns (%)')
 ax4.set_title('Permutation Uniqueness')
 ax4.legend()

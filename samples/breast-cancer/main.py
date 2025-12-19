@@ -1,6 +1,6 @@
 # Note: required to import baconNet from local folder
-# import sys
-# sys.path.append('../../')
+import sys
+sys.path.insert(0, '../../')
 
 from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
@@ -55,16 +55,14 @@ feature_names = X.columns.tolist()
 # Train/test split
 X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X, y, test_size=0.2, random_state=None)
 
-
-# Standardize
-# scaler1 = RobustScaler()
-# X_train_np = scaler1.fit_transform(X_train_np)
-# X_test_np = scaler1.transform(X_test_np)
-
-# Standardize
-scaler2 = SigmoidScaler()
+scaler2 = SigmoidScaler(alpha=4)
 X_train_np = scaler2.fit_transform(X_train_np)
 X_test_np = scaler2.transform(X_test_np)
+
+# Standardize
+# scaler2 = MinMaxScaler()
+# X_train_np = scaler2.fit_transform(X_train_np)
+# X_test_np = scaler2.transform(X_test_np)
 
 # Convert to PyTorch tensors
 X_train = torch.tensor(X_train_np, dtype=torch.float32).to(device)
@@ -74,8 +72,8 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
-weight_mode = 'trainable'
-acceptance_threshold = 0.90
+weight_mode = 'fixed'
+acceptance_threshold = 0.98
 weight_penalty_strength=1e-2 
 
 
@@ -83,14 +81,25 @@ bacon = baconNet(
     input_size=30, 
     freeze_loss_threshold=freeze_loss_threshold, 
     aggregator=aggregator, 
-    loss_amplifier=1000, 
+    loss_amplifier=1000,     
+    permutation_initial_temperature=5.0,
+    permutation_final_temperature=4.0,
     weight_penalty_strength=weight_penalty_strength, 
     weight_normalization='softmax', 
+    use_class_weighting=False,
     weight_mode=weight_mode)
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, 
                                                         attempts=10, 
+                                                        use_hierarchical_permutation=True,
+                                                        hierarchical_epochs_per_attempt=2000,
+                                                        hierarchical_group_size=8,
                                                         acceptance_threshold=acceptance_threshold, 
-                                                        max_epochs=12000)
+                                                        loss_weight_perm_sparsity=5.0,
+                                                        sinkhorn_iters=300,
+                                                        freeze_confidence_threshold=0.95,  # Still freeze at very high confidence
+                                                        freeze_min_confidence=0.85,        # Or freeze at 0.90 confidence if...
+                                                        freeze_loss_threshold=0.09,        # ...loss is below 0.08 * loss_amplifier
+                                                        max_epochs=4000)
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
 X_all = torch.cat([X_train, X_test], dim=0)
 Y_all = torch.cat([Y_train, Y_test], dim=0)

@@ -1,0 +1,62 @@
+[
+  {
+    "sparsity_weight": 0.01,
+    "soft_accuracy": 0.954883337020874,
+    "hard_accuracy": 0.6210333108901978,
+    "accuracy_drop": 0.33385002613067627,
+    "relative_drop_pct": 34.96238893143217,
+    "confidence": 0.09928683191537857,
+    "uniqueness": 0.16,
+    "unique_columns": 16
+  },
+  {
+    "sparsity_weight": 0.1,
+    "soft_accuracy": 0.9179999828338623,
+    "hard_accuracy": 0.6199833154678345,
+    "accuracy_drop": 0.29801666736602783,
+    "relative_drop_pct": 32.463689862613236,
+    "confidence": 0.15671701729297638,
+    "uniqueness": 0.33,
+    "unique_columns": 33
+  },
+  {
+    "sparsity_weight": 0.5,
+    "soft_accuracy": 0.951449990272522,
+    "hard_accuracy": 0.6194666624069214,
+    "accuracy_drop": 0.3319833278656006,
+    "relative_drop_pct": 34.89235706130085,
+    "confidence": 0.22349813580513,
+    "uniqueness": 0.45,
+    "unique_columns": 45
+  },
+  {
+    "sparsity_weight": 1.0,
+    "soft_accuracy": 0.9568833708763123,
+    "hard_accuracy": 0.7432667016983032,
+    "accuracy_drop": 0.21361666917800903,
+    "relative_drop_pct": 22.32421167298364,
+    "confidence": 0.205603688955307,
+    "uniqueness": 0.56,
+    "unique_columns": 56
+  },
+  {
+    "sparsity_weight": 5.0,
+    "soft_accuracy": 0.9800000190734863,
+    "hard_accuracy": 0.6213833689689636,
+    "accuracy_drop": 0.3586166501045227,
+    "relative_drop_pct": 36.593535012740794,
+    "confidence": 0.44434696435928345,
+    "uniqueness": 0.79,
+    "unique_columns": 79
+  },
+  {
+    "sparsity_weight": 10.0,
+    "soft_accuracy": 0.962933361530304,
+    "hard_accuracy": 0.7432667016983032,
+    "accuracy_drop": 0.21966665983200073,
+    "relative_drop_pct": 22.81223899885493,
+    "confidence": 0.6032349467277527,
+    "uniqueness": 0.88,
+    "unique_columns": 88
+  }
+]

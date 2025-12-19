@@ -3,12 +3,12 @@ import torch.nn as nn
 import itertools
 
 class inputToLeafSinkhorn(nn.Module):
-    def __init__(self, num_inputs, num_leaves, temperature=3.0, sinkhorn_iters=20, use_gumbel=True):
+    def __init__(self, num_inputs, num_leaves, temperature=3.0, sinkhorn_iters=100, use_gumbel=True):
         super().__init__()
         self.num_inputs = num_inputs
         self.num_leaves = num_leaves
         self.temperature = temperature
-        self.sinkhorn_iters = sinkhorn_iters
+        self.sinkhorn_iters = sinkhorn_iters  # Increased from 20 to 100 for better convergence
         self.use_gumbel = use_gumbel
         self.gumbel_noise_scale = 1.0  # You can anneal this
 
