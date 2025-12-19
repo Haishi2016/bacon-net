@@ -138,7 +138,7 @@ print(f"\nTrain data shape: {X_train_np.shape}, dtype: {X_train_np.dtype}")
 print(f"Test data shape: {X_test_np.shape}, dtype: {X_test_np.dtype}")
 
 # Normalize features using SigmoidScaler
-scaler = SigmoidScaler(alpha=4)
+scaler = SigmoidScaler(alpha=4, beta=-1)
 X_train_np = scaler.fit_transform(X_train_np)
 X_test_np = scaler.transform(X_test_np)
 
@@ -152,7 +152,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 0.80
+acceptance_threshold = 0.8
 weight_penalty_strength = 1e-3
 
 # Update input size based on encoded features
@@ -239,7 +239,8 @@ accuracies = [best_score_accuracy]
 accuracy_drops = []
 feature_contributions = []
 
-for i in range(1, 13):
+# Prune based on actual number of features after one-hot encoding
+for i in range(1, num_features):
     func_eval = bacon.prune_features(i)
     kept_indices = bacon.assembler.locked_perm[i:].tolist()
     removed_feature_idx = bacon.assembler.locked_perm[i - 1].item()
