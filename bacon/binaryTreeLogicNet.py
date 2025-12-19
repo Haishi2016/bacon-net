@@ -73,7 +73,8 @@ class binaryTreeLogicNet(nn.Module):
                  transformation_temperature: float = 1.0,
                  transformation_use_gumbel: bool = False,
                  transformations = None,
-                 device=None):
+                 device=None,
+                 sinkhorn_iters=100):
         super(binaryTreeLogicNet, self).__init__()
         self.original_input_size = input_size
         self.num_leaves = input_size  # 🔹 Each input gets its own leaf initially
@@ -101,6 +102,7 @@ class binaryTreeLogicNet(nn.Module):
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary 
         self.aggregator = aggregator       
         self.weight_penalty_strength = weight_penalty_strength
+        self.sinkhorn_iters = sinkhorn_iters  # Sinkhorn iteration count for convergence
         self.layer_outputs = None  # For storing layer outputs during forward pass
         self.combination_mode = combination_mode  # "none" or "cross"
         if combination_split is None:
@@ -210,7 +212,8 @@ class binaryTreeLogicNet(nn.Module):
                 self.input_to_leaf = inputToLeafSinkhorn(
                     self.original_input_size,
                     self.num_leaves,
-                    use_gumbel=True
+                    use_gumbel=True,
+                    sinkhorn_iters=self.sinkhorn_iters
                 ).to(self.device)
             elif self.combination_mode == "cross":
                  self.input_to_leaf = inputToCombinationSinkhorn(
@@ -643,7 +646,7 @@ class binaryTreeLogicNet(nn.Module):
                 else:
                     print("🚫 No good permutation found in top-k. Restarting.")
                     self.is_frozen = False
-                    self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True).to(self.device)
+                    self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True, sinkhorn_iters=self.sinkhorn_iters).to(self.device)
                     self.reset_optimizer() 
 
             if self.is_frozen:
