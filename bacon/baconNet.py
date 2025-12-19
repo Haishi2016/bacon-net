@@ -302,6 +302,8 @@ class baconNet(nn.Module):
                     logging.info(f"✅ Loaded model accuracy: {acc:.4f}")
                     if acc >= acceptance_threshold:
                         return self.assembler.state_dict(), acc
+                    else:
+                        logging.info(f"⚠️ Loaded accuracy {acc:.4f} < threshold {acceptance_threshold:.4f}, will retrain")
             except Exception as e:
                 logging.warning(f"⚠️ Failed to load model from {save_path}: {e}")
 
