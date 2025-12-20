@@ -1151,9 +1151,18 @@ class baconNet(nn.Module):
                         try:
                             logging.info(f"   🔒 Force-freezing model (creating locked_perm and frozen structure)")
                             from bacon.frozonInputToLeaf import frozenInputToLeaf
+                            from scipy.optimize import linear_sum_assignment
+                            import numpy as np
+                            
                             # Get hard assignment from current soft permutation
                             soft_perm = torch.softmax(self.assembler.input_to_leaf.logits, dim=1)
-                            hard_perm = torch.argmax(soft_perm, dim=1)
+                            
+                            # BUG FIX: Use Hungarian algorithm instead of argmax to ensure valid permutation
+                            # argmax can create duplicates when multiple rows have max in same column
+                            soft_perm_np = soft_perm.detach().cpu().numpy()
+                            row_ind, col_ind = linear_sum_assignment(-soft_perm_np)
+                            hard_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long, device=self.assembler.device)
+                            
                             self.assembler.locked_perm = hard_perm.clone().detach()
                             self.assembler.is_frozen = True
                             # Replace with frozen layer
@@ -1161,7 +1170,7 @@ class baconNet(nn.Module):
                                 self.assembler.locked_perm,
                                 self.assembler.original_input_size
                             ).to(self.assembler.device)
-                            logging.info(f"   ✅ Successfully force-frozen model")
+                            logging.info(f"   ✅ Successfully force-frozen model with valid permutation (no duplicates)")
                         except Exception as e:
                             logging.warning(f"   ⚠️ Failed to force-freeze model: {e}")
                     else:
