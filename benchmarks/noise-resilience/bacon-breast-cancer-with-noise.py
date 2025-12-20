@@ -32,15 +32,59 @@ from bacon.utils import (
 import logging
 import matplotlib.pyplot as plt
 import pandas as pd
+from noise_utils import (
+    add_uniform_noise,
+    compute_nAUDC
+)
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 breast_cancer = fetch_ucirepo(id=17)
+
+noise_ratio = 0.1
+
 X = breast_cancer.data.features.iloc[:, 0:30]  # mean values only
+feature_names = X.columns.tolist()
+
+# Convert to numpy array for noise addition
+X_np = X.values
+X_tensor = torch.tensor(X_np, dtype=torch.float32)
+X_noisy_tensor, corrupted_indices = add_uniform_noise(X_tensor, noise_ratio, seed=42)
+X_noisy = X_noisy_tensor.numpy()
+
+# Display noise information
+print("\n" + "="*60)
+print("NOISE APPLICATION SUMMARY")
+print("="*60)
+print(f"Noise ratio: {noise_ratio:.2%}")
+print(f"Features per sample to corrupt: {int(noise_ratio * len(feature_names))}/{len(feature_names)}")
+print(f"Total samples: {len(X_noisy)}")
+
+if noise_ratio > 0:
+    # Show which features were corrupted in first few samples
+    print("\nCorrupted features in first 5 samples:")
+    for i in range(min(5, len(corrupted_indices))):
+        if corrupted_indices[i]:
+            corrupted_names = [feature_names[idx] for idx in sorted(corrupted_indices[i])]
+            print(f"  Sample {i}: {', '.join(corrupted_names)}")
+        else:
+            print(f"  Sample {i}: None")
+    
+    # Overall statistics
+    all_corrupted = set()
+    for indices in corrupted_indices:
+        all_corrupted.update(indices)
+    
+    if all_corrupted:
+        print(f"\nTotal unique features affected across all samples: {len(all_corrupted)}/{len(feature_names)}")
+        print(f"Features affected: {', '.join([feature_names[idx] for idx in sorted(all_corrupted)])}")
+else:
+    print("\nNo noise applied (noise_ratio = 0.0)")
+
 y = LabelEncoder().fit_transform(breast_cancer.data.targets.values.ravel())
 
 
-df = pd.DataFrame(X, columns=breast_cancer.data.features.columns[:30])
+df = pd.DataFrame(X_noisy, columns=breast_cancer.data.features.columns[:30])
 df['target'] = y
 
 # Balance the dataset
@@ -53,7 +97,7 @@ y = df['target']
 feature_names = X.columns.tolist()
 
 # Train/test split
-X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X, y, test_size=0.2, random_state=None)
+X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X_noisy, y, test_size=0.2, random_state=42)
 
 scaler2 = SigmoidScaler(alpha=4, beta=-1)
 X_train_np = scaler2.fit_transform(X_train_np)
@@ -73,7 +117,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 0.95
+acceptance_threshold = 1.0
 weight_penalty_strength=1e-2 
 
 
