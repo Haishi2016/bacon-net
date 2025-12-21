@@ -129,15 +129,15 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 0.74
+acceptance_threshold = 1.0
 weight_penalty_strength = 1e-3
 
 # Update input size based on features
 num_features = len(feature_names)
 print(f"\n📊 Model will use {num_features} input features")
 
-from bacon.transformationLayer import IdentityTransformation, NegationTransformation
-trans = [IdentityTransformation(1), NegationTransformation(1)]
+from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation
+trans = [IdentityTransformation(1), NegationTransformation(1), PeakTransformation(1)]
 
 bacon = baconNet(
     input_size=num_features, 
@@ -205,12 +205,19 @@ visualize_tree_structure(bacon.assembler, feature_names)
 
 # Find optimal thresholds for different metrics
 print("\n" + "="*60)
-print("THRESHOLD OPTIMIZATION")
+print("OVERFITTING CHECK")
 print("="*60)
 
-# First, evaluate with default threshold (0.5)
-print("\n📊 Performance with default threshold (0.5):")
-print_metrics(bacon, X_all, Y_all, threshold=0.5)
+# Evaluate on both train and test sets separately
+print("\nTraining Set Performance (threshold=0.5):")
+print_metrics(bacon, X_train, Y_train, threshold=0.5)
+
+print("\nTest Set Performance (threshold=0.5):")
+print_metrics(bacon, X_test, Y_test, threshold=0.5)
+
+print("\n" + "="*60)
+print("THRESHOLD OPTIMIZATION (on combined data)")
+print("="*60)
 
 best_threshold_recall, best_score_recall = find_best_threshold(bacon, X_all, Y_all, metric='recall')
 print(f"\nBest threshold for recall: {best_threshold_recall:.3f}, Best score: {best_score_recall:.4f}")

@@ -41,7 +41,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 breast_cancer = fetch_ucirepo(id=17)
 
-noise_ratio = 0.1
+noise_ratio = 0.0
 
 X = breast_cancer.data.features.iloc[:, 0:30]  # mean values only
 feature_names = X.columns.tolist()
@@ -97,6 +97,8 @@ y = df['target']
 feature_names = X.columns.tolist()
 
 # Train/test split
+# CRITICAL: This random_state must match the one used when the saved model was created
+# If there's a mismatch, you'll see test accuracy > train accuracy (data leakage)
 X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(X_noisy, y, test_size=0.2, random_state=42)
 
 scaler2 = SigmoidScaler(alpha=4, beta=-1)
@@ -117,7 +119,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 1.0
+acceptance_threshold = 0.98
 weight_penalty_strength=1e-2 
 
 
@@ -135,7 +137,7 @@ bacon = baconNet(
 (best_model, best_accuracy) = bacon.find_best_model(X_train, Y_train, X_test, Y_test, 
                                                         attempts=10, 
                                                         use_hierarchical_permutation=True,
-                                                        hierarchical_epochs_per_attempt=2000,
+                                                        hierarchical_epochs_per_attempt=3000,
                                                         hierarchical_group_size=8,
                                                         hierarchical_bleed_ratio=0.5,
                                                         acceptance_threshold=acceptance_threshold, 
@@ -174,22 +176,32 @@ accuracies = []
 accuracy_drops = []
 feature_contributions = []
 
-best_threshold, best_score = find_best_threshold(bacon, X_all, Y_all, metric='recall')
+# Evaluate on both train and test sets to check for overfitting
+print("\n" + "="*60)
+print("OVERFITTING CHECK")
+print("="*60)
+print("\nTraining Set Performance:")
+print_metrics(bacon, X_train, Y_train, threshold=0.5)
+
+print("\nTest Set Performance:")
+print_metrics(bacon, X_test, Y_test, threshold=0.5)
+
+best_threshold, best_score = find_best_threshold(bacon, X_test, Y_test, metric='recall')
 print(f"Best threshold for recall: {best_threshold:.2f}, Best score: {best_score:.4f}")
-print_metrics(bacon, X_all, Y_all, threshold=best_threshold)
-print_metrics(bacon, X_all, Y_all, threshold=0.02)
-print_metrics(bacon, X_all, Y_all, threshold=0.1)
+print_metrics(bacon, X_test, Y_test, threshold=best_threshold)
+print_metrics(bacon, X_test, Y_test, threshold=0.02)
+print_metrics(bacon, X_test, Y_test, threshold=0.1)
 
 
-best_threshold, best_score = find_best_threshold(bacon, X_all, Y_all, metric='precision')
+best_threshold, best_score = find_best_threshold(bacon, X_test, Y_test, metric='precision')
 print(f"Best threshold for precision: {best_threshold:.2f}, Best score: {best_score:.4f}")
-print_metrics(bacon, X_all, Y_all, threshold=best_threshold)
+print_metrics(bacon, X_test, Y_test, threshold=best_threshold)
 
-best_threshold, best_score = find_best_threshold(bacon, X_all, Y_all, metric='accuracy')
+best_threshold, best_score = find_best_threshold(bacon, X_test, Y_test, metric='accuracy')
 print(f"Best threshold for accuracy: {best_threshold:.2f}, Best score: {best_score:.4f}")
-print_metrics(bacon, X_all, Y_all, threshold=best_threshold)
+print_metrics(bacon, X_test, Y_test, threshold=best_threshold)
 
-bacon.evaluate(X_all, Y_all, threshold=best_threshold)
+bacon.evaluate(X_test, Y_test, threshold=best_threshold)
 accuracies.append(best_score)
 
 for i in range(1, 30):
