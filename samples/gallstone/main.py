@@ -4,7 +4,6 @@ sys.path.insert(0, '../../')
 
 from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 import torch
 from bacon.baconNet import baconNet
 from bacon.visualization import (
@@ -28,16 +27,16 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Fetch CDC Diabetes Health Indicators dataset
-print("Loading CDC Diabetes Health Indicators dataset...")
-diabetes = fetch_ucirepo(id=891)
+# Fetch Gallstone dataset
+print("Loading Gallstone dataset...")
+gallstone = fetch_ucirepo(id=1150)
 
 # Extract features and target
-X = diabetes.data.features
-y = diabetes.data.targets
+X = gallstone.data.features
+y = gallstone.data.targets
 
-# Target is Diabetes_binary: 0 = no diabetes, 1 = prediabetes or diabetes
-y_binary = y['Diabetes_binary'].values
+# Target is Gallstone: 0 = no gallstone, 1 = gallstone disease
+y_binary = y.values.ravel()
 
 print(f"Dataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
@@ -52,31 +51,36 @@ print("="*60)
 
 print("\nFeature Names and Descriptions:")
 feature_descriptions = {
-    'HighBP': 'High blood pressure (0=no, 1=yes)',
-    'HighChol': 'High cholesterol (0=no, 1=yes)',
-    'CholCheck': 'Cholesterol check in 5 years (0=no, 1=yes)',
+    'Age': 'Age in years',
+    'Gender': 'Gender (0=female, 1=male)',
+    'Height': 'Height in cm',
+    'Weight': 'Weight in kg',
     'BMI': 'Body Mass Index',
-    'Smoker': 'Smoked at least 100 cigarettes (0=no, 1=yes)',
-    'Stroke': 'Ever had a stroke (0=no, 1=yes)',
-    'HeartDiseaseorAttack': 'Coronary heart disease or MI (0=no, 1=yes)',
-    'PhysActivity': 'Physical activity in past 30 days (0=no, 1=yes)',
-    'Fruits': 'Consume fruit 1+ times per day (0=no, 1=yes)',
-    'Veggies': 'Consume vegetables 1+ times per day (0=no, 1=yes)',
-    'HvyAlcoholConsump': 'Heavy alcohol consumption (0=no, 1=yes)',
-    'AnyHealthcare': 'Have any health care coverage (0=no, 1=yes)',
-    'NoDocbcCost': 'Could not see doctor due to cost (0=no, 1=yes)',
-    'GenHlth': 'General health (1=excellent to 5=poor)',
-    'MentHlth': 'Days of poor mental health (past 30 days)',
-    'PhysHlth': 'Days of poor physical health (past 30 days)',
-    'DiffWalk': 'Difficulty walking or climbing stairs (0=no, 1=yes)',
-    'Sex': 'Sex (0=female, 1=male)',
-    'Age': 'Age category (1-13, binned)',
-    'Education': 'Education level (1-6)',
-    'Income': 'Income level (1-8)'
+    'TBW': 'Total body water (L)',
+    'ECW': 'Extracellular water (L)',
+    'ICW': 'Intracellular water (L)',
+    'Muscle_mass': 'Muscle mass (kg)',
+    'Fat_mass': 'Fat mass (kg)',
+    'Protein': 'Protein (kg)',
+    'VFA': 'Visceral fat area (cm²)',
+    'Hepatic_fat': 'Hepatic fat (%)',
+    'Glucose': 'Blood glucose (mg/dL)',
+    'Total_cholesterol': 'Total cholesterol (mg/dL)',
+    'HDL': 'High-density lipoprotein (mg/dL)',
+    'LDL': 'Low-density lipoprotein (mg/dL)',
+    'Triglycerides': 'Triglycerides (mg/dL)',
+    'AST': 'Aspartate aminotransferase (U/L)',
+    'ALT': 'Alanine aminotransferase (U/L)',
+    'ALP': 'Alkaline phosphatase (U/L)',
+    'Creatinine': 'Creatinine (mg/dL)',
+    'GFR': 'Glomerular filtration rate',
+    'CRP': 'C-reactive protein (mg/L)',
+    'Hemoglobin': 'Hemoglobin (g/dL)',
+    'Vitamin_D': 'Vitamin D (ng/mL)'
 }
 
 for col in df.columns[:-1]:  # Exclude target
-    desc = feature_descriptions.get(col, 'Unknown')
+    desc = feature_descriptions.get(col, 'Bioimpedance/Laboratory measure')
     print(f"  {col:20s} - {desc}")
 
 print("\nFeature Statistics:")
@@ -86,8 +90,8 @@ print("\nSample Records (first 5):")
 print(df.head())
 
 print("\nClass Distribution:")
-print(f"  No Diabetes (0): {(df['target'] == 0).sum()} people ({(df['target'] == 0).sum() / len(df) * 100:.1f}%)")
-print(f"  Diabetes (1):    {(df['target'] == 1).sum()} people ({(df['target'] == 1).sum() / len(df) * 100:.1f}%)")
+print(f"  No Gallstone (0): {(df['target'] == 0).sum()} people ({(df['target'] == 0).sum() / len(df) * 100:.1f}%)")
+print(f"  Gallstone (1):    {(df['target'] == 1).sum()} people ({(df['target'] == 1).sum() / len(df) * 100:.1f}%)")
 
 # Separate features and target
 X = df.drop(columns=['target'])
@@ -95,14 +99,14 @@ y = df['target']
 
 feature_names = X.columns.tolist()
 
-# Note: Most features are already binary or ordinal integers, no one-hot encoding needed
+# Note: All features are already numeric, no one-hot encoding needed
 print("\n" + "="*60)
 print("FEATURE TYPES")
 print("="*60)
-print("All features are already numeric (binary or ordinal)")
+print("All features are already numeric (continuous)")
 print("No one-hot encoding required")
 
-# Train/test split using full dataset
+# Train/test split
 X_train_df, X_test_df, y_train_np, y_test_np = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
@@ -115,7 +119,7 @@ print(f"\nTrain data shape: {X_train_np.shape}, dtype: {X_train_np.dtype}")
 print(f"Test data shape: {X_test_np.shape}, dtype: {X_test_np.dtype}")
 
 # Normalize features using SigmoidScaler
-scaler = SigmoidScaler(alpha=2, beta=-1)
+scaler = SigmoidScaler(alpha=4, beta=-1)
 X_train_np = scaler.fit_transform(X_train_np)
 X_test_np = scaler.transform(X_test_np)
 
@@ -129,15 +133,15 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 0.75
+acceptance_threshold = 0.90
 weight_penalty_strength = 1e-3
 
 # Update input size based on features
 num_features = len(feature_names)
 print(f"\n📊 Model will use {num_features} input features")
 
-from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation
-trans = [IdentityTransformation(1), NegationTransformation(1), PeakTransformation(1)]
+from bacon.transformationLayer import IdentityTransformation, NegationTransformation
+trans = [IdentityTransformation(1), NegationTransformation(1)]
 
 bacon = baconNet(
     input_size=num_features, 
@@ -158,10 +162,7 @@ bacon = baconNet(
 (best_model, best_accuracy) = bacon.find_best_model(
     X_train, Y_train, X_test, Y_test, 
     attempts=10, 
-    use_hierarchical_permutation=True,
-    hierarchical_bleed_ratio=0.5,
-    hierarchical_epochs_per_attempt=2000,  
-    hierarchical_group_size=10, 
+    use_hierarchical_permutation=False,
     acceptance_threshold=acceptance_threshold, 
     loss_weight_perm_sparsity=5.0,
     sinkhorn_iters=200,
@@ -172,24 +173,6 @@ bacon = baconNet(
 )
 
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
-
-# Debug: Check locked_perm for duplicates
-print("\n" + "="*60)
-print("DEBUG: Checking locked_perm")
-print("="*60)
-locked_perm = bacon.assembler.locked_perm.tolist()
-print(f"locked_perm: {locked_perm}")
-print(f"Length: {len(locked_perm)}")
-print(f"Unique values: {len(set(locked_perm))}")
-print(f"Has duplicates: {len(locked_perm) != len(set(locked_perm))}")
-if len(locked_perm) != len(set(locked_perm)):
-    from collections import Counter
-    counts = Counter(locked_perm)
-    duplicates = {k: v for k, v in counts.items() if v > 1}
-    print(f"Duplicate indices: {duplicates}")
-    for idx, count in duplicates.items():
-        print(f"  Feature '{feature_names[idx]}' (index {idx}) appears {count} times")
-print("="*60)
 
 # Combine train and test for comprehensive analysis
 X_all = torch.cat([X_train, X_test], dim=0)
@@ -275,12 +258,12 @@ for idx, drop in sorted_contributions:
 # Plot accuracy vs. pruning
 plt.figure(figsize=(10, 5))
 plt.plot(range(len(accuracies)), [a * 100 for a in accuracies], marker='o', linewidth=2)
-plt.title("Diabetes: Accuracy vs. Number of Features Pruned")
+plt.title("Gallstone: Accuracy vs. Number of Features Pruned")
 plt.xlabel("Number of Features Pruned from Left")
 plt.ylabel("Accuracy (%)")
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig('diabetes_pruning.png', dpi=150)
+plt.savefig('gallstone_pruning.png', dpi=150)
 plt.show()
 
 # Visualization
