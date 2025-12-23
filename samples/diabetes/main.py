@@ -115,7 +115,7 @@ print(f"\nTrain data shape: {X_train_np.shape}, dtype: {X_train_np.dtype}")
 print(f"Test data shape: {X_test_np.shape}, dtype: {X_test_np.dtype}")
 
 # Normalize features using SigmoidScaler
-scaler = SigmoidScaler(alpha=2, beta=-1)
+scaler = SigmoidScaler(alpha=4, beta=-1)
 X_train_np = scaler.fit_transform(X_train_np)
 X_test_np = scaler.transform(X_test_np)
 
@@ -129,7 +129,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 0.75
+acceptance_threshold = 0.87
 weight_penalty_strength = 1e-3
 
 # Update input size based on features

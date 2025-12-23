@@ -2,7 +2,6 @@
 import sys
 sys.path.insert(0, '../../')
 
-from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 from bacon.utils import SigmoidScaler
@@ -19,13 +18,14 @@ print("="*60)
 print("XGBOOST - GALLSTONE CLASSIFICATION")
 print("="*60)
 
-# Fetch Gallstone dataset
-gallstone = fetch_ucirepo(id=1150)
+# Load Gallstone dataset from local CSV
+df = pd.read_csv('c:/School/lsp/dataset-uci.csv')
 
-# Extract features and target
-X = gallstone.data.features
-y = gallstone.data.targets
-y_binary = y.values.ravel()
+# Target is first column 'Gallstone Status': 0 = no gallstone, 1 = gallstone disease
+y_binary = df['Gallstone Status'].values
+
+# Features are all other columns
+X = df.drop(columns=['Gallstone Status'])
 
 print(f"\nDataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
