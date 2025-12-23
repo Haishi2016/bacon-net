@@ -1,4 +1,4 @@
-# Logistic Regression baseline for Diabetes classification
+# Logistic Regression baseline for EEG Eye State classification
 import sys
 sys.path.insert(0, '../../')
 
@@ -11,16 +11,16 @@ import pandas as pd
 import numpy as np
 
 print("="*60)
-print("LOGISTIC REGRESSION - DIABETES CLASSIFICATION")
+print("LOGISTIC REGRESSION - EEG EYE STATE CLASSIFICATION")
 print("="*60)
 
-# Fetch CDC Diabetes Health Indicators dataset
-diabetes = fetch_ucirepo(id=891)
+# Fetch EEG Eye State dataset
+eeg = fetch_ucirepo(id=264)
 
 # Extract features and target
-X = diabetes.data.features
-y = diabetes.data.targets
-y_binary = y['Diabetes_binary'].values
+X = eeg.data.features
+y = eeg.data.targets
+y_binary = y.values.ravel()
 
 print(f"\nDataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
@@ -44,7 +44,7 @@ X_train = X_train_df.values.astype(np.float64)
 X_test = X_test_df.values.astype(np.float64)
 
 # Normalize features using SigmoidScaler (SAME AS BACON)
-scaler = SigmoidScaler(alpha=4, beta=-1)
+scaler = SigmoidScaler(alpha=3, beta=-1)
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
@@ -103,19 +103,19 @@ print("\nConfusion Matrix (Test Set):")
 print(confusion_matrix(y_test, y_pred_test))
 
 print("\nClassification Report (Test Set):")
-print(classification_report(y_test, y_pred_test, target_names=['No Diabetes', 'Diabetes']))
+print(classification_report(y_test, y_pred_test, target_names=['Eyes Open', 'Eyes Closed']))
 
 # Feature importance (coefficients)
 print("\n" + "="*60)
-print("TOP 10 MOST IMPORTANT FEATURES")
+print("EEG SENSOR IMPORTANCE (by coefficient magnitude)")
 print("="*60)
 
 feature_importance = np.abs(best_model.coef_[0])
-top_indices = np.argsort(feature_importance)[-10:][::-1]
+top_indices = np.argsort(feature_importance)[::-1]
 
 for rank, idx in enumerate(top_indices, 1):
     coef = best_model.coef_[0][idx]
-    print(f"{rank:2d}. {feature_names[idx]:25s} | coef = {coef:+.4f} | |coef| = {abs(coef):.4f}")
+    print(f"{rank:2d}. {feature_names[idx]:6s} | coef = {coef:+.4f} | |coef| = {abs(coef):.4f}")
 
 print("\n" + "="*60)
 print(f"FINAL TEST ACCURACY: {best_accuracy:.2%}")

@@ -1,26 +1,26 @@
-# Logistic Regression baseline for Diabetes classification
+# Random Forest baseline for EEG Eye State classification
 import sys
 sys.path.insert(0, '../../')
 
 from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 from bacon.utils import SigmoidScaler
 import pandas as pd
 import numpy as np
 
 print("="*60)
-print("LOGISTIC REGRESSION - DIABETES CLASSIFICATION")
+print("RANDOM FOREST - EEG EYE STATE CLASSIFICATION")
 print("="*60)
 
-# Fetch CDC Diabetes Health Indicators dataset
-diabetes = fetch_ucirepo(id=891)
+# Fetch EEG Eye State dataset
+eeg = fetch_ucirepo(id=264)
 
 # Extract features and target
-X = diabetes.data.features
-y = diabetes.data.targets
-y_binary = y['Diabetes_binary'].values
+X = eeg.data.features
+y = eeg.data.targets
+y_binary = y.values.ravel()
 
 print(f"\nDataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
@@ -44,43 +44,50 @@ X_train = X_train_df.values.astype(np.float64)
 X_test = X_test_df.values.astype(np.float64)
 
 # Normalize features using SigmoidScaler (SAME AS BACON)
-scaler = SigmoidScaler(alpha=4, beta=-1)
+scaler = SigmoidScaler(alpha=3, beta=-1)
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
 print("\n" + "="*60)
-print("TRAINING LOGISTIC REGRESSION")
+print("TRAINING RANDOM FOREST")
 print("="*60)
 
-# Train Logistic Regression with multiple solvers
+# Train Random Forest with different configurations
 best_accuracy = 0
 best_model = None
-best_solver = None
+best_config = None
 
-for solver in ['lbfgs', 'liblinear', 'saga']:
-    try:
-        lr = LogisticRegression(
-            max_iter=10000,
-            random_state=42,
-            solver=solver,
-            class_weight='balanced'
-        )
-        lr.fit(X_train, y_train)
-        
-        y_pred = lr.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
-        
-        print(f"Solver {solver:10s}: Test Accuracy = {acc:.4f}")
-        
-        if acc > best_accuracy:
-            best_accuracy = acc
-            best_model = lr
-            best_solver = solver
-    except Exception as e:
-        print(f"Solver {solver:10s}: Failed - {e}")
+configs = [
+    {'n_estimators': 50, 'max_depth': None},
+    {'n_estimators': 100, 'max_depth': None},
+    {'n_estimators': 200, 'max_depth': None},
+    {'n_estimators': 100, 'max_depth': 10},
+    {'n_estimators': 100, 'max_depth': 20},
+]
+
+for config in configs:
+    rf = RandomForestClassifier(
+        n_estimators=config['n_estimators'],
+        max_depth=config['max_depth'],
+        random_state=42,
+        class_weight='balanced',
+        n_jobs=-1
+    )
+    rf.fit(X_train, y_train)
+    
+    y_pred = rf.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    
+    config_str = f"n_est={config['n_estimators']:3d}, depth={str(config['max_depth']):5s}"
+    print(f"{config_str}: Test Accuracy = {acc:.4f}")
+    
+    if acc > best_accuracy:
+        best_accuracy = acc
+        best_model = rf
+        best_config = config
 
 print("\n" + "="*60)
-print(f"BEST MODEL: {best_solver} solver")
+print(f"BEST MODEL: n_estimators={best_config['n_estimators']}, max_depth={best_config['max_depth']}")
 print("="*60)
 
 # Evaluate best model
@@ -103,19 +110,19 @@ print("\nConfusion Matrix (Test Set):")
 print(confusion_matrix(y_test, y_pred_test))
 
 print("\nClassification Report (Test Set):")
-print(classification_report(y_test, y_pred_test, target_names=['No Diabetes', 'Diabetes']))
+print(classification_report(y_test, y_pred_test, target_names=['Eyes Open', 'Eyes Closed']))
 
-# Feature importance (coefficients)
+# Feature importance
 print("\n" + "="*60)
-print("TOP 10 MOST IMPORTANT FEATURES")
+print("EEG SENSOR IMPORTANCE (by feature importance)")
 print("="*60)
 
-feature_importance = np.abs(best_model.coef_[0])
-top_indices = np.argsort(feature_importance)[-10:][::-1]
+feature_importance = best_model.feature_importances_
+top_indices = np.argsort(feature_importance)[::-1]
 
 for rank, idx in enumerate(top_indices, 1):
-    coef = best_model.coef_[0][idx]
-    print(f"{rank:2d}. {feature_names[idx]:25s} | coef = {coef:+.4f} | |coef| = {abs(coef):.4f}")
+    importance = feature_importance[idx]
+    print(f"{rank:2d}. {feature_names[idx]:6s} | importance = {importance:.4f}")
 
 print("\n" + "="*60)
 print(f"FINAL TEST ACCURACY: {best_accuracy:.2%}")

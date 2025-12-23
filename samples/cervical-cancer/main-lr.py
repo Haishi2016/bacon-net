@@ -1,4 +1,4 @@
-# Logistic Regression baseline for Diabetes classification
+# Logistic Regression baseline for Cervical Cancer classification
 import sys
 sys.path.insert(0, '../../')
 
@@ -11,16 +11,16 @@ import pandas as pd
 import numpy as np
 
 print("="*60)
-print("LOGISTIC REGRESSION - DIABETES CLASSIFICATION")
+print("LOGISTIC REGRESSION - CERVICAL CANCER CLASSIFICATION")
 print("="*60)
 
-# Fetch CDC Diabetes Health Indicators dataset
-diabetes = fetch_ucirepo(id=891)
+# Fetch Cervical Cancer dataset
+cervical = fetch_ucirepo(id=537)
 
 # Extract features and target
-X = diabetes.data.features
-y = diabetes.data.targets
-y_binary = y['Diabetes_binary'].values
+X = cervical.data.features
+y = cervical.data.targets
+y_binary = y.values.ravel()
 
 print(f"\nDataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
@@ -36,7 +36,7 @@ feature_names = X.columns.tolist()
 
 # Train/test split (SAME RANDOM SEED AS BACON)
 X_train_df, X_test_df, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
+    X, y, test_size=0.25, random_state=42, stratify=y
 )
 
 # Convert DataFrames to numpy arrays for scaling
@@ -103,7 +103,7 @@ print("\nConfusion Matrix (Test Set):")
 print(confusion_matrix(y_test, y_pred_test))
 
 print("\nClassification Report (Test Set):")
-print(classification_report(y_test, y_pred_test, target_names=['No Diabetes', 'Diabetes']))
+print(classification_report(y_test, y_pred_test, target_names=['No Cancer', 'Cancer']))
 
 # Feature importance (coefficients)
 print("\n" + "="*60)
@@ -115,7 +115,7 @@ top_indices = np.argsort(feature_importance)[-10:][::-1]
 
 for rank, idx in enumerate(top_indices, 1):
     coef = best_model.coef_[0][idx]
-    print(f"{rank:2d}. {feature_names[idx]:25s} | coef = {coef:+.4f} | |coef| = {abs(coef):.4f}")
+    print(f"{rank:2d}. {feature_names[idx]:35s} | coef = {coef:+.4f} | |coef| = {abs(coef):.4f}")
 
 print("\n" + "="*60)
 print(f"FINAL TEST ACCURACY: {best_accuracy:.2%}")

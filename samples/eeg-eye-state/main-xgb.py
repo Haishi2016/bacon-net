@@ -1,4 +1,4 @@
-# XGBoost baseline for Diabetes classification
+# XGBoost baseline for EEG Eye State classification
 import sys
 sys.path.insert(0, '../../')
 
@@ -16,16 +16,16 @@ except ImportError:
     sys.exit(1)
 
 print("="*60)
-print("XGBOOST - DIABETES CLASSIFICATION")
+print("XGBOOST - EEG EYE STATE CLASSIFICATION")
 print("="*60)
 
-# Fetch CDC Diabetes Health Indicators dataset
-diabetes = fetch_ucirepo(id=891)
+# Fetch EEG Eye State dataset
+eeg = fetch_ucirepo(id=264)
 
 # Extract features and target
-X = diabetes.data.features
-y = diabetes.data.targets
-y_binary = y['Diabetes_binary'].values
+X = eeg.data.features
+y = eeg.data.targets
+y_binary = y.values.ravel()
 
 print(f"\nDataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
@@ -49,7 +49,7 @@ X_train = X_train_df.values.astype(np.float64)
 X_test = X_test_df.values.astype(np.float64)
 
 # Normalize features using SigmoidScaler (SAME AS BACON)
-scaler = SigmoidScaler(alpha=4, beta=-1)
+scaler = SigmoidScaler(alpha=3, beta=-1)
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
@@ -124,19 +124,19 @@ print("\nConfusion Matrix (Test Set):")
 print(confusion_matrix(y_test, y_pred_test))
 
 print("\nClassification Report (Test Set):")
-print(classification_report(y_test, y_pred_test, target_names=['No Diabetes', 'Diabetes']))
+print(classification_report(y_test, y_pred_test, target_names=['Eyes Open', 'Eyes Closed']))
 
 # Feature importance
 print("\n" + "="*60)
-print("TOP 10 MOST IMPORTANT FEATURES")
+print("EEG SENSOR IMPORTANCE (by feature importance)")
 print("="*60)
 
 feature_importance = best_model.feature_importances_
-top_indices = np.argsort(feature_importance)[-10:][::-1]
+top_indices = np.argsort(feature_importance)[::-1]
 
 for rank, idx in enumerate(top_indices, 1):
     importance = feature_importance[idx]
-    print(f"{rank:2d}. {feature_names[idx]:25s} | importance = {importance:.4f}")
+    print(f"{rank:2d}. {feature_names[idx]:6s} | importance = {importance:.4f}")
 
 print("\n" + "="*60)
 print(f"FINAL TEST ACCURACY: {best_accuracy:.2%}")

@@ -2,6 +2,7 @@
 import sys
 sys.path.insert(0, '../../')
 
+from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
 import torch
 from bacon.baconNet import baconNet
@@ -26,15 +27,16 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load Gallstone dataset from local CSV
-print("Loading Gallstone dataset...")
-df = pd.read_csv('c:/School/lsp/dataset-uci.csv')
+# Fetch EEG Eye State dataset
+print("Loading EEG Eye State dataset...")
+eeg = fetch_ucirepo(id=264)
 
-# Target is first column 'Gallstone Status': 0 = no gallstone, 1 = gallstone disease
-y_binary = df['Gallstone Status'].values
+# Extract features and target
+X = eeg.data.features
+y = eeg.data.targets
 
-# Features are all other columns
-X = df.drop(columns=['Gallstone Status'])
+# Target is eyeDetection: 0 = eyes open, 1 = eyes closed
+y_binary = y.values.ravel()
 
 print(f"Dataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
@@ -47,39 +49,27 @@ print("\n" + "="*60)
 print("DATASET PREVIEW")
 print("="*60)
 
-print("\nFeature Names and Descriptions:")
+print("\nFeature Names and Descriptions (EEG Electrode Positions):")
 feature_descriptions = {
-    'Age': 'Age in years',
-    'Gender': 'Gender (0=female, 1=male)',
-    'Height': 'Height in cm',
-    'Weight': 'Weight in kg',
-    'BMI': 'Body Mass Index',
-    'TBW': 'Total body water (L)',
-    'ECW': 'Extracellular water (L)',
-    'ICW': 'Intracellular water (L)',
-    'Muscle_mass': 'Muscle mass (kg)',
-    'Fat_mass': 'Fat mass (kg)',
-    'Protein': 'Protein (kg)',
-    'VFA': 'Visceral fat area (cm²)',
-    'Hepatic_fat': 'Hepatic fat (%)',
-    'Glucose': 'Blood glucose (mg/dL)',
-    'Total_cholesterol': 'Total cholesterol (mg/dL)',
-    'HDL': 'High-density lipoprotein (mg/dL)',
-    'LDL': 'Low-density lipoprotein (mg/dL)',
-    'Triglycerides': 'Triglycerides (mg/dL)',
-    'AST': 'Aspartate aminotransferase (U/L)',
-    'ALT': 'Alanine aminotransferase (U/L)',
-    'ALP': 'Alkaline phosphatase (U/L)',
-    'Creatinine': 'Creatinine (mg/dL)',
-    'GFR': 'Glomerular filtration rate',
-    'CRP': 'C-reactive protein (mg/L)',
-    'Hemoglobin': 'Hemoglobin (g/dL)',
-    'Vitamin_D': 'Vitamin D (ng/mL)'
+    'AF3': 'EEG sensor at AF3 position (anterior frontal left)',
+    'F7': 'EEG sensor at F7 position (frontal left)',
+    'F3': 'EEG sensor at F3 position (frontal left-center)',
+    'FC5': 'EEG sensor at FC5 position (frontal-central left)',
+    'T7': 'EEG sensor at T7 position (temporal left)',
+    'P7': 'EEG sensor at P7 position (parietal left)',
+    'O1': 'EEG sensor at O1 position (occipital left)',
+    'O2': 'EEG sensor at O2 position (occipital right)',
+    'P8': 'EEG sensor at P8 position (parietal right)',
+    'T8': 'EEG sensor at T8 position (temporal right)',
+    'FC6': 'EEG sensor at FC6 position (frontal-central right)',
+    'F4': 'EEG sensor at F4 position (frontal right-center)',
+    'F8': 'EEG sensor at F8 position (frontal right)',
+    'AF4': 'EEG sensor at AF4 position (anterior frontal right)'
 }
 
 for col in df.columns[:-1]:  # Exclude target
-    desc = feature_descriptions.get(col, 'Bioimpedance/Laboratory measure')
-    print(f"  {col:20s} - {desc}")
+    desc = feature_descriptions.get(col, 'EEG sensor reading')
+    print(f"  {col:6s} - {desc}")
 
 print("\nFeature Statistics:")
 print(df.describe().round(2))
@@ -88,8 +78,8 @@ print("\nSample Records (first 5):")
 print(df.head())
 
 print("\nClass Distribution:")
-print(f"  No Gallstone (0): {(df['target'] == 0).sum()} people ({(df['target'] == 0).sum() / len(df) * 100:.1f}%)")
-print(f"  Gallstone (1):    {(df['target'] == 1).sum()} people ({(df['target'] == 1).sum() / len(df) * 100:.1f}%)")
+print(f"  Eyes Open (0):   {(df['target'] == 0).sum()} measurements ({(df['target'] == 0).sum() / len(df) * 100:.1f}%)")
+print(f"  Eyes Closed (1): {(df['target'] == 1).sum()} measurements ({(df['target'] == 1).sum() / len(df) * 100:.1f}%)")
 
 # Separate features and target
 X = df.drop(columns=['target'])
@@ -97,11 +87,11 @@ y = df['target']
 
 feature_names = X.columns.tolist()
 
-# Note: All features are already numeric, no one-hot encoding needed
+# Note: All features are already numeric continuous values
 print("\n" + "="*60)
 print("FEATURE TYPES")
 print("="*60)
-print("All features are already numeric (continuous)")
+print("All features are already numeric (continuous EEG readings)")
 print("No one-hot encoding required")
 
 # Train/test split
@@ -117,7 +107,7 @@ print(f"\nTrain data shape: {X_train_np.shape}, dtype: {X_train_np.dtype}")
 print(f"Test data shape: {X_test_np.shape}, dtype: {X_test_np.dtype}")
 
 # Normalize features using SigmoidScaler
-scaler = SigmoidScaler(alpha=4, beta=-1)
+scaler = SigmoidScaler(alpha=3, beta=-1)
 X_train_np = scaler.fit_transform(X_train_np)
 X_test_np = scaler.transform(X_test_np)
 
@@ -130,7 +120,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 # Model configuration
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
-weight_mode = 'fixed'
+weight_mode = 'trainable'
 acceptance_threshold = 0.90
 weight_penalty_strength = 1e-3
 
@@ -162,8 +152,8 @@ bacon = baconNet(
     attempts=10, 
     use_hierarchical_permutation=True,
     hierarchical_bleed_ratio=0.5,
-    hierarchical_epochs_per_attempt=4000,  
-    hierarchical_group_size=10, 
+    hierarchical_epochs_per_attempt=3000,  
+    hierarchical_group_size=8, 
     acceptance_threshold=acceptance_threshold, 
     loss_weight_perm_sparsity=5.0,
     sinkhorn_iters=200,
@@ -254,17 +244,17 @@ sorted_contributions = sorted(feature_contributions, key=lambda x: x[1], reverse
 print("\n📊 Feature contributions (sorted by accuracy drop):")
 for idx, drop in sorted_contributions:
     relevance = "❌ Low impact" if drop <= 0 else ("🔥 Critical" if drop > 0.05 else "✓ Important")
-    print(f"  {feature_names[idx]:25s}: accuracy drop = {drop * 100:.2f}% {relevance}")
+    print(f"  {feature_names[idx]:6s}: accuracy drop = {drop * 100:.2f}% {relevance}")
 
 # Plot accuracy vs. pruning
 plt.figure(figsize=(10, 5))
 plt.plot(range(len(accuracies)), [a * 100 for a in accuracies], marker='o', linewidth=2)
-plt.title("Gallstone: Accuracy vs. Number of Features Pruned")
+plt.title("EEG Eye State: Accuracy vs. Number of Features Pruned")
 plt.xlabel("Number of Features Pruned from Left")
 plt.ylabel("Accuracy (%)")
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig('gallstone_pruning.png', dpi=150)
+plt.savefig('eeg_eye_state_pruning.png', dpi=150)
 plt.show()
 
 # Visualization

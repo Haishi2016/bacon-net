@@ -2,6 +2,7 @@
 import sys
 sys.path.insert(0, '../../')
 
+from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
 import torch
 from bacon.baconNet import baconNet
@@ -26,15 +27,16 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load Gallstone dataset from local CSV
-print("Loading Gallstone dataset...")
-df = pd.read_csv('c:/School/lsp/dataset-uci.csv')
+# Fetch Cervical Cancer Behavior Risk dataset
+print("Loading Cervical Cancer Behavior Risk dataset...")
+cervical = fetch_ucirepo(id=537)
 
-# Target is first column 'Gallstone Status': 0 = no gallstone, 1 = gallstone disease
-y_binary = df['Gallstone Status'].values
+# Extract features and target
+X = cervical.data.features
+y = cervical.data.targets
 
-# Features are all other columns
-X = df.drop(columns=['Gallstone Status'])
+# Target is ca_cervix: 0 = no cervical cancer, 1 = cervical cancer
+y_binary = y.values.ravel()
 
 print(f"Dataset shape: {X.shape}")
 print(f"Class distribution: {np.bincount(y_binary)}")
@@ -49,37 +51,30 @@ print("="*60)
 
 print("\nFeature Names and Descriptions:")
 feature_descriptions = {
-    'Age': 'Age in years',
-    'Gender': 'Gender (0=female, 1=male)',
-    'Height': 'Height in cm',
-    'Weight': 'Weight in kg',
-    'BMI': 'Body Mass Index',
-    'TBW': 'Total body water (L)',
-    'ECW': 'Extracellular water (L)',
-    'ICW': 'Intracellular water (L)',
-    'Muscle_mass': 'Muscle mass (kg)',
-    'Fat_mass': 'Fat mass (kg)',
-    'Protein': 'Protein (kg)',
-    'VFA': 'Visceral fat area (cm²)',
-    'Hepatic_fat': 'Hepatic fat (%)',
-    'Glucose': 'Blood glucose (mg/dL)',
-    'Total_cholesterol': 'Total cholesterol (mg/dL)',
-    'HDL': 'High-density lipoprotein (mg/dL)',
-    'LDL': 'Low-density lipoprotein (mg/dL)',
-    'Triglycerides': 'Triglycerides (mg/dL)',
-    'AST': 'Aspartate aminotransferase (U/L)',
-    'ALT': 'Alanine aminotransferase (U/L)',
-    'ALP': 'Alkaline phosphatase (U/L)',
-    'Creatinine': 'Creatinine (mg/dL)',
-    'GFR': 'Glomerular filtration rate',
-    'CRP': 'C-reactive protein (mg/L)',
-    'Hemoglobin': 'Hemoglobin (g/dL)',
-    'Vitamin_D': 'Vitamin D (ng/mL)'
+    'behavior_eating': 'Eating behavior score',
+    'behavior_personalHygiene': 'Personal hygiene behavior score',
+    'behavior_sexualRisk': 'Sexual risk behavior score',
+    'intention_aggregation': 'Aggregated intention score',
+    'intention_commitment': 'Commitment intention score',
+    'attitude_consistency': 'Attitude consistency score',
+    'attitude_spontaneity': 'Attitude spontaneity score',
+    'norm_significantPerson': 'Significant person norm score',
+    'norm_fulfillment': 'Norm fulfillment score',
+    'perception_vulnerability': 'Perceived vulnerability score',
+    'perception_severity': 'Perceived severity score',
+    'motivation_strength': 'Motivation strength score',
+    'motivation_willingness': 'Motivation willingness score',
+    'socialSupport_emotionality': 'Emotional social support score',
+    'socialSupport_appreciation': 'Appreciation social support score',
+    'socialSupport_instrumental': 'Instrumental social support score',
+    'empowerment_knowledge': 'Empowerment knowledge score',
+    'empowerment_abilities': 'Empowerment abilities score',
+    'empowerment_desires': 'Empowerment desires score'
 }
 
 for col in df.columns[:-1]:  # Exclude target
-    desc = feature_descriptions.get(col, 'Bioimpedance/Laboratory measure')
-    print(f"  {col:20s} - {desc}")
+    desc = feature_descriptions.get(col, 'Behavioral/psychological measure')
+    print(f"  {col:30s} - {desc}")
 
 print("\nFeature Statistics:")
 print(df.describe().round(2))
@@ -88,8 +83,8 @@ print("\nSample Records (first 5):")
 print(df.head())
 
 print("\nClass Distribution:")
-print(f"  No Gallstone (0): {(df['target'] == 0).sum()} people ({(df['target'] == 0).sum() / len(df) * 100:.1f}%)")
-print(f"  Gallstone (1):    {(df['target'] == 1).sum()} people ({(df['target'] == 1).sum() / len(df) * 100:.1f}%)")
+print(f"  No Cervical Cancer (0): {(df['target'] == 0).sum()} people ({(df['target'] == 0).sum() / len(df) * 100:.1f}%)")
+print(f"  Cervical Cancer (1):    {(df['target'] == 1).sum()} people ({(df['target'] == 1).sum() / len(df) * 100:.1f}%)")
 
 # Separate features and target
 X = df.drop(columns=['target'])
@@ -97,16 +92,16 @@ y = df['target']
 
 feature_names = X.columns.tolist()
 
-# Note: All features are already numeric, no one-hot encoding needed
+# Note: All features are already numeric integers
 print("\n" + "="*60)
 print("FEATURE TYPES")
 print("="*60)
-print("All features are already numeric (continuous)")
+print("All features are already numeric (integer scores)")
 print("No one-hot encoding required")
 
-# Train/test split
+# Train/test split (stratified to maintain class balance in small dataset)
 X_train_df, X_test_df, y_train_np, y_test_np = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
+    X, y, test_size=0.25, random_state=42, stratify=y
 )
 
 # Convert DataFrames to numpy arrays for scaling
@@ -127,11 +122,11 @@ Y_train = torch.tensor(y_train_np.to_numpy().reshape(-1, 1), dtype=torch.float32
 Y_test = torch.tensor(y_test_np.to_numpy().reshape(-1, 1), dtype=torch.float32).to(device)
 X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 
-# Model configuration
-freeze_loss_threshold = 0.07
+# Model configuration (adapted for small dataset)
+freeze_loss_threshold = 0.05
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 0.90
+acceptance_threshold = 1.0
 weight_penalty_strength = 1e-3
 
 # Update input size based on features
@@ -139,7 +134,7 @@ num_features = len(feature_names)
 print(f"\n📊 Model will use {num_features} input features")
 
 from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation, ValleyTransformation, StepUpTransformation, StepDownTransformation
-trans = [IdentityTransformation(1), NegationTransformation(1), PeakTransformation(1), ValleyTransformation(1), StepUpTransformation(1), StepDownTransformation(1)]
+trans = [IdentityTransformation(1), NegationTransformation(1)]
 
 bacon = baconNet(
     input_size=num_features, 
@@ -156,21 +151,21 @@ bacon = baconNet(
     weight_mode=weight_mode
 )
 
-# Train model
+# Train model (adapted for small dataset - fewer attempts, shorter training)
 (best_model, best_accuracy) = bacon.find_best_model(
     X_train, Y_train, X_test, Y_test, 
-    attempts=10, 
+    attempts=20, 
     use_hierarchical_permutation=True,
     hierarchical_bleed_ratio=0.5,
-    hierarchical_epochs_per_attempt=4000,  
-    hierarchical_group_size=10, 
+    hierarchical_epochs_per_attempt=3000,  
+    hierarchical_group_size=6, 
     acceptance_threshold=acceptance_threshold, 
     loss_weight_perm_sparsity=5.0,
-    sinkhorn_iters=200,
-    freeze_confidence_threshold=0.95,
-    freeze_min_confidence=0.85,
-    freeze_loss_threshold=0.09,
-    max_epochs=5000
+    sinkhorn_iters=150,
+    freeze_confidence_threshold=0.92,
+    freeze_min_confidence=0.80,
+    freeze_loss_threshold=0.08,
+    max_epochs=4000
 )
 
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
@@ -254,17 +249,17 @@ sorted_contributions = sorted(feature_contributions, key=lambda x: x[1], reverse
 print("\n📊 Feature contributions (sorted by accuracy drop):")
 for idx, drop in sorted_contributions:
     relevance = "❌ Low impact" if drop <= 0 else ("🔥 Critical" if drop > 0.05 else "✓ Important")
-    print(f"  {feature_names[idx]:25s}: accuracy drop = {drop * 100:.2f}% {relevance}")
+    print(f"  {feature_names[idx]:35s}: accuracy drop = {drop * 100:.2f}% {relevance}")
 
 # Plot accuracy vs. pruning
 plt.figure(figsize=(10, 5))
 plt.plot(range(len(accuracies)), [a * 100 for a in accuracies], marker='o', linewidth=2)
-plt.title("Gallstone: Accuracy vs. Number of Features Pruned")
+plt.title("Cervical Cancer: Accuracy vs. Number of Features Pruned")
 plt.xlabel("Number of Features Pruned from Left")
 plt.ylabel("Accuracy (%)")
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig('gallstone_pruning.png', dpi=150)
+plt.savefig('cervical_cancer_pruning.png', dpi=150)
 plt.show()
 
 # Visualization

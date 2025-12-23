@@ -44,7 +44,7 @@ X_train = X_train_df.values.astype(np.float64)
 X_test = X_test_df.values.astype(np.float64)
 
 # Normalize features using SigmoidScaler (SAME AS BACON)
-scaler = SigmoidScaler(alpha=2, beta=-1)
+scaler = SigmoidScaler(alpha=4, beta=-1)
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 

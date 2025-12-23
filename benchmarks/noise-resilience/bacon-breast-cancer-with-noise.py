@@ -41,7 +41,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 breast_cancer = fetch_ucirepo(id=17)
 
-noise_ratio = 0.1
+noise_ratio = 0.5
 
 X = breast_cancer.data.features.iloc[:, 0:30]  # mean values only
 feature_names = X.columns.tolist()
