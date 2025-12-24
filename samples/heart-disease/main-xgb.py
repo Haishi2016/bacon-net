@@ -2,12 +2,9 @@
 import sys
 sys.path.insert(0, '../../')
 
-from ucimlrepo import fetch_ucirepo
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
-from bacon.utils import SigmoidScaler
-import pandas as pd
 import numpy as np
+from dataset import prepare_data_sklearn
 
 try:
     import xgboost as xgb
@@ -19,58 +16,8 @@ print("="*60)
 print("XGBOOST - HEART DISEASE CLASSIFICATION")
 print("="*60)
 
-# Fetch heart disease dataset (Cleveland database)
-heart_disease = fetch_ucirepo(id=45)
-
-# Extract features and target
-X = heart_disease.data.features
-y = heart_disease.data.targets
-
-# The target 'num' is 0-4, convert to binary: 0 = no disease, 1-4 = disease present
-y_binary = (y['num'] > 0).astype(int).values
-
-# Handle missing values (marked as '?')
-X = X.replace('?', np.nan)
-X = X.apply(pd.to_numeric, errors='coerce')
-
-# Drop rows with missing values
-valid_indices = ~X.isnull().any(axis=1)
-X = X[valid_indices]
-y_binary = y_binary[valid_indices]
-
-print(f"\nDataset shape after removing missing values: {X.shape}")
-print(f"Class distribution: {np.bincount(y_binary)}")
-
-df = pd.DataFrame(X)
-df['target'] = y_binary
-
-# Separate features and target
-X = df.drop(columns=['target'])
-y = df['target']
-
-# One-hot encode categorical features (SAME AS BACON)
-categorical_features = ['cp', 'restecg', 'slope', 'thal']
-X_encoded = pd.get_dummies(X, columns=categorical_features, prefix=categorical_features, drop_first=False)
-
-print(f"\nOriginal features: {len(X.columns)}")
-print(f"After one-hot encoding: {len(X_encoded.columns)}")
-
-feature_names = X_encoded.columns.tolist()
-X = X_encoded
-
-# Train/test split (SAME RANDOM SEED AS BACON)
-X_train_df, X_test_df, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
-
-# Convert DataFrames to numpy arrays for scaling
-X_train = X_train_df.values.astype(np.float64)
-X_test = X_test_df.values.astype(np.float64)
-
-# Normalize features using SigmoidScaler (SAME AS BACON)
-scaler = SigmoidScaler(alpha=4, beta=-1)
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+# Prepare data using common dataset utility
+X_train, X_test, y_train, y_test, feature_names = prepare_data_sklearn()
 
 print("\n" + "="*60)
 print("TRAINING XGBOOST")
