@@ -1,0 +1,28 @@
+{
+  "noise_ratio": 0.4,
+  "test_accuracy": 0.9210526315789473,
+  "train_accuracy": 0.9252747252747253,
+  "features_used": [
+    "area3",
+    "concavity1",
+    "concavity2",
+    "fractal_dimension1",
+    "perimeter1",
+    "perimeter3",
+    "radius1",
+    "texture1",
+    "texture3"
+  ],
+  "num_features_used": 9,
+  "feature_importances": {
+    "radius1": 0.1043445303810723,
+    "texture1": 0.015082336560896272,
+    "perimeter1": 0.049367728389140705,
+    "concavity1": 0.019902894871425394,
+    "fractal_dimension1": 0.0030009330704030583,
+    "concavity2": 0.005873060739464939,
+    "texture3": 0.004488790643123892,
+    "perimeter3": 0.2897144620520365,
+    "area3": 0.5082252632924368
+  }
+}

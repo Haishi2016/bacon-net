@@ -1,0 +1,20 @@
+{
+  "noise_ratio": 0.2,
+  "test_accuracy": 0.9298245614035088,
+  "train_accuracy": 0.9208791208791208,
+  "features_used": [
+    "compactness3",
+    "fractal_dimension2",
+    "perimeter3",
+    "radius3",
+    "texture3"
+  ],
+  "num_features_used": 5,
+  "feature_importances": {
+    "fractal_dimension2": 0.01582464794200263,
+    "radius3": 0.17872310614351744,
+    "texture3": 0.04959590100212468,
+    "perimeter3": 0.6910644163454226,
+    "compactness3": 0.06479192856693275
+  }
+}

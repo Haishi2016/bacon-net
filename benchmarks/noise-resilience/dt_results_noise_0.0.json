@@ -1,0 +1,32 @@
+{
+  "noise_ratio": 0.0,
+  "test_accuracy": 0.956140350877193,
+  "train_accuracy": 0.989010989010989,
+  "features_used": [
+    "area2",
+    "concave_points1",
+    "concave_points2",
+    "concave_points3",
+    "concavity2",
+    "perimeter3",
+    "radius3",
+    "smoothness2",
+    "smoothness3",
+    "texture1",
+    "texture3"
+  ],
+  "num_features_used": 11,
+  "feature_importances": {
+    "texture1": 0.031915944117865566,
+    "concave_points1": 0.7162767916879631,
+    "area2": 0.012413359397378079,
+    "smoothness2": 0.001280813998773842,
+    "concavity2": 0.01272012265567106,
+    "concave_points2": 0.01650354375325527,
+    "radius3": 0.054179481304049384,
+    "texture3": 0.02866404967670652,
+    "perimeter3": 0.05334522088271815,
+    "smoothness3": 0.004689669788517494,
+    "concave_points3": 0.06801100273710152
+  }
+}
