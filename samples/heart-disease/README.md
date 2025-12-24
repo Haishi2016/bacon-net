@@ -63,53 +63,28 @@ python main.py
 The sample uses the following BACON configuration:
 
 - **Aggregator:** `lsp.half_weight` (Logic Scoring of Preference - Half Weight)
-- **Weight Mode:** `trainable` (allows learning optimal feature weights)
-- **Weight Normalization:** `softmax`
+- **Weight Mode:** `fixed` 
 - **Loss Amplifier:** 1000
 - **Sinkhorn Iterations:** 200 (for permutation convergence)
 - **Class Weighting:** Enabled (handles potential class imbalance)
 - **Acceptance Threshold:** 90% (model must achieve 90% test accuracy)
-
-## Expected Results
-
-The model typically achieves:
-- **Test Accuracy:** 85-95%
-- **Interpretability:** Clear tree structure showing which features and combinations predict heart disease
-- **Feature Importance:** Ranking of clinical measurements by their contribution to predictions
-
-## Analysis Features
-
-The script provides:
-
-1. **Tree Visualization:** Visual representation of the learned decision structure
-2. **Threshold Optimization:** Finds optimal classification thresholds for different metrics (accuracy, precision, recall, F1)
-3. **Feature Importance:** Analyzes each feature's contribution through progressive pruning
-4. **Performance Metrics:** Comprehensive evaluation including precision, recall, F1-score
-5. **Prediction Analysis:** Visualizations of model predictions and errors
+- **Transformation:** Enabled (Identity, Negation)
 
 ## Key Findings
 
-The analysis reveals:
-- Which clinical measurements are most predictive of heart disease
-- How features interact in the decision-making process
-- The logical structure behind the diagnosis (conjunctive/disjunctive patterns)
-- Optimal decision thresholds for different clinical priorities
+In the heart disease task, BACON identifies **asymptomatic chest pain**(`cp`=4) as the most decisive feature, followed by sex (`sex`) as a conditional modifier. Notably, the model does not induce a global baseline condition. This reflects the heterogeneity of cardiac risk presentation in the dataset, where diagnosis is driven by high-signal symptom patterns rather than a shared background state. The absence of an artificial baseline highlights BACON’s ability to adapt its symbolic structure to the intrinsic causal geometry of the domain.
 
 ## Clinical Relevance
 
-This interpretable model can help clinicians understand:
-- Which patient characteristics most strongly indicate heart disease risk
-- How different clinical measurements combine to inform diagnosis
-- The logical reasoning behind individual patient predictions
-- Which features could be prioritized for screening
+Heart disease exists primarily through decisive symptom manifestation, rather than gradual accumulation from a shared baseline. This matches how cardiology often works:
+* Symptoms trump demographics
+* Risk factors modulate, but don’t replace, symptoms
 
 ## Saved Models
 
-Models achieving high accuracy can be saved and reused:
-
-| Model file | Accuracy | Configuration |
-|------------|----------|---------------|
-| *To be populated based on your training runs* | - | - |
+| Model file | Threshold | Accuracy | Precision | Recall |
+|--------|--------|--------|--------|--------|
+| assembler.pth | 0.513 | 86.53% | 92.17% | 77.37% |
 
 ## Notes
 
@@ -117,7 +92,3 @@ Models achieving high accuracy can be saved and reused:
 - The original dataset has 76 attributes, but clinical ML research typically uses only these 14 attributes
 - This is a well-studied benchmark dataset for interpretable medical diagnosis
 - Results may vary between runs due to random initialization and data splitting
-
-## References
-
-Detrano, R., Jánosi, A., Steinbrunn, W., Pfisterer, M., Schmid, J., Sandhu, S., Guppy, K., Lee, S., & Froelicher, V. (1989). International application of a new probability algorithm for the diagnosis of coronary artery disease. *American Journal of Cardiology*.
