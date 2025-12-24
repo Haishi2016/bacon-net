@@ -41,7 +41,13 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 breast_cancer = fetch_ucirepo(id=17)
 
-noise_ratio = 0.5
+# Configuration - ADJUST THIS TO TEST DIFFERENT NOISE LEVELS
+noise_ratio = 0.0  # 0.0, 0.1, 0.2, 0.3, 0.4, 0.5
+
+print("="*60)
+print("BACON - BREAST CANCER WITH NOISE")
+print("="*60)
+print(f"Noise ratio: {noise_ratio:.2%}\n")
 
 X = breast_cancer.data.features.iloc[:, 0:30]  # mean values only
 feature_names = X.columns.tolist()
@@ -232,11 +238,42 @@ plt.xlabel("Number of Features Pruned from Left")
 plt.ylabel("Accuracy (%)")
 plt.grid(True)
 plt.tight_layout()
+plt.savefig('bacon_pruning.png', dpi=150)
 plt.show()
-
 
 plot_sorted_predictions_with_labels(bacon, X_all, Y_all, threshold=best_threshold)
 plot_sorted_predictions_with_errors(bacon, X_all, Y_all, threshold=best_threshold)
+
+# Extract features used by BACON for structural stability analysis
+features_used_indices = bacon.assembler.locked_perm.cpu().numpy()
+features_used = [feature_names[idx] for idx in features_used_indices]
+
+print(f"\n{'='*60}")
+print(f"FEATURES USED BY BACON (F_{noise_ratio})")
+print(f"{'='*60}")
+print(f"Total features used: {len(features_used)}/{len(feature_names)}")
+print("\nFeatures in tree (ordered by importance):")
+for i, feat in enumerate(features_used, 1):
+    print(f"  {i:2d}. {feat}")
+
+# Save results for structural stability analysis
+import json
+results = {
+    'noise_ratio': noise_ratio,
+    'test_accuracy': best_score,
+    'train_accuracy': accuracy_score(y_train_np, (bacon.assembler(X_train) > 0.5).cpu().numpy()),
+    'features_used': features_used,
+    'num_features_used': len(features_used),
+    'feature_contributions': {feature_names[idx]: float(drop) for idx, drop in sorted_contributions}
+}
+
+with open(f'bacon_results_noise_{noise_ratio:.1f}.json', 'w') as f:
+    json.dump(results, f, indent=2)
+
+print(f"\n✅ Results saved to bacon_results_noise_{noise_ratio:.1f}.json")
+print(f"\n{'='*60}")
+print(f"FINAL TEST ACCURACY: {best_score:.2%}")
+print(f"{'='*60}")
 
 # for feature in feature_names:
 #     plot_feature_sensitivity_synthetic(bacon, X_all, feature, feature_names)

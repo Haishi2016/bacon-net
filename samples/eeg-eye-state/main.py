@@ -107,7 +107,7 @@ print(f"\nTrain data shape: {X_train_np.shape}, dtype: {X_train_np.dtype}")
 print(f"Test data shape: {X_test_np.shape}, dtype: {X_test_np.dtype}")
 
 # Normalize features using SigmoidScaler
-scaler = SigmoidScaler(alpha=3, beta=-1)
+scaler = SigmoidScaler(alpha=4, beta=-1)
 X_train_np = scaler.fit_transform(X_train_np)
 X_test_np = scaler.transform(X_test_np)
 
@@ -120,7 +120,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 # Model configuration
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
-weight_mode = 'trainable'
+weight_mode = 'fixed'
 acceptance_threshold = 0.90
 weight_penalty_strength = 1e-3
 
@@ -135,7 +135,7 @@ bacon = baconNet(
     input_size=num_features, 
     freeze_loss_threshold=freeze_loss_threshold, 
     aggregator=aggregator, 
-    use_transformation_layer=True,
+    use_transformation_layer=False,
     transformations=trans,
     loss_amplifier=1000,     
     permutation_initial_temperature=5.0,
@@ -153,13 +153,14 @@ bacon = baconNet(
     use_hierarchical_permutation=True,
     hierarchical_bleed_ratio=0.5,
     hierarchical_epochs_per_attempt=3000,  
-    hierarchical_group_size=8, 
+    hierarchical_group_size=4, 
     acceptance_threshold=acceptance_threshold, 
-    loss_weight_perm_sparsity=5.0,
+    loss_weight_perm_sparsity=3.0,
     sinkhorn_iters=200,
     freeze_confidence_threshold=0.95,
     freeze_min_confidence=0.85,
     freeze_loss_threshold=0.09,
+    frozen_training_epochs=500,
     max_epochs=5000
 )
 

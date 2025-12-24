@@ -1,0 +1,22 @@
+{
+  "noise_ratio": 0.5,
+  "test_accuracy": 0.8771929824561403,
+  "train_accuracy": 0.8967032967032967,
+  "features_used": [
+    "concavity2",
+    "perimeter3",
+    "radius1",
+    "radius3",
+    "smoothness1",
+    "symmetry3"
+  ],
+  "num_features_used": 6,
+  "feature_importances": {
+    "radius1": 0.4953427972194747,
+    "smoothness1": 0.004832599344671768,
+    "concavity2": 0.03770806259345341,
+    "radius3": 0.1737783763441115,
+    "perimeter3": 0.27476709461596,
+    "symmetry3": 0.013571069882328628
+  }
+}
