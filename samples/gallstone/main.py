@@ -131,7 +131,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 0.90
+acceptance_threshold = 0.75
 weight_penalty_strength = 1e-3
 
 # Update input size based on features
@@ -230,39 +230,87 @@ with torch.no_grad():
     baseline_accuracy = ((baseline_output > 0.5).float() == Y_all).float().mean().item()
 
 accuracies = [baseline_accuracy]
-accuracy_drops = []
-feature_contributions = []
 
+# Save original weights to restore between tests
+import copy
+original_weights = [w.data.clone() for w in bacon.assembler.weights]
+
+# Cumulative pruning: prune 0, then 1, then 2, ... features (up to num_features - 1)
 for i in range(1, num_features):
-    func_eval = bacon.prune_features(i)
-    kept_indices = bacon.assembler.locked_perm[i:].tolist()
-    removed_feature_idx = bacon.assembler.locked_perm[i - 1].item()
-    X_all_pruned = X_all[:, kept_indices]
+    # Restore original weights before each pruning test
+    for j, w in enumerate(bacon.assembler.weights):
+        w.data.copy_(original_weights[j])
+    bacon.assembler.pruned_aggregators.clear()  # Clear pruning flags
+    
+    # Apply cumulative pruning for first i features
+    bacon.assembler.prune_features(i)
     
     with torch.no_grad():
-        pruned_output = func_eval(X_all_pruned)
-        # Use threshold=0.5 consistently throughout pruning analysis
+        pruned_output = bacon.assembler(X_all)
         pruned_accuracy = ((pruned_output > 0.5).float() == Y_all).float().mean().item()
         accuracies.append(pruned_accuracy)
-        drop = accuracies[i - 1] - pruned_accuracy
-        accuracy_drops.append(drop)
-        feature_contributions.append((removed_feature_idx, drop))
         print(f"✅ Accuracy after pruning {i} feature(s): {pruned_accuracy * 100:.2f}%")
 
+# Individual feature importance: measure impact of removing each feature independently
+print("\n📊 Individual Feature Importance (measured independently):")
+feature_contributions = []
+
+for i in range(num_features):
+    # Restore original weights
+    for j, w in enumerate(bacon.assembler.weights):
+        w.data.copy_(original_weights[j])
+    bacon.assembler.pruned_aggregators.clear()
+    
+    # Prune only this one feature (at position i in the permutation)
+    feature_idx = bacon.assembler.locked_perm[i].item()
+    
+    # Can only prune features that have corresponding aggregators (0 to num_features-2)
+    if i >= len(bacon.assembler.weights):
+        # Last feature has no aggregator, skip it
+        print(f"  Feature {i} ({feature_names[feature_idx]}) has no aggregator to prune")
+        feature_contributions.append((feature_idx, 0.0))
+        continue
+    
+    # Temporarily prune just this feature by manipulating the pruning logic
+    with torch.no_grad():
+        if i == 0:
+            bacon.assembler.weights[0].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=device)
+            bacon.assembler.pruned_aggregators.add(0)
+        elif i == 1:
+            bacon.assembler.weights[1].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=device)
+            bacon.assembler.pruned_aggregators.add(1)
+        else:
+            bacon.assembler.weights[i].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=device)
+            bacon.assembler.pruned_aggregators.add(i)
+    
+    with torch.no_grad():
+        pruned_output = bacon.assembler(X_all)
+        pruned_accuracy = ((pruned_output > 0.5).float() == Y_all).float().mean().item()
+        drop = baseline_accuracy - pruned_accuracy
+        feature_contributions.append((feature_idx, drop))
+
+# Sort by importance (biggest drop = most important)
 sorted_contributions = sorted(feature_contributions, key=lambda x: x[1], reverse=True)
 
-print("\n📊 Feature contributions (sorted by accuracy drop):")
 for idx, drop in sorted_contributions:
     relevance = "❌ Low impact" if drop <= 0 else ("🔥 Critical" if drop > 0.05 else "✓ Important")
     print(f"  {feature_names[idx]:25s}: accuracy drop = {drop * 100:.2f}% {relevance}")
 
+# Restore original weights after all pruning tests
+for j, w in enumerate(bacon.assembler.weights):
+    w.data.copy_(original_weights[j])
+bacon.assembler.pruned_aggregators.clear()
+
 # Plot accuracy vs. pruning
 plt.figure(figsize=(10, 5))
-plt.plot(range(len(accuracies)), [a * 100 for a in accuracies], marker='o', linewidth=2)
+# X-axis: 0 = no pruning, 1 = 1 feature pruned, etc.
+x_values = list(range(len(accuracies)))
+plt.plot(x_values, [a * 100 for a in accuracies], marker='o', linewidth=2)
 plt.title("Gallstone: Accuracy vs. Number of Features Pruned")
-plt.xlabel("Number of Features Pruned from Left")
+plt.xlabel("Number of Features Pruned from Left (0 = No Pruning)")
 plt.ylabel("Accuracy (%)")
 plt.grid(True, alpha=0.3)
+plt.xticks(x_values)  # Show all tick marks
 plt.tight_layout()
 plt.savefig('gallstone_pruning.png', dpi=150)
 plt.show()

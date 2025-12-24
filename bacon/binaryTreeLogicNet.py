@@ -105,6 +105,7 @@ class binaryTreeLogicNet(nn.Module):
         self.sinkhorn_iters = sinkhorn_iters  # Sinkhorn iteration count for convergence
         self.layer_outputs = None  # For storing layer outputs during forward pass
         self.combination_mode = combination_mode  # "none" or "cross"
+        self.pruned_aggregators = set()  # Track which aggregators have been pruned
         if combination_split is None:
             # default: split in half, e.g. 10/10 for 20D
             self.combination_split = input_size // 2
@@ -471,13 +472,17 @@ class binaryTreeLogicNet(nn.Module):
                         a = torch.sigmoid(bias) * 3-1
                     else:
                         a = bias
-                    if self.weight_mode == "fixed":
+                    
+                    # Check for pruning first, before fixed mode
+                    if i in self.pruned_aggregators:
+                        w = self.weights[i]  # Use pruned weights directly
+                    elif self.weight_mode == "fixed":
                         w = torch.tensor([self.weight_value,self.weight_value], dtype=torch.float32, device=self.device)
                     else:
+                        raw_w = self.weights[i]
                         if self.weight_normalization == "softmax":
-                            w = F.softmax(self.weights[i], dim=0)
+                            w = F.softmax(raw_w, dim=0)
                         elif self.weight_normalization == "minmax":
-                            raw_w = self.weights[i]
                             w_min = raw_w.min()
                             w_max = raw_w.max()
                             denom = w_max - w_min
@@ -493,7 +498,7 @@ class binaryTreeLogicNet(nn.Module):
                                 else:
                                     w = w / w_sum        
                         else:
-                            w = self.weights[i]                
+                            w = raw_w                
 
                     if i == 0:
                         left = node_outputs[0]
@@ -501,7 +506,15 @@ class binaryTreeLogicNet(nn.Module):
                     else:
                         left = node_outputs[-1]  # previous node
                         right = node_outputs[i + 1]  # next input
+                    
+                    # Debug: Log pruned aggregator behavior
+                    if i in self.pruned_aggregators and i < 3:
+                        print(f"   AGG{i}: left={left.mean().item():.3f}, right={right.mean().item():.3f}, w={w.tolist()}")
+                    
                     nres = self.aggregator.aggregate(left, right, a, w[0], w[1])
+                    
+                    if i in self.pruned_aggregators and i < 3:
+                        print(f"   AGG{i}: result={nres.mean().item():.3f}")
                     # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
                     if torch.isnan(nres).any():
                         nres = torch.where(torch.isnan(nres), bias, nres)
@@ -760,91 +773,38 @@ class binaryTreeLogicNet(nn.Module):
             return best_model, best_perm, best_loss, best_index
         
     def prune_features(self, features):
-        """Prune features from the left (least important) of the binary tree.
+        """Prune features from the left (least important) by adjusting weights.
 
-        WARNING: Pruning structurally changes the tree and causes accuracy degradation because:
-        - Aggregator 0 is trained to combine two raw inputs
-        - Other aggregators are trained to combine (aggregated_result + raw_input)
-        - After pruning, aggregators are used in contexts they weren't trained for
-        
-        For better feature importance analysis, consider masking features to zero instead.
+        Prunes the first N features by setting weights to bypass them:
+        - feature 0: set weight[0] = [0,1] (bypass left input in agg 0)
+        - feature 1: set weight[1] = [0,1] (bypass previous result in agg 1)
+        - feature k (k>=2): set weight[k] = [1,0] (bypass new input in agg k)
 
         Args:
-            features (int): Number of features to prune from the left.
-        Returns:
-            callable: Pruned forward function.
+            features (int): Number of features to prune from the left (0 to num_leaves-1).
         """
         if not self.is_frozen:
             raise RuntimeError("Model is not frozen. Can't prune features.")
-        if features >= self.num_leaves:
+        if features > self.num_leaves:
             raise ValueError(f"Cannot prune more features than leaves. {features} > {self.num_leaves}")
-
-        # When pruning K features from left, use aggregators starting at index K
-        # This aligns the remaining features with the rightmost part of the tree
+        
+        self.pruned_aggregators.clear()
+        
         if features == 0:
-            pruned_weights = self.weights
-            pruned_biases = self.biases
-        else:
-            pruned_weights = self.weights[features:]  # right-align: skip first K aggregators
-            pruned_biases = self.biases[features:]
+            return
 
-        def pruned_forward(x):
-            node_outputs = list(x.T)
-            layer_outputs = []
-            
-            # Edge case: if only 1 feature remains, no aggregation needed
-            if len(node_outputs) == 1:
-                return node_outputs[0].unsqueeze(1)
-            
-            # Number of aggregators needed = number of input features - 1
-            # Use only the required number of aggregators from pruned_weights/biases
-            num_aggregators_needed = len(node_outputs) - 1
-            
-            epsilon = 1e-6
-            for i in range(num_aggregators_needed):
-                if self.weight_mode == "fixed":
-                    w = torch.tensor([self.weight_value,self.weight_value], dtype=torch.float32, device=self.device)
+        with torch.no_grad():
+            # Prune all features from 0 to features-1
+            for k in range(features):
+                if k == 0:
+                    # Prune feature 0: bypass left input in agg 0
+                    self.weights[0].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
+                    self.pruned_aggregators.add(0)
+                elif k == 1:
+                    # Prune feature 1: bypass left input (previous result) in agg 1
+                    self.weights[1].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
+                    self.pruned_aggregators.add(1)
                 else:
-                    if self.weight_normalization == "softmax":
-                        w = F.softmax(pruned_weights[i], dim=0)
-                    elif self.weight_normalization == "minmax":
-                        raw_w = pruned_weights[i]
-                        w_min = raw_w.min()
-                        w_max = raw_w.max()
-                        denom = w_max - w_min
-
-                        if denom.item() == 0:
-                            # Both weights are equal — fallback to uniform weights
-                            w = torch.tensor([0.5, 0.5], device=self.device)
-                        else:
-                            w = (raw_w - w_min) / denom
-                            w_sum = w.sum()
-                            if w_sum.item() == 0:
-                                w = torch.tensor([0.5, 0.5], device=self.device)
-                            else:
-                                w = w / w_sum
-                    else:
-                        w = pruned_weights[i]              
-                
-                if self.normalize_andness:
-                    a = torch.sigmoid(pruned_biases[i])*3-1
-                else:
-                    a = pruned_biases[i]
-
-                # Mirror the normal forward logic
-                if i == 0:
-                    # First aggregator combines first two features
-                    left = node_outputs[0]
-                    right = node_outputs[1]
-                else:
-                    # Subsequent aggregators combine previous result with next feature
-                    left = node_outputs[-1]  # previous aggregation result
-                    right = node_outputs[i + 1]  # next feature
-                z = self.aggregator.aggregate(left, right, a, w[0], w[1])
-                node_outputs.append(z)
-                layer_outputs.append(z)
-            # final = torch.sigmoid(self.fc_out(layer_outputs[-1].unsqueeze(1)))
-            # return final
-            return layer_outputs[-1].unsqueeze(1)  # Remove the extra dimension
-
-        return pruned_forward
+                    # Prune feature k (k>=2): bypass right input (new feature) in agg k
+                    self.weights[k].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=self.device)
+                    self.pruned_aggregators.add(k)        
