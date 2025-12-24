@@ -152,7 +152,7 @@ X_test = torch.tensor(X_test_np, dtype=torch.float32).to(device)
 freeze_loss_threshold = 0.07
 aggregator = 'lsp.half_weight' 
 weight_mode = 'fixed'
-acceptance_threshold = 1.0
+acceptance_threshold = 0.80
 weight_penalty_strength = 1e-3
 
 # Update input size based on encoded features
@@ -246,25 +246,38 @@ print("\n" + "="*60)
 print("FEATURE IMPORTANCE ANALYSIS")
 print("="*60)
 
-accuracies = [best_score_accuracy]
+# Use consistent threshold=0.5 for baseline and pruning analysis
+with torch.no_grad():
+    baseline_output = bacon.assembler(X_all)
+    baseline_accuracy = ((baseline_output > 0.5).float() == Y_all).float().mean().item()
+
+accuracies = [baseline_accuracy]
 accuracy_drops = []
 feature_contributions = []
 
+# Save original weights to restore between tests
+import copy
+original_weights = [w.data.clone() for w in bacon.assembler.weights]
+
 # Prune based on actual number of features after one-hot encoding
 for i in range(1, num_features):
-    func_eval = bacon.prune_features(i)
-    kept_indices = bacon.assembler.locked_perm[i:].tolist()
+    # Restore original weights before each pruning test
+    for j, w in enumerate(bacon.assembler.weights):
+        w.data.copy_(original_weights[j])
+    bacon.assembler.pruned_aggregators.clear()  # Clear pruning flags
+    
+    # Apply pruning for first i features
+    bacon.assembler.prune_features(i)
     removed_feature_idx = bacon.assembler.locked_perm[i - 1].item()
-    X_all_pruned = X_all[:, kept_indices]
     
     with torch.no_grad():
-        pruned_output = func_eval(X_all_pruned)
-        pruned_accuracy = (pruned_output.round() == Y_all).float().mean().item()
+        pruned_output = bacon.assembler(X_all)
+        pruned_accuracy = ((pruned_output > 0.5).float() == Y_all).float().mean().item()
         accuracies.append(pruned_accuracy)
-        drop = accuracies[i - 1] - pruned_accuracy
+        drop = baseline_accuracy - pruned_accuracy  # Compare to baseline, not previous iteration
         accuracy_drops.append(drop)
         feature_contributions.append((removed_feature_idx, drop))
-        print(f"✅ Accuracy after pruning {i} feature(s): {pruned_accuracy * 100:.2f}%")
+        print(f"✅ Accuracy after pruning {i} feature(s): {pruned_accuracy * 100:.2f}% (drop: {drop * 100:.2f}%)")
 
 sorted_contributions = sorted(feature_contributions, key=lambda x: x[1], reverse=True)
 
