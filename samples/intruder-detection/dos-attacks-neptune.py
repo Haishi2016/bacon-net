@@ -84,7 +84,7 @@ print(filtered.describe())
 
 # Define attack types
 dos_attacks = [
-    'back', 'land', 'neptune', 'pod', 'smurf', 'teardrop'    
+    'neptune'
 ]
 
 # Binary labels
@@ -203,7 +203,7 @@ best_model, best_accuracy = bacon.find_best_model(
     hierarchical_bleed_ratio=0.5,        
     max_epochs=12000,
     attempts=1, 
-    acceptance_threshold=0.90
+    acceptance_threshold=1.0
 )
 print(f"✅ Best accuracy: {best_accuracy * 100:.2f}%")
 

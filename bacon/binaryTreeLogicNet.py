@@ -506,15 +506,9 @@ class binaryTreeLogicNet(nn.Module):
                     else:
                         left = node_outputs[-1]  # previous node
                         right = node_outputs[i + 1]  # next input
-                    
-                    # Debug: Log pruned aggregator behavior
-                    if i in self.pruned_aggregators and i < 3:
-                        print(f"   AGG{i}: left={left.mean().item():.3f}, right={right.mean().item():.3f}, w={w.tolist()}")
-                    
+                                        
                     nres = self.aggregator.aggregate(left, right, a, w[0], w[1])
                     
-                    if i in self.pruned_aggregators and i < 3:
-                        print(f"   AGG{i}: result={nres.mean().item():.3f}")
                     # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
                     if torch.isnan(nres).any():
                         nres = torch.where(torch.isnan(nres), bias, nres)
@@ -772,39 +766,30 @@ class binaryTreeLogicNet(nn.Module):
             print(f"✅ Best permutation selected: {best_perm} (Loss: {best_loss:.4f})")
             return best_model, best_perm, best_loss, best_index
         
-    def prune_features(self, features):
-        """Prune features from the left (least important) by adjusting weights.
-
-        Prunes the first N features by setting weights to bypass them:
-        - feature 0: set weight[0] = [0,1] (bypass left input in agg 0)
-        - feature 1: set weight[1] = [0,1] (bypass previous result in agg 1)
-        - feature k (k>=2): set weight[k] = [1,0] (bypass new input in agg k)
+    def prune_features(self, feature_index):
+        """Prune a single feature by adjusting its corresponding aggregator weight.
+        
+        This is designed to be called incrementally from outside to build up cumulative pruning.
+        Does NOT clear existing pruning state - adds to it.
 
         Args:
-            features (int): Number of features to prune from the left (0 to num_leaves-1).
+            feature_index (int): Index of the feature to prune (0 to num_leaves-1).
         """
         if not self.is_frozen:
             raise RuntimeError("Model is not frozen. Can't prune features.")
-        if features > self.num_leaves:
-            raise ValueError(f"Cannot prune more features than leaves. {features} > {self.num_leaves}")
+        if feature_index >= self.num_leaves:
+            raise ValueError(f"Feature index {feature_index} out of range (num_leaves={self.num_leaves})")
         
-        self.pruned_aggregators.clear()
-        
-        if features == 0:
-            return
-
         with torch.no_grad():
-            # Prune all features from 0 to features-1
-            for k in range(features):
-                if k == 0:
-                    # Prune feature 0: bypass left input in agg 0
-                    self.weights[0].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
-                    self.pruned_aggregators.add(0)
-                elif k == 1:
-                    # Prune feature 1: bypass left input (previous result) in agg 1
-                    self.weights[1].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
-                    self.pruned_aggregators.add(1)
-                else:
-                    # Prune feature k (k>=2): bypass right input (new feature) in agg k
-                    self.weights[k].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=self.device)
-                    self.pruned_aggregators.add(k)        
+            if feature_index == 0:
+                # Prune feature 0: bypass left input in agg 0
+                self.weights[0].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
+                self.pruned_aggregators.add(0)
+            elif feature_index == 1:
+                # Prune feature 1: bypass left input (previous result) in agg 1
+                self.weights[1].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
+                self.pruned_aggregators.add(1)
+            else:
+                # Prune feature k (k>=2): bypass right input (new feature) in agg k
+                self.weights[feature_index].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=self.device)
+                self.pruned_aggregators.add(feature_index)        

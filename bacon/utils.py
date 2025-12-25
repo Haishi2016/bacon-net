@@ -382,3 +382,326 @@ class SigmoidScaler(BaseEstimator, TransformerMixin):
         X = np.asarray(X)
         X_centered = (X - self.mean_) / self.std_
         return 1 / (1 + np.exp(-self.alpha * (X_centered - self.beta)))
+
+
+def analyze_feature_importance_with_pruning(
+    model, 
+    X, 
+    Y, 
+    feature_names, 
+    threshold=0.5,
+    baseline_enabled=False,
+    baseline_drop_threshold=0.05,
+    device=None
+):
+    """Analyze feature importance through cumulative pruning.
+    
+    Args:
+        model: Trained baconNet model with frozen structure
+        X: Input tensor
+        Y: Target tensor
+        feature_names: List of feature names
+        threshold: Classification threshold for accuracy calculation
+        baseline_enabled: If True, detect and skip baseline features
+        baseline_drop_threshold: Minimum accuracy drop to consider a feature as baseline
+        device: torch device
+        
+    Returns:
+        dict: {
+            'accuracies': List of accuracies after pruning 0, 1, 2, ... features,
+            'baseline_features': List of feature indices that form the baseline (empty if baseline_enabled=False),
+            'baseline_feature_names': List of feature names in baseline,
+            'num_features_pruned': Number of features actually pruned (excluding baseline)
+        }
+    """
+    if device is None:
+        device = X.device
+    
+    assembler = model.assembler
+    num_features = len(feature_names)
+    
+    # Calculate baseline accuracy
+    with torch.no_grad():
+        baseline_output = assembler(X)
+        baseline_accuracy = ((baseline_output > threshold).float() == Y).float().mean().item()
+    
+    accuracies = [baseline_accuracy]
+    baseline_features = []
+    
+    # Save original weights
+    original_weights = [w.data.clone() for w in assembler.weights]
+    
+    # Detect baseline if enabled
+    if baseline_enabled:
+        print("🔍 Detecting baseline features...")
+        for i in range(num_features):
+            # Restore weights
+            for j, w in enumerate(assembler.weights):
+                w.data.copy_(original_weights[j])
+            assembler.pruned_aggregators.clear()
+            
+            # Check if pruning feature i causes significant drop
+            if i < len(assembler.weights):
+                assembler.prune_features(i)
+                
+                with torch.no_grad():
+                    pruned_output = assembler(X)
+                    pruned_accuracy = ((pruned_output > threshold).float() == Y).float().mean().item()
+                    drop = baseline_accuracy - pruned_accuracy
+                
+                if drop >= baseline_drop_threshold:
+                    baseline_features.append(i)
+                    feature_idx = assembler.locked_perm[i].item()
+                    print(f"   ✅ Baseline feature {i}: {feature_names[feature_idx]} (drop: {drop*100:.2f}%)")
+                else:
+                    # Baseline chain breaks at first non-significant feature
+                    break
+        
+        if len(baseline_features) > 0:
+            print(f"📌 Baseline detected: {len(baseline_features)} features will NOT be pruned")
+        else:
+            print("📌 No baseline detected")
+    
+    # Cumulative pruning analysis (skip baseline features)
+    print("\n🔬 Cumulative pruning analysis:")
+    for i in range(1, num_features):
+        # Restore original weights
+        for j, w in enumerate(assembler.weights):
+            w.data.copy_(original_weights[j])
+        assembler.pruned_aggregators.clear()
+        
+        # Apply cumulative pruning: prune features 0 through i-1, EXCEPT baseline
+        for k in range(i):
+            if k not in baseline_features:  # Skip baseline features
+                assembler.prune_features(k)
+        
+        with torch.no_grad():
+            pruned_output = assembler(X)
+            pruned_accuracy = ((pruned_output > threshold).float() == Y).float().mean().item()
+            accuracies.append(pruned_accuracy)
+            
+            baseline_note = f" (baseline: {len(baseline_features)})" if baseline_enabled and len(baseline_features) > 0 else ""
+            print(f"   Accuracy after pruning {i} feature(s){baseline_note}: {pruned_accuracy * 100:.2f}%")
+    
+    # Restore original weights
+    for j, w in enumerate(assembler.weights):
+        w.data.copy_(original_weights[j])
+    assembler.pruned_aggregators.clear()
+    
+    baseline_feature_names = [feature_names[assembler.locked_perm[i].item()] for i in baseline_features]
+    
+    return {
+        'accuracies': accuracies,
+        'baseline_features': baseline_features,
+        'baseline_feature_names': baseline_feature_names,
+        'num_features_pruned': num_features - len(baseline_features) - 1  # -1 for the last feature
+    }
+
+
+def export_tree_structure_to_json(model, feature_names=None):
+    """Export the binary tree structure to a JSON-serializable dictionary.
+    
+    Args:
+        model: The binaryTreeLogicNet model
+        feature_names (list, optional): List of feature names. If None, uses feature0, feature1, etc.
+        
+    Returns:
+        dict: JSON-serializable dictionary representing the tree structure
+    """
+    import json
+    
+    if feature_names is not None and len(feature_names) < model.num_leaves:
+        raise ValueError(f"Feature name count {len(feature_names)} doesn't match number of leaves {model.num_leaves}")
+    
+    # Get feature names with permutation applied
+    if feature_names:
+        if model.locked_perm is not None:
+            leaf_names = [feature_names[i] for i in model.locked_perm.tolist()]
+        else:
+            leaf_names = feature_names
+    else:
+        leaf_names = [f"feature{i}" for i in range(model.num_leaves)]
+    
+    # Apply transformations to leaf names
+    if hasattr(model, 'transformation_layer') and model.transformation_layer is not None:
+        selected_transforms = model.transformation_layer.get_selected_transformations()
+        # Get transformation names from the transformation objects
+        transformation_names = []
+        for transform in model.transformation_layer.transformations:
+            name = transform.__class__.__name__.replace('Transformation', '').lower()
+            transformation_names.append(name)
+        
+        original_leaf_names = leaf_names.copy()
+        leaf_names = []
+        transformations_applied = []
+        for i, name in enumerate(original_leaf_names):
+            transform_idx = selected_transforms[i].item()
+            transform_name = transformation_names[transform_idx]
+            transformations_applied.append(transform_name)
+            if transform_name == 'negation':  # negation
+                leaf_names.append(f"NOT {name}")
+            else:
+                leaf_names.append(name)
+    else:
+        transformations_applied = ["identity"] * len(leaf_names)
+    
+    # Extract weights and biases
+    if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
+        weights = [w.detach().cpu().tolist() if hasattr(w, 'detach') else w for w in model.weights]
+    else:
+        weights = [F.softmax(w.detach().cpu(), dim=0).tolist() for w in model.weights]
+    
+    # Calculate andness values (a-values)
+    a_vals = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
+    
+    # Build tree structure based on layout
+    effective_layout = getattr(model, 'tree_layout', 'left')
+    
+    tree_structure = {
+        "model_type": "binaryTreeLogicNet",
+        "layout": effective_layout,
+        "num_features": model.num_leaves,
+        "num_layers": model.num_layers,
+        "features": []
+    }
+    
+    # Add feature information with transformations
+    for i, (name, orig_name, transform) in enumerate(zip(leaf_names, 
+                                                           feature_names if feature_names else leaf_names, 
+                                                           transformations_applied)):
+        tree_structure["features"].append({
+            "index": i,
+            "original_name": orig_name if feature_names else f"feature{i}",
+            "display_name": name,
+            "transformation": transform
+        })
+    
+    # Build node structure based on layout
+    if effective_layout == 'left':
+        # Left-associative tree
+        nodes = []
+        for i in range(model.num_layers):
+            node = {
+                "layer": i,
+                "aggregator_index": i,
+                "andness": round(a_vals[i], 6),
+                # "operator": "AND" if a_vals[i] >= 0.5 else "OR",
+                "weights": {
+                    "left": round(weights[i][0], 6),
+                    "right": round(weights[i][1], 6)
+                }
+            }
+            
+            if i == 0:
+                node["left_input"] = {"type": "feature", "index": 0, "name": leaf_names[0]}
+                node["right_input"] = {"type": "feature", "index": 1, "name": leaf_names[1]}
+            else:
+                node["left_input"] = {"type": "aggregator", "layer": i-1}
+                node["right_input"] = {"type": "feature", "index": i+1, "name": leaf_names[i+1]}
+            
+            nodes.append(node)
+        
+        tree_structure["nodes"] = nodes
+        
+    elif effective_layout == 'balanced':
+        # Balanced binary tree
+        def build_balanced_structure(start, end, idx):
+            if start == end:
+                return {"type": "feature", "index": start, "name": leaf_names[start]}, idx
+            
+            mid = (start + end) // 2
+            left_tree, idx = build_balanced_structure(start, mid, idx)
+            right_tree, idx = build_balanced_structure(mid + 1, end, idx)
+            
+            node = {
+                "type": "aggregator",
+                "layer": idx,
+                "andness": round(a_vals[idx], 6),
+                "operator": "AND" if a_vals[idx] >= 0.5 else "OR",
+                "weights": {
+                    "left": round(weights[idx][0], 6),
+                    "right": round(weights[idx][1], 6)
+                },
+                "left_input": left_tree,
+                "right_input": right_tree
+            }
+            
+            return node, idx + 1
+        
+        root, _ = build_balanced_structure(0, model.num_leaves - 1, 0)
+        tree_structure["root"] = root
+        
+    elif effective_layout == 'paired':
+        # Paired tree: pair features first, then aggregate pairs
+        nodes = []
+        idx = 0
+        pairs = []
+        j = 0
+        
+        # First phase: pair adjacent features
+        while j < model.num_leaves:
+            if j + 1 < model.num_leaves:
+                node = {
+                    "layer": idx,
+                    "aggregator_index": idx,
+                    "phase": "pairing",
+                    "andness": round(a_vals[idx], 6),
+                    "operator": "AND" if a_vals[idx] >= 0.5 else "OR",
+                    "weights": {
+                        "left": round(weights[idx][0], 6),
+                        "right": round(weights[idx][1], 6)
+                    },
+                    "left_input": {"type": "feature", "index": j, "name": leaf_names[j]},
+                    "right_input": {"type": "feature", "index": j+1, "name": leaf_names[j+1]}
+                }
+                pairs.append({"type": "aggregator", "index": idx})
+                nodes.append(node)
+                idx += 1
+                j += 2
+            else:
+                pairs.append({"type": "feature", "index": j, "name": leaf_names[j]})
+                j += 1
+        
+        # Second phase: fold pairs left-associatively
+        for k in range(1, len(pairs)):
+            node = {
+                "layer": idx,
+                "aggregator_index": idx,
+                "phase": "folding",
+                "andness": round(a_vals[idx], 6),
+                "operator": "AND" if a_vals[idx] >= 0.5 else "OR",
+                "weights": {
+                    "left": round(weights[idx][0], 6),
+                    "right": round(weights[idx][1], 6)
+                },
+                "left_input": pairs[k-1] if k == 1 else {"type": "aggregator", "index": idx-1},
+                "right_input": pairs[k]
+            }
+            nodes.append(node)
+            idx += 1
+        
+        tree_structure["nodes"] = nodes
+    
+    return tree_structure
+
+
+def save_tree_structure_to_json(model, filename, feature_names=None):
+    """Export the binary tree structure to a JSON file.
+    
+    Args:
+        model: The binaryTreeLogicNet model
+        filename (str): Path to save the JSON file
+        feature_names (list, optional): List of feature names
+        
+    Returns:
+        str: Path to the saved file
+    """
+    import json
+    
+    tree_structure = export_tree_structure_to_json(model, feature_names)
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(tree_structure, f, indent=2, ensure_ascii=False)
+    
+    print(f"✅ Tree structure saved to: {filename}")
+    return filename
