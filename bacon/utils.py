@@ -531,7 +531,7 @@ def export_tree_structure_to_json(model, feature_names=None):
             name = transform.__class__.__name__.replace('Transformation', '').lower()
             transformation_names.append(name)
         
-        original_leaf_names = leaf_names.copy()
+        original_leaf_names = leaf_names.copy()  # Keep permuted but untransformed names
         leaf_names = []
         transformations_applied = []
         for i, name in enumerate(original_leaf_names):
@@ -543,6 +543,7 @@ def export_tree_structure_to_json(model, feature_names=None):
             else:
                 leaf_names.append(name)
     else:
+        original_leaf_names = leaf_names.copy()  # No transformations, but keep copy
         transformations_applied = ["identity"] * len(leaf_names)
     
     # Extract weights and biases
@@ -562,17 +563,22 @@ def export_tree_structure_to_json(model, feature_names=None):
         "layout": effective_layout,
         "num_features": model.num_leaves,
         "num_layers": model.num_layers,
+        "original_feature_order": feature_names if feature_names else [f"feature{i}" for i in range(model.num_leaves)],
+        "locked_perm": model.locked_perm.tolist() if model.locked_perm is not None else None,
         "features": []
     }
     
     # Add feature information with transformations
-    for i, (name, orig_name, transform) in enumerate(zip(leaf_names, 
-                                                           feature_names if feature_names else leaf_names, 
-                                                           transformations_applied)):
+    # original_leaf_names are the permuted feature names (before transformation display)
+    # leaf_names are the display names (after transformation, e.g., "NOT age")
+    # transformations_applied are the transformation types
+    for i, (display_name, orig_name, transform) in enumerate(zip(leaf_names, 
+                                                                   original_leaf_names,
+                                                                   transformations_applied)):
         tree_structure["features"].append({
             "index": i,
-            "original_name": orig_name if feature_names else f"feature{i}",
-            "display_name": name,
+            "original_name": orig_name,  # Permuted but untransformed name
+            "display_name": display_name,  # With transformation applied
             "transformation": transform
         })
     
@@ -705,3 +711,544 @@ def save_tree_structure_to_json(model, filename, feature_names=None):
     
     print(f"✅ Tree structure saved to: {filename}")
     return filename
+
+
+# ============================================================================
+# BACON Network Distillation - Generate Standalone Inference Code
+# ============================================================================
+
+def _generate_aggregator_library(aggregator_type):
+    """Generate standalone Python code for aggregator functions.
+    
+    Args:
+        aggregator_type (str): Type of aggregator (e.g., 'lsp.half_weight')
+        
+    Returns:
+        str: Python code for the aggregator implementation
+    """
+    if aggregator_type == 'lsp.half_weight':
+        return '''
+def lsp_half_weight_r(a):
+    """Compute r parameter for LSP half-weight aggregator."""
+    delta = 0.5 - a
+    numerator = (0.25 +
+                 1.65811 * delta +
+                 2.15388 * delta ** 2 + 
+                 8.2844 * delta ** 3 +
+                 6.16764 * delta ** 4)
+    denominator = a * (1 - a)
+    epsilon = 1e-6
+    if abs(denominator) < epsilon:
+        denominator = epsilon if denominator >= 0 else -epsilon
+    return numerator / denominator
+
+
+def lsp_half_weight_aggregate(x, y, a, w0, w1):
+    """LSP half-weight aggregator for two inputs.
+    
+    Args:
+        x: First input (0 to 1)
+        y: Second input (0 to 1)
+        a: Andness parameter (-1 to 2)
+        w0: Weight for first input
+        w1: Weight for second input
+        
+    Returns:
+        Aggregated value (0 to 1)
+    """
+    epsilon = 1e-6
+    
+    # Clamp inputs to valid range
+    x = max(epsilon, min(1 - epsilon, x))
+    y = max(epsilon, min(1 - epsilon, y))
+    a = max(-1.0 + epsilon, min(2.0 - epsilon, a))
+    
+    # Rule 0: a == 2 (full conjunction)
+    if abs(a - 2) < epsilon:
+        return 1.0 if (abs(x - 1) < epsilon and abs(y - 1) < epsilon) else 0.0
+    
+    # Rule 1: 0.75 <= a < 2 (strong conjunction)
+    elif a >= 0.75:
+        import math
+        return (x ** (2*w0) * y ** (2*w1)) ** (math.sqrt(3 / (2 - a)) - 1)
+    
+    # Rule 2: 0.5 < a < 0.75 (weak conjunction)
+    elif a > 0.5:
+        import math
+        R = lsp_half_weight_r(0.75)
+        return (3 - 4*a) * (w0*x + w1*y) + (4*a - 2) * (x ** (2*w0) * y ** (2*w1)) ** (math.sqrt(3 / (2 - a)) - 1)
+    
+    # Rule 3: a == 0.5 (arithmetic mean)
+    elif abs(a - 0.5) < epsilon:
+        return w0*x + w1*y
+    
+    # Rule 4: -1 <= a < 0.5 (disjunction, use De Morgan)
+    elif a >= -1:
+        return 1 - lsp_half_weight_aggregate(1-x, 1-y, max(-1.0 + epsilon, min(2.0 - epsilon, 1-a)), w0, w1)
+    
+    else:
+        raise ValueError(f"Invalid andness value: {a}. Must be in [-1, 2].")
+'''
+    elif aggregator_type == 'lsp.full_weight':
+        return '''
+def lsp_full_weight_aggregate(x, y, a, w0, w1):
+    """LSP full-weight aggregator (simplified placeholder).
+    
+    Args:
+        x: First input (0 to 1)
+        y: Second input (0 to 1)
+        a: Andness parameter (-1 to 2)
+        w0: Weight for first input
+        w1: Weight for second input
+        
+    Returns:
+        Aggregated value (0 to 1)
+    """
+    # Simplified implementation - extend as needed
+    epsilon = 1e-6
+    x = max(epsilon, min(1 - epsilon, x))
+    y = max(epsilon, min(1 - epsilon, y))
+    a = max(-1.0 + epsilon, min(2.0 - epsilon, a))
+    
+    # Weighted geometric mean for conjunction, weighted arithmetic for disjunction
+    if a >= 0.5:
+        import math
+        return (x ** w0 * y ** w1) ** (1 + (a - 0.5) * 2)
+    else:
+        return 1 - lsp_full_weight_aggregate(1-x, 1-y, 1-a, w0, w1)
+'''
+    elif aggregator_type.startswith('math.'):
+        return '''
+def math_aggregate(x, y, a, w0, w1):
+    """Mathematical aggregator (arithmetic/geometric mean).
+    
+    Args:
+        x: First input (0 to 1)
+        y: Second input (0 to 1)
+        a: Andness parameter (ignored for math aggregators)
+        w0: Weight for first input
+        w1: Weight for second input
+        
+    Returns:
+        Aggregated value (0 to 1)
+    """
+    # Weighted arithmetic mean
+    return w0 * x + w1 * y
+'''
+    else:
+        # Generic fallback
+        return '''
+def generic_aggregate(x, y, a, w0, w1):
+    """Generic aggregator fallback (weighted average).
+    
+    Args:
+        x: First input (0 to 1)
+        y: Second input (0 to 1)
+        a: Andness parameter
+        w0: Weight for first input
+        w1: Weight for second input
+        
+    Returns:
+        Aggregated value (0 to 1)
+    """
+    return w0 * x + w1 * y
+'''
+
+
+def _generate_transformation_library():
+    """Generate standalone Python code for transformation functions."""
+    return '''
+def apply_identity(x):
+    """Identity transformation."""
+    return x
+
+
+def apply_negation(x):
+    """Negation transformation."""
+    return 1.0 - x
+
+
+def apply_peak(x, center=0.5, sharpness=2.0):
+    """Peak transformation - bell curve centered at 'center'."""
+    return 1.0 - abs(x - center) ** sharpness
+
+
+def apply_valley(x, center=0.5, sharpness=2.0):
+    """Valley transformation - inverted bell curve."""
+    return abs(x - center) ** sharpness
+
+
+def apply_step_up(x, threshold=0.5, sharpness=10.0):
+    """Step up transformation - sigmoid-like step."""
+    import math
+    return 1.0 / (1.0 + math.exp(-sharpness * (x - threshold)))
+
+
+def apply_step_down(x, threshold=0.5, sharpness=10.0):
+    """Step down transformation - inverted sigmoid."""
+    import math
+    return 1.0 / (1.0 + math.exp(sharpness * (x - threshold)))
+'''
+
+
+def _generate_vectorized_transformation_library():
+    """Generate vectorized transformation functions for batch mode."""
+    return '''
+def apply_identity_vec(x):
+    """Vectorized identity transformation."""
+    return x
+
+
+def apply_negation_vec(x):
+    """Vectorized negation transformation."""
+    return 1.0 - x
+
+
+def apply_peak_vec(x, center=0.5, sharpness=2.0):
+    """Vectorized peak transformation - bell curve centered at 'center'."""
+    return 1.0 - np.abs(x - center) ** sharpness
+
+
+def apply_valley_vec(x, center=0.5, sharpness=2.0):
+    """Vectorized valley transformation - inverted bell curve."""
+    return np.abs(x - center) ** sharpness
+
+
+def apply_step_up_vec(x, threshold=0.5, sharpness=10.0):
+    """Vectorized step up transformation - sigmoid-like step."""
+    return 1.0 / (1.0 + np.exp(-sharpness * (x - threshold)))
+
+
+def apply_step_down_vec(x, threshold=0.5, sharpness=10.0):
+    """Vectorized step down transformation - inverted sigmoid."""
+    return 1.0 / (1.0 + np.exp(sharpness * (x - threshold)))
+'''
+
+
+def distill_bacon_to_code(json_file, output_file, aggregator_type='lsp.half_weight', mode='instance'):
+    """Distill a BACON model from JSON to standalone executable Python code.
+    
+    This generates a self-contained Python file that can perform inference
+    without requiring the BACON framework. The generated code includes:
+    - Necessary aggregator implementations
+    - Transformation functions
+    - Model inference function
+    
+    Args:
+        json_file (str): Path to the JSON file containing the model structure
+        output_file (str): Path where the generated Python code will be saved
+        aggregator_type (str): Type of aggregator used in the model
+        mode (str): Generation mode - 'instance' (zero dependencies) or 'batch' (NumPy required)
+        
+    Returns:
+        str: Path to the generated Python file
+    """
+    import json
+    
+    # Load model structure
+    with open(json_file, 'r', encoding='utf-8') as f:
+        model_data = json.load(f)
+    
+    # Determine aggregator function name
+    if aggregator_type == 'lsp.half_weight':
+        agg_func_name = 'lsp_half_weight_aggregate'
+    elif aggregator_type == 'lsp.full_weight':
+        agg_func_name = 'lsp_full_weight_aggregate'
+    elif aggregator_type.startswith('math.'):
+        agg_func_name = 'math_aggregate'
+    else:
+        agg_func_name = 'generic_aggregate'
+    
+    # Start building the code
+    code_parts = []
+    
+    # Header
+    if mode == 'batch':
+        code_parts.append('''"""
+Distilled BACON Network - Standalone Inference Code (Batch Mode)
+Generated automatically from trained BACON model.
+
+This file can perform batch inference with NumPy for vectorized operations.
+Dependency: NumPy
+"""
+
+import math
+import numpy as np
+''')
+    else:
+        code_parts.append('''"""
+Distilled BACON Network - Standalone Inference Code (Instance Mode)
+Generated automatically from trained BACON model.
+
+This file is self-contained and can perform inference without any dependencies.
+Zero dependencies: Uses only Python standard library (math module).
+"""
+
+import math
+''')
+    
+    # Add aggregator library
+    code_parts.append('\n# ============================================================================')
+    code_parts.append('# Aggregator Functions')
+    code_parts.append('# ============================================================================\n')
+    code_parts.append(_generate_aggregator_library(aggregator_type))
+    
+    # Add transformation library
+    code_parts.append('\n# ============================================================================')
+    code_parts.append('# Transformation Functions')
+    code_parts.append('# ============================================================================\n')
+    code_parts.append(_generate_transformation_library())
+    
+    # For batch mode, also add vectorized versions
+    if mode == 'batch':
+        code_parts.append('\n# ============================================================================')
+        code_parts.append('# Vectorized Transformation Functions (for Batch Mode)')
+        code_parts.append('# ============================================================================\n')
+        code_parts.append(_generate_vectorized_transformation_library())
+    
+    # Generate inference function based on tree layout
+    code_parts.append('\n# ============================================================================')
+    code_parts.append('# Model Inference')
+    code_parts.append('# ============================================================================\n')
+    
+    layout = model_data.get('layout', 'left')
+    features = model_data.get('features', [])
+    original_feature_order = model_data.get('original_feature_order', [feat['original_name'] for feat in features])
+    locked_perm = model_data.get('locked_perm', None)
+    
+    # Generate the predict function based on mode
+    if mode == 'batch':
+        code_parts.append(f'''
+def predict(input_array):
+    """Perform batch inference on input data.
+    
+    Args:
+        input_array: NumPy array of shape (n_samples, {len(original_feature_order)}) 
+                     or single sample of shape ({len(original_feature_order)},)
+                     Features in ORIGINAL dataset order: {original_feature_order}
+        
+    Returns:
+        NumPy array of predictions (0 to 1), shape (n_samples,) or scalar for single sample
+    """
+    input_array = np.atleast_2d(input_array)
+    if input_array.shape[1] != {len(original_feature_order)}:
+        raise ValueError(f"Expected {len(original_feature_order)} features, got {{input_array.shape[1]}}")
+    
+    # Apply permutation and transformations (vectorized)
+    features = []
+''')
+        
+        # For each position in the permuted order (batch mode with vectorized functions)
+        for feat in features:
+            perm_idx = feat['index']
+            orig_name = feat['original_name']
+            input_idx = original_feature_order.index(orig_name)
+            transform = feat['transformation']
+            
+            if transform == 'identity':
+                code_parts.append(f"    features.append(apply_identity_vec(input_array[:, {input_idx}]))  # {feat['display_name']}")
+            elif transform == 'negation':
+                code_parts.append(f"    features.append(apply_negation_vec(input_array[:, {input_idx}]))  # {feat['display_name']}")
+            elif transform == 'peak':
+                code_parts.append(f"    features.append(apply_peak_vec(input_array[:, {input_idx}]))  # {feat['display_name']}")
+            elif transform == 'valley':
+                code_parts.append(f"    features.append(apply_valley_vec(input_array[:, {input_idx}]))  # {feat['display_name']}")
+            elif transform == 'stepup':
+                code_parts.append(f"    features.append(apply_step_up_vec(input_array[:, {input_idx}]))  # {feat['display_name']}")
+            elif transform == 'stepdown':
+                code_parts.append(f"    features.append(apply_step_down_vec(input_array[:, {input_idx}]))  # {feat['display_name']}")
+            else:
+                code_parts.append(f"    features.append(apply_identity_vec(input_array[:, {input_idx}]))  # {feat['display_name']} (unknown: {transform})")
+        
+        code_parts.append('\n    # Convert to array for easier indexing\n')
+        code_parts.append('    features = np.array(features)  # Shape: (n_features, n_samples)\n')
+        code_parts.append('\n    # Aggregate through the tree (vectorized)\n')
+        
+    else:  # instance mode
+        code_parts.append(f'''
+def predict(input_array):
+    """Perform inference on input data.
+    
+    Args:
+        input_array: List or array of {len(original_feature_order)} input features in ORIGINAL dataset order
+                     Feature order: {original_feature_order}
+        
+    Returns:
+        float: Prediction value (0 to 1)
+    """
+    if len(input_array) != {len(original_feature_order)}:
+        raise ValueError(f"Expected {len(original_feature_order)} features, got {{len(input_array)}}")
+    
+    # Apply permutation and transformations
+    features = []
+''')
+        
+        # For each position in the permuted order (instance mode)
+        for feat in features:
+            perm_idx = feat['index']
+            orig_name = feat['original_name']
+            input_idx = original_feature_order.index(orig_name)
+            transform = feat['transformation']
+            
+            if transform == 'identity':
+                code_parts.append(f"    features.append(apply_identity(input_array[{input_idx}]))  # {feat['display_name']}")
+            elif transform == 'negation':
+                code_parts.append(f"    features.append(apply_negation(input_array[{input_idx}]))  # {feat['display_name']}")
+            elif transform == 'peak':
+                code_parts.append(f"    features.append(apply_peak(input_array[{input_idx}]))  # {feat['display_name']}")
+            elif transform == 'valley':
+                code_parts.append(f"    features.append(apply_valley(input_array[{input_idx}]))  # {feat['display_name']}")
+            elif transform == 'stepup':
+                code_parts.append(f"    features.append(apply_step_up(input_array[{input_idx}]))  # {feat['display_name']}")
+            elif transform == 'stepdown':
+                code_parts.append(f"    features.append(apply_step_down(input_array[{input_idx}]))  # {feat['display_name']}")
+            else:
+                code_parts.append(f"    features.append(apply_identity(input_array[{input_idx}]))  # {feat['display_name']} (unknown: {transform})")
+        
+        code_parts.append('\n    # Aggregate through the tree\n')
+    
+    # Generate aggregation code based on layout
+    if layout == 'left':
+        nodes = model_data.get('nodes', [])
+        if mode == 'batch':
+            # Batch mode: vectorized aggregation
+            for i, node in enumerate(nodes):
+                layer = node['layer']
+                andness = node['andness']
+                w0 = node['weights']['left']
+                w1 = node['weights']['right']
+                
+                if layer == 0:
+                    left_idx = node['left_input']['index']
+                    right_idx = node['right_input']['index']
+                    code_parts.append(f"    agg_{layer} = np.array([{agg_func_name}(features[{left_idx}, i], features[{right_idx}, i], {andness}, {w0}, {w1}) for i in range(features.shape[1])])  # Layer {layer}")
+                else:
+                    right_idx = node['right_input']['index']
+                    code_parts.append(f"    agg_{layer} = np.array([{agg_func_name}(agg_{layer-1}[i], features[{right_idx}, i], {andness}, {w0}, {w1}) for i in range(features.shape[1])])  # Layer {layer}")
+            
+            code_parts.append(f'\n    return agg_{len(nodes)-1} if input_array.ndim > 1 else agg_{len(nodes)-1}[0]\n')
+        else:
+            # Instance mode: single sample aggregation
+            for i, node in enumerate(nodes):
+                layer = node['layer']
+                andness = node['andness']
+                w0 = node['weights']['left']
+                w1 = node['weights']['right']
+                
+                if layer == 0:
+                    left_idx = node['left_input']['index']
+                    right_idx = node['right_input']['index']
+                    code_parts.append(f"    agg_{layer} = {agg_func_name}(features[{left_idx}], features[{right_idx}], {andness}, {w0}, {w1})  # Layer {layer}")
+                else:
+                    right_idx = node['right_input']['index']
+                    code_parts.append(f"    agg_{layer} = {agg_func_name}(agg_{layer-1}, features[{right_idx}], {andness}, {w0}, {w1})  # Layer {layer}")
+            
+            code_parts.append(f'\n    return agg_{len(nodes)-1}\n')
+    
+    elif layout == 'balanced':
+        # For balanced tree, we need to recursively build the aggregation
+        code_parts.append('    # TODO: Balanced tree aggregation - implement recursive structure\n')
+        code_parts.append('    raise NotImplementedError("Balanced tree layout not yet implemented in distillation")\n')
+    
+    elif layout == 'paired':
+        # For paired tree, handle in two phases
+        nodes = model_data.get('nodes', [])
+        pairing_nodes = [n for n in nodes if n.get('phase') == 'pairing']
+        folding_nodes = [n for n in nodes if n.get('phase') == 'folding']
+        
+        code_parts.append('    # Phase 1: Pair adjacent features\n')
+        pair_results = []
+        for i, node in enumerate(pairing_nodes):
+            left_idx = node['left_input']['index']
+            right_idx = node['right_input']['index']
+            andness = node['andness']
+            w0 = node['weights']['left']
+            w1 = node['weights']['right']
+            code_parts.append(f"    pair_{i} = {agg_func_name}(features[{left_idx}], features[{right_idx}], {andness}, {w0}, {w1})")
+            pair_results.append(f"pair_{i}")
+        
+        # Handle unpaired feature if exists
+        if len(features) % 2 == 1:
+            code_parts.append(f"    pair_{len(pairing_nodes)} = features[{len(features)-1}]  # Unpaired feature")
+            pair_results.append(f"pair_{len(pairing_nodes)}")
+        
+        code_parts.append('\n    # Phase 2: Fold pairs left-associatively\n')
+        for i, node in enumerate(folding_nodes):
+            andness = node['andness']
+            w0 = node['weights']['left']
+            w1 = node['weights']['right']
+            if i == 0:
+                code_parts.append(f"    fold_{i} = {agg_func_name}({pair_results[0]}, {pair_results[1]}, {andness}, {w0}, {w1})")
+            else:
+                code_parts.append(f"    fold_{i} = {agg_func_name}(fold_{i-1}, {pair_results[i+1]}, {andness}, {w0}, {w1})")
+        
+        if len(folding_nodes) > 0:
+            code_parts.append(f'\n    return fold_{len(folding_nodes)-1}\n')
+        else:
+            code_parts.append(f'\n    return {pair_results[0]}\n')
+    
+    # Add example usage
+    if mode == 'batch':
+        code_parts.append('''
+
+if __name__ == "__main__":
+    # Example usage for batch mode
+    import sys
+    
+    if len(sys.argv) > 1:
+        # Read input from command line (single sample)
+        try:
+            input_values = np.array([[float(x) for x in sys.argv[1:]]])
+            result = predict(input_values)
+            print(f"Prediction: {result:.6f}")
+        except Exception as e:
+            print(f"Error: {e}")
+            print(f"Usage: python {sys.argv[0]} <value1> <value2> ... <valueN>")
+    else:
+        # Demo with random batch input
+        n_samples = 5
+        demo_input = np.random.random((n_samples, ''' + str(len(features)) + '''))
+        print(f"Demo batch input (shape {demo_input.shape}):")
+        print(demo_input)
+        results = predict(demo_input)
+        print(f"\\nBatch predictions:")
+        print(results)
+''')
+    else:
+        code_parts.append('''
+
+if __name__ == "__main__":
+    # Example usage for instance mode
+    import sys
+    
+    if len(sys.argv) > 1:
+        # Read input from command line
+        try:
+            input_values = [float(x) for x in sys.argv[1:]]
+            result = predict(input_values)
+            print(f"Prediction: {result:.6f}")
+        except Exception as e:
+            print(f"Error: {e}")
+            print(f"Usage: python {sys.argv[0]} <value1> <value2> ... <valueN>")
+    else:
+        # Demo with random input
+        import random
+        demo_input = [random.random() for _ in range(''' + str(len(features)) + ''')]
+        print(f"Demo input: {demo_input}")
+        result = predict(demo_input)
+        print(f"Prediction: {result:.6f}")
+''')
+    
+    # Write to file
+    final_code = '\n'.join(code_parts)
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(final_code)
+    
+    print(f"✅ Distilled model saved to: {output_file}")
+    print(f"   - Aggregator: {aggregator_type}")
+    print(f"   - Mode: {mode} ({'zero dependencies' if mode == 'instance' else 'requires NumPy'})")
+    print(f"   - Layout: {layout}")
+    print(f"   - Features: {len(features)}")
+    print(f"   - File size: {len(final_code)} characters")
+    
+    return output_file

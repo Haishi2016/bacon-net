@@ -3,34 +3,82 @@
   "layout": "left",
   "num_features": 22,
   "num_layers": 21,
+  "original_feature_order": [
+    "age",
+    "sex",
+    "trestbps",
+    "chol",
+    "fbs",
+    "thalach",
+    "exang",
+    "oldpeak",
+    "ca",
+    "cp_1",
+    "cp_2",
+    "cp_3",
+    "cp_4",
+    "restecg_0",
+    "restecg_1",
+    "restecg_2",
+    "slope_1",
+    "slope_2",
+    "slope_3",
+    "thal_3.0",
+    "thal_6.0",
+    "thal_7.0"
+  ],
+  "locked_perm": [
+    10,
+    3,
+    19,
+    4,
+    11,
+    5,
+    0,
+    9,
+    20,
+    2,
+    14,
+    13,
+    15,
+    16,
+    18,
+    6,
+    1,
+    17,
+    12,
+    8,
+    21,
+    7
+  ],
   "features": [
     {
       "index": 0,
-      "original_name": "age",
+      "original_name": "cp_2",
       "display_name": "NOT cp_2",
       "transformation": "negation"
     },
     {
       "index": 1,
-      "original_name": "sex",
+      "original_name": "chol",
       "display_name": "chol",
       "transformation": "identity"
     },
     {
       "index": 2,
-      "original_name": "trestbps",
+      "original_name": "thal_3.0",
       "display_name": "NOT thal_3.0",
       "transformation": "negation"
     },
     {
       "index": 3,
-      "original_name": "chol",
+      "original_name": "fbs",
       "display_name": "NOT fbs",
       "transformation": "negation"
     },
     {
       "index": 4,
-      "original_name": "fbs",
+      "original_name": "cp_3",
       "display_name": "NOT cp_3",
       "transformation": "negation"
     },
@@ -42,67 +90,67 @@
     },
     {
       "index": 6,
-      "original_name": "exang",
+      "original_name": "age",
       "display_name": "NOT age",
       "transformation": "negation"
     },
     {
       "index": 7,
-      "original_name": "oldpeak",
+      "original_name": "cp_1",
       "display_name": "NOT cp_1",
       "transformation": "negation"
     },
     {
       "index": 8,
-      "original_name": "ca",
+      "original_name": "thal_6.0",
       "display_name": "NOT thal_6.0",
       "transformation": "negation"
     },
     {
       "index": 9,
-      "original_name": "cp_1",
+      "original_name": "trestbps",
       "display_name": "NOT trestbps",
       "transformation": "negation"
     },
     {
       "index": 10,
-      "original_name": "cp_2",
+      "original_name": "restecg_1",
       "display_name": "NOT restecg_1",
       "transformation": "negation"
     },
     {
       "index": 11,
-      "original_name": "cp_3",
+      "original_name": "restecg_0",
       "display_name": "NOT restecg_0",
       "transformation": "negation"
     },
     {
       "index": 12,
-      "original_name": "cp_4",
+      "original_name": "restecg_2",
       "display_name": "NOT restecg_2",
       "transformation": "negation"
     },
     {
       "index": 13,
-      "original_name": "restecg_0",
+      "original_name": "slope_1",
       "display_name": "NOT slope_1",
       "transformation": "negation"
     },
     {
       "index": 14,
-      "original_name": "restecg_1",
+      "original_name": "slope_3",
       "display_name": "NOT slope_3",
       "transformation": "negation"
     },
     {
       "index": 15,
-      "original_name": "restecg_2",
+      "original_name": "exang",
       "display_name": "exang",
       "transformation": "identity"
     },
     {
       "index": 16,
-      "original_name": "slope_1",
+      "original_name": "sex",
       "display_name": "sex",
       "transformation": "identity"
     },
@@ -114,25 +162,25 @@
     },
     {
       "index": 18,
-      "original_name": "slope_3",
+      "original_name": "cp_4",
       "display_name": "cp_4",
       "transformation": "identity"
     },
     {
       "index": 19,
-      "original_name": "thal_3.0",
+      "original_name": "ca",
       "display_name": "ca",
       "transformation": "identity"
     },
     {
       "index": 20,
-      "original_name": "thal_6.0",
+      "original_name": "thal_7.0",
       "display_name": "thal_7.0",
       "transformation": "identity"
     },
     {
       "index": 21,
-      "original_name": "thal_7.0",
+      "original_name": "oldpeak",
       "display_name": "oldpeak",
       "transformation": "identity"
     }
