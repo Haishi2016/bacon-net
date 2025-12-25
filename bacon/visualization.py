@@ -1121,3 +1121,35 @@ def overlay_sorted_predictions_and_feature(model, X_test, Y_test, feature_name, 
     plt.grid(True, linestyle='--', linewidth=0.5)
     plt.tight_layout()
     plt.show()
+
+
+def plot_feature_pruning_analysis(accuracies, baseline_features=None, title="Accuracy vs. Number of Features Pruned", filename=None):
+    """Plot accuracy vs number of features pruned.
+    
+    Args:
+        accuracies: List of accuracies [baseline, after_pruning_1, after_pruning_2, ...]
+        baseline_features: List of baseline feature indices (optional, for annotation)
+        title: Plot title
+        filename: If provided, save plot to this file
+    """
+    plt.figure(figsize=(10, 5))
+    x_values = list(range(len(accuracies)))
+    plt.plot(x_values, [a * 100 for a in accuracies], marker='o', linewidth=2)
+    
+    # Annotate baseline if present
+    if baseline_features and len(baseline_features) > 0:
+        baseline_note = f" (Baseline: {len(baseline_features)} features not pruned)"
+        plt.title(title + baseline_note)
+    else:
+        plt.title(title)
+    
+    plt.xlabel("Number of Features Pruned from Left (0 = No Pruning)")
+    plt.ylabel("Accuracy (%)")
+    plt.grid(True, alpha=0.3)
+    plt.xticks(x_values)  # Show all tick marks
+    plt.tight_layout()
+    
+    if filename:
+        plt.savefig(filename, dpi=150)
+    
+    plt.show()

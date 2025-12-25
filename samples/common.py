@@ -103,6 +103,7 @@ def train_bacon_model(
     freeze_confidence_threshold=0.95,
     freeze_min_confidence=0.85,
     freeze_loss_threshold=0.09,
+    frozen_training_epochs=200,
     max_epochs=5000,
     **kwargs
 ):
@@ -140,11 +141,12 @@ def train_bacon_model(
         hierarchical_group_size=hierarchical_group_size,
         acceptance_threshold=acceptance_threshold,
         loss_weight_perm_sparsity=loss_weight_perm_sparsity,
-        sinkhorn_iters=sinkhorn_iters,
+        sinkhorn_iters=sinkhorn_iters,        
         freeze_confidence_threshold=freeze_confidence_threshold,
         freeze_min_confidence=freeze_min_confidence,
         freeze_loss_threshold=freeze_loss_threshold,
         max_epochs=max_epochs,
+        frozen_training_epochs=frozen_training_epochs,
         **kwargs
     )
     
