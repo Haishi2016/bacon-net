@@ -1,0 +1,257 @@
+{
+  "model_type": "binaryTreeLogicNet",
+  "layout": "left",
+  "num_features": 10,
+  "num_layers": 9,
+  "original_feature_order": [
+    "Age",
+    "Gender",
+    "TB",
+    "DB",
+    "Alkphos",
+    "Sgpt",
+    "Sgot",
+    "TP",
+    "ALB",
+    "A/G Ratio"
+  ],
+  "locked_perm": [
+    9,
+    7,
+    8,
+    1,
+    0,
+    5,
+    6,
+    2,
+    3,
+    4
+  ],
+  "features": [
+    {
+      "index": 0,
+      "original_name": "A/G Ratio",
+      "display_name": "A/G Ratio",
+      "transformation": "identity"
+    },
+    {
+      "index": 1,
+      "original_name": "TP",
+      "display_name": "TP",
+      "transformation": "identity"
+    },
+    {
+      "index": 2,
+      "original_name": "ALB",
+      "display_name": "ALB",
+      "transformation": "identity"
+    },
+    {
+      "index": 3,
+      "original_name": "Gender",
+      "display_name": "Gender",
+      "transformation": "identity"
+    },
+    {
+      "index": 4,
+      "original_name": "Age",
+      "display_name": "Age",
+      "transformation": "identity"
+    },
+    {
+      "index": 5,
+      "original_name": "Sgpt",
+      "display_name": "Sgpt",
+      "transformation": "identity"
+    },
+    {
+      "index": 6,
+      "original_name": "Sgot",
+      "display_name": "Sgot",
+      "transformation": "identity"
+    },
+    {
+      "index": 7,
+      "original_name": "TB",
+      "display_name": "TB",
+      "transformation": "identity"
+    },
+    {
+      "index": 8,
+      "original_name": "DB",
+      "display_name": "DB",
+      "transformation": "identity"
+    },
+    {
+      "index": 9,
+      "original_name": "Alkphos",
+      "display_name": "Alkphos",
+      "transformation": "identity"
+    }
+  ],
+  "nodes": [
+    {
+      "layer": 0,
+      "aggregator_index": 0,
+      "andness": 0.240223,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "feature",
+        "index": 0,
+        "name": "A/G Ratio"
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 1,
+        "name": "TP"
+      }
+    },
+    {
+      "layer": 1,
+      "aggregator_index": 1,
+      "andness": -0.763595,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 0
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 2,
+        "name": "ALB"
+      }
+    },
+    {
+      "layer": 2,
+      "aggregator_index": 2,
+      "andness": 1.999957,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 1
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 3,
+        "name": "Gender"
+      }
+    },
+    {
+      "layer": 3,
+      "aggregator_index": 3,
+      "andness": -0.087327,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 2
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 4,
+        "name": "Age"
+      }
+    },
+    {
+      "layer": 4,
+      "aggregator_index": 4,
+      "andness": 0.108333,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 3
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 5,
+        "name": "Sgpt"
+      }
+    },
+    {
+      "layer": 5,
+      "aggregator_index": 5,
+      "andness": 1.744398,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 4
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 6,
+        "name": "Sgot"
+      }
+    },
+    {
+      "layer": 6,
+      "aggregator_index": 6,
+      "andness": 1.231013,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 5
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 7,
+        "name": "TB"
+      }
+    },
+    {
+      "layer": 7,
+      "aggregator_index": 7,
+      "andness": 1.443223,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 6
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 8,
+        "name": "DB"
+      }
+    },
+    {
+      "layer": 8,
+      "aggregator_index": 8,
+      "andness": 1.428068,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 7
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 9,
+        "name": "Alkphos"
+      }
+    }
+  ]
+}

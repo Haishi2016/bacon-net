@@ -511,6 +511,141 @@ def analyze_feature_importance_with_pruning(
     }
 
 
+def analyze_feature_importance_with_growing(
+    model, 
+    X, 
+    Y, 
+    feature_names, 
+    threshold=0.5,
+    device=None
+):
+    """Analyze feature importance through incremental growth from baseline.
+    
+    Start with baseline (node0, node1, aggregator0) and incrementally grow the tree
+    towards the root by restoring one feature/aggregator at a time.
+    
+    Args:
+        model: Trained baconNet model with frozen structure
+        X: Input tensor
+        Y: Target tensor
+        feature_names: List of feature names
+        threshold: Classification threshold for accuracy calculation
+        device: torch device
+        
+    Returns:
+        dict: {
+            'accuracies': List of accuracies as tree grows from baseline,
+            'feature_order': List of feature indices in growth order
+        }
+    """
+    if device is None:
+        device = X.device
+    
+    assembler = model.assembler
+    num_features = len(feature_names)
+    
+    if num_features < 2:
+        print("⚠️ Growing analysis requires at least 2 features")
+        return {'accuracies': [], 'feature_order': []}
+    
+    # Save original weights and biases
+    original_weights = [w.data.clone() for w in assembler.weights]
+    original_biases = [b.data.clone() for b in assembler.biases]
+    
+    num_aggregators = len(assembler.weights)
+    accuracies = []
+    feature_order = list(range(num_features))
+    
+    print("\n🌱 Incremental growing analysis:")
+    print(f"   Starting with baseline: Features 0 and 1 ({feature_names[assembler.locked_perm[0].item()]} + {feature_names[assembler.locked_perm[1].item()]})")
+    
+    # Step 1: Evaluate baseline (node0, node1, aggregator0 only)
+    # Set all aggregators except agg0 to neutrality: bias=0.5, left=1, right=0
+    with torch.no_grad():
+        # Restore all to original first
+        for j, w in enumerate(assembler.weights):
+            w.data.copy_(original_weights[j])
+        for j in range(len(assembler.biases)):
+            if assembler.biases[j].shape == original_biases[j].shape:
+                assembler.biases[j].data.copy_(original_biases[j])
+            else:
+                assembler.biases[j].data = original_biases[j].clone()
+        
+        # Set aggregators 1 onwards to neutrality (pass left input through)
+        for j in range(1, num_aggregators):
+            assembler.weights[j].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=device)
+            # Set bias to 0.5 (logical neutrality)
+            if assembler.normalize_andness:
+                # If normalize_andness, bias is logit-transformed: logit(0.5) = 0
+                if assembler.biases[j].numel() == 1:
+                    assembler.biases[j].data.fill_(0.0)
+                else:
+                    assembler.biases[j].data = torch.tensor(0.0, dtype=torch.float32, device=device)
+            else:
+                if assembler.biases[j].numel() == 1:
+                    assembler.biases[j].data.fill_(0.5)
+                else:
+                    assembler.biases[j].data = torch.tensor(0.5, dtype=torch.float32, device=device)
+        
+        baseline_output = assembler(X)
+        baseline_accuracy = ((baseline_output > threshold).float() == Y).float().mean().item()
+        accuracies.append(baseline_accuracy)
+        print(f"   Baseline (features 0-1): accuracy = {baseline_accuracy * 100:.2f}%")
+    
+    # Step 2: Incrementally grow by adding features 2 onwards
+    for i in range(2, num_features):
+        with torch.no_grad():
+            # Restore all to original
+            for j, w in enumerate(assembler.weights):
+                w.data.copy_(original_weights[j])
+            for j in range(len(assembler.biases)):
+                if assembler.biases[j].shape == original_biases[j].shape:
+                    assembler.biases[j].data.copy_(original_biases[j])
+                else:
+                    assembler.biases[j].data = original_biases[j].clone()
+            
+            # Feature i uses aggregator i-1
+            # We want to include features 0 through i
+            # So restore aggregators 0 through i-1 to original values
+            # Set aggregators i onwards to neutrality (pass left input through)
+            for j in range(i, num_aggregators):
+                assembler.weights[j].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=device)
+                # Set bias to 0.5 (logical neutrality)
+                if assembler.normalize_andness:
+                    # If normalize_andness, bias is logit-transformed: logit(0.5) = 0
+                    if assembler.biases[j].numel() == 1:
+                        assembler.biases[j].data.fill_(0.0)
+                    else:
+                        assembler.biases[j].data = torch.tensor(0.0, dtype=torch.float32, device=device)
+                else:
+                    if assembler.biases[j].numel() == 1:
+                        assembler.biases[j].data.fill_(0.5)
+                    else:
+                        assembler.biases[j].data = torch.tensor(0.5, dtype=torch.float32, device=device)
+            
+            grown_output = assembler(X)
+            grown_accuracy = ((grown_output > threshold).float() == Y).float().mean().item()
+            accuracies.append(grown_accuracy)
+            
+            feature_name = feature_names[assembler.locked_perm[i].item()]
+            print(f"   Growing to feature {i} ({feature_name}): accuracy = {grown_accuracy * 100:.2f}% (total features: {i+1})")
+    
+    # Restore original weights and biases
+    with torch.no_grad():
+        for j, w in enumerate(assembler.weights):
+            w.data.copy_(original_weights[j])
+        for j in range(len(assembler.biases)):
+            if assembler.biases[j].shape == original_biases[j].shape:
+                assembler.biases[j].data.copy_(original_biases[j])
+            else:
+                assembler.biases[j].data = original_biases[j].clone()
+    
+    return {
+        'accuracies': accuracies,
+        'feature_order': feature_order
+    }
+
+
 def export_tree_structure_to_json(model, feature_names=None):
     """Export the binary tree structure to a JSON-serializable dictionary.
     

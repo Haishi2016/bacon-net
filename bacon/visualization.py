@@ -1229,3 +1229,30 @@ def plot_feature_pruning_analysis(accuracies, baseline_features=None, title="Acc
         plt.savefig(filename, dpi=150)
     
     plt.show()
+
+
+def plot_feature_growing_analysis(accuracies, title="Accuracy vs. Number of Features (Growing)", filename=None):
+    """Plot accuracy vs number of features as tree grows from baseline.
+    
+    Args:
+        accuracies: List of accuracies [baseline_2_features, after_adding_feature_2, after_adding_feature_3, ...]
+        title: Plot title
+        filename: If provided, save plot to this file
+    """
+    plt.figure(figsize=(10, 5))
+    # X-axis represents number of features: starts at 2 (baseline), then 3, 4, 5, ...
+    num_features = list(range(2, 2 + len(accuracies)))
+    plt.plot(num_features, [a * 100 for a in accuracies], marker='o', linewidth=2, color='green')
+    
+    plt.title(title)
+    plt.xlabel("Number of Features (Growing from Baseline)")
+    plt.ylabel("Accuracy (%)")
+    plt.grid(True, alpha=0.3)
+    plt.xticks(num_features)  # Show all tick marks
+    plt.tight_layout()
+    
+    if filename:
+        plt.savefig(filename, dpi=150)
+    
+    plt.show()
+
