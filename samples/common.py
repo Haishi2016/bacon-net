@@ -237,8 +237,8 @@ def analyze_feature_importance(
     
     Args:
         model: Trained baconNet model
-        X_all: Combined features (train + test)
-        Y_all: Combined labels (train + test)
+        X_all: Features to use for analysis (typically test set)
+        Y_all: Labels for the data
         feature_names: List of feature names
         title_prefix: Prefix for plot title (e.g., "Heart Disease")
         threshold: Classification threshold (default: 0.5)
@@ -315,7 +315,9 @@ def run_standard_analysis(
     title_prefix="",
     device=None,
     save_tree_json=True,
-    json_filename=None
+    json_filename=None,
+    pruning_threshold=None,
+    pruning_threshold_metric='f1'
 ):
     """Run the complete standard analysis pipeline.
     
@@ -330,6 +332,8 @@ def run_standard_analysis(
         device: torch device (default: None)
         save_tree_json: Whether to save tree structure as JSON (default: True)
         json_filename: Filename for JSON export (default: "{title_prefix}_tree_structure.json")
+        pruning_threshold: Threshold to use for pruning analysis (default: None, uses optimized threshold)
+        pruning_threshold_metric: Metric to optimize threshold for if pruning_threshold is None (default: 'f1')
         
     Returns:
         dict: Analysis results including thresholds and pruning results
@@ -358,10 +362,23 @@ def run_standard_analysis(
     # Optimize thresholds
     threshold_results = optimize_thresholds(model, X_all, Y_all)
     
-    # Analyze feature importance
+    # Determine threshold for pruning
+    if pruning_threshold is None:
+        pruning_threshold = threshold_results[pruning_threshold_metric]['threshold']
+        pruning_score = threshold_results[pruning_threshold_metric]['score']
+        print(f"\n🎯 Using optimized {pruning_threshold_metric.upper()} threshold for pruning: {pruning_threshold:.3f} (score: {pruning_score:.4f})")
+    else:
+        print(f"\n🎯 Using custom threshold for pruning: {pruning_threshold:.3f}")
+    
+    # Analyze feature importance (use TEST data for consistency with reported accuracy)
+    print("\n" + "="*60)
+    print("FEATURE IMPORTANCE ANALYSIS")
+    print("="*60)
+    print("📊 Using TEST data for pruning analysis (consistent with reported accuracy)")
     pruning_results = analyze_feature_importance(
-        model, X_all, Y_all, feature_names,
+        model, X_test, Y_test, feature_names,
         title_prefix=title_prefix,
+        threshold=pruning_threshold,
         device=device
     )
     
