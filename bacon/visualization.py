@@ -255,14 +255,52 @@ def visualize_tree_structure(model, labels=None, layout=None):
     else:
         leaf_names = [f"Leaf {i+1}" for i in range(model.num_leaves)]
     
-    # Check for transformation layer and apply negations to labels
+    # Check for transformation layer and apply transformations to labels
     if hasattr(model, 'transformation_layer') and model.transformation_layer is not None:
         selected_transforms = model.transformation_layer.get_selected_transformations()
         original_leaf_names = leaf_names.copy()
         leaf_names = []
+        
+        # Get transformation names
+        transformation_names = []
+        for transform in model.transformation_layer.transformations:
+            name = transform.__class__.__name__.replace('Transformation', '').lower()
+            transformation_names.append(name)
+        
         for i, name in enumerate(original_leaf_names):
-            if selected_transforms[i].item() == 1:  # negation
+            transform_idx = selected_transforms[i].item()
+            transform_name = transformation_names[transform_idx]
+            transform_obj = model.transformation_layer.transformations[transform_idx]
+            
+            # Get learned parameters
+            params = {}
+            if hasattr(transform_obj, 'get_param_summary'):
+                # Extract params for this transformation from ParameterDict
+                # Parameters are stored as "t{idx}_{param_name}"
+                transform_params_dict = {}
+                for key, value in model.transformation_layer.transform_params.items():
+                    if key.startswith(f"t{transform_idx}_"):
+                        param_name = key[len(f"t{transform_idx}_"):]
+                        transform_params_dict[param_name] = value
+                
+                if transform_params_dict:
+                    params = transform_obj.get_param_summary(transform_params_dict, i)
+            
+            # Format label based on transformation type
+            if transform_name == 'negation':
                 leaf_names.append(f"NOT {name}")
+            elif transform_name == 'peak':
+                peak_loc = params.get('peak_location', '?')
+                leaf_names.append(f"PEAK({name},t={peak_loc})")
+            elif transform_name == 'valley':
+                valley_loc = params.get('valley_location', '?')
+                leaf_names.append(f"VALLEY({name},t={valley_loc})")
+            elif transform_name == 'step_up':
+                threshold = params.get('threshold', '?')
+                leaf_names.append(f"STEP_UP({name},t={threshold})")
+            elif transform_name == 'step_down':
+                threshold = params.get('threshold', '?')
+                leaf_names.append(f"STEP_DOWN({name},t={threshold})")
             else:  # identity
                 leaf_names.append(name)
 
@@ -394,14 +432,52 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
     else:
         leaf_names = [f"feature{i+1}" for i in range(model.num_leaves)]
     
-    # Check for transformation layer and apply negations to labels
+    # Check for transformation layer and apply transformations to labels
     if hasattr(model, 'transformation_layer') and model.transformation_layer is not None:
         selected_transforms = model.transformation_layer.get_selected_transformations()
         original_leaf_names = leaf_names.copy()
         leaf_names = []
+        
+        # Get transformation names
+        transformation_names = []
+        for transform in model.transformation_layer.transformations:
+            name = transform.__class__.__name__.replace('Transformation', '').lower()
+            transformation_names.append(name)
+        
         for i, name in enumerate(original_leaf_names):
-            if selected_transforms[i].item() == 1:  # negation
+            transform_idx = selected_transforms[i].item()
+            transform_name = transformation_names[transform_idx]
+            transform_obj = model.transformation_layer.transformations[transform_idx]
+            
+            # Get learned parameters
+            params = {}
+            if hasattr(transform_obj, 'get_param_summary'):
+                # Extract params for this transformation from ParameterDict
+                # Parameters are stored as "t{idx}_{param_name}"
+                transform_params_dict = {}
+                for key, value in model.transformation_layer.transform_params.items():
+                    if key.startswith(f"t{transform_idx}_"):
+                        param_name = key[len(f"t{transform_idx}_"):]
+                        transform_params_dict[param_name] = value
+                
+                if transform_params_dict:
+                    params = transform_obj.get_param_summary(transform_params_dict, i)
+            
+            # Format label based on transformation type
+            if transform_name == 'negation':
                 leaf_names.append(f"NOT {name}")
+            elif transform_name == 'peak':
+                peak_loc = params.get('peak_location', '?')
+                leaf_names.append(f"PEAK({name},t={peak_loc})")
+            elif transform_name == 'valley':
+                valley_loc = params.get('valley_location', '?')
+                leaf_names.append(f"VALLEY({name},t={valley_loc})")
+            elif transform_name == 'step_up':
+                threshold = params.get('threshold', '?')
+                leaf_names.append(f"STEP_UP({name},t={threshold})")
+            elif transform_name == 'step_down':
+                threshold = params.get('threshold', '?')
+                leaf_names.append(f"STEP_DOWN({name},t={threshold})")
             else:  # identity
                 leaf_names.append(name)
 

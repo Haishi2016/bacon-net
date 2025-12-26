@@ -769,6 +769,12 @@ class binaryTreeLogicNet(nn.Module):
     def prune_features(self, feature_index):
         """Prune a single feature by adjusting its corresponding aggregator weight.
         
+        In a left-associative tree:
+        - Feature 0 (left input of agg 0)
+        - Feature 1 (right input of agg 0)
+        - Feature 2 (right input of agg 1) - uses aggregator at index 1
+        - Feature k (k>=2) uses aggregator at index k-1
+        
         This is designed to be called incrementally from outside to build up cumulative pruning.
         Does NOT clear existing pruning state - adds to it.
 
@@ -786,10 +792,11 @@ class binaryTreeLogicNet(nn.Module):
                 self.weights[0].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
                 self.pruned_aggregators.add(0)
             elif feature_index == 1:
-                # Prune feature 1: bypass left input (previous result) in agg 1
-                self.weights[1].data = torch.tensor([0.0, 1.0], dtype=torch.float32, device=self.device)
-                self.pruned_aggregators.add(1)
+                # Prune feature 1: bypass right input in agg 0
+                self.weights[0].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=self.device)
+                self.pruned_aggregators.add(0)
             else:
-                # Prune feature k (k>=2): bypass right input (new feature) in agg k
-                self.weights[feature_index].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=self.device)
-                self.pruned_aggregators.add(feature_index)        
+                # Prune feature k (k>=2): bypass right input (new feature) in agg k-1
+                agg_idx = feature_index - 1
+                self.weights[agg_idx].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=self.device)
+                self.pruned_aggregators.add(agg_idx)        

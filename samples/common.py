@@ -230,7 +230,6 @@ def analyze_feature_importance(
     title_prefix="",
     threshold=0.5,
     baseline_enabled=True,
-    baseline_drop_threshold=0.05,
     device=None
 ):
     """Analyze feature importance through pruning with baseline detection.
@@ -263,7 +262,6 @@ def analyze_feature_importance(
         feature_names,
         threshold=threshold,
         baseline_enabled=baseline_enabled,
-        baseline_drop_threshold=baseline_drop_threshold,
         device=device
     )
     

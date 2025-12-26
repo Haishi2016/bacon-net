@@ -122,7 +122,8 @@ class PeakTransformation(ParameterizedTransformation):
         return 1.0 - distance
     
     def get_param_summary(self, params, feature_idx):
-        peak_loc = torch.sigmoid(params['peak_loc'][feature_idx]).item()
+        # Note: Each transformation is initialized with num_features=1, so always use index 0
+        peak_loc = torch.sigmoid(params['peak_loc'][0]).item()
         return {'peak_location': f"{peak_loc:.3f}"}
 
 
@@ -158,7 +159,8 @@ class ValleyTransformation(ParameterizedTransformation):
         return distance
     
     def get_param_summary(self, params, feature_idx):
-        valley_loc = torch.sigmoid(params['valley_loc'][feature_idx]).item()
+        # Note: Each transformation is initialized with num_features=1, so always use index 0
+        valley_loc = torch.sigmoid(params['valley_loc'][0]).item()
         return {'valley_location': f"{valley_loc:.3f}"}
 
 
@@ -194,7 +196,8 @@ class StepUpTransformation(ParameterizedTransformation):
         return torch.clamp(x / threshold.unsqueeze(0), min=0.0, max=1.0)
     
     def get_param_summary(self, params, feature_idx):
-        threshold = (torch.sigmoid(params['threshold'][feature_idx]) * 0.99 + 0.01).item()
+        # Each transformation instance has num_features=1, so params have shape (1,)
+        threshold = (torch.sigmoid(params['threshold'][0]) * 0.99 + 0.01).item()
         return {'threshold': f"{threshold:.3f}"}
 
 
@@ -229,7 +232,8 @@ class StepDownTransformation(ParameterizedTransformation):
         return torch.clamp(1.0 - x / threshold.unsqueeze(0), min=0.0, max=1.0)
     
     def get_param_summary(self, params, feature_idx):
-        threshold = (torch.sigmoid(params['threshold'][feature_idx]) * 0.99 + 0.01).item()
+        # Each transformation instance has num_features=1, so params have shape (1,)
+        threshold = (torch.sigmoid(params['threshold'][0]) * 0.99 + 0.01).item()
         return {'threshold': f"{threshold:.3f}"}
 
 
