@@ -420,6 +420,9 @@ def analyze_feature_importance_with_pruning(
     assembler = model.assembler
     num_features = len(feature_names)
     
+    # CRITICAL: Clear any existing pruning state from previous runs
+    assembler.pruned_aggregators.clear()
+    
     # Calculate baseline accuracy
     with torch.no_grad():
         baseline_output = assembler(X)
@@ -431,48 +434,56 @@ def analyze_feature_importance_with_pruning(
     # Save original weights
     original_weights = [w.data.clone() for w in assembler.weights]
     
-    # Detect baseline if enabled
+    # IMPORTANT: In a left-associative tree, there are num_features-1 aggregators
+    # So we can only prune features 0 through num_features-2
+    num_aggregators = len(assembler.weights)
+    max_prunable_feature = num_aggregators - 1
+    
+    # Detect baseline structurally
     if baseline_enabled:
-        print("🔍 Detecting baseline features...")
-        for i in range(num_features):
-            # Restore weights
-            for j, w in enumerate(assembler.weights):
-                w.data.copy_(original_weights[j])
-            assembler.pruned_aggregators.clear()
-            
-            # Check if pruning feature i causes significant drop
-            if i < len(assembler.weights):
-                assembler.prune_features(i)
-                
-                with torch.no_grad():
-                    pruned_output = assembler(X)
-                    pruned_accuracy = ((pruned_output > threshold).float() == Y).float().mean().item()
-                    drop = baseline_accuracy - pruned_accuracy
-                
-                if drop >= baseline_drop_threshold:
-                    baseline_features.append(i)
-                    feature_idx = assembler.locked_perm[i].item()
-                    print(f"   ✅ Baseline feature {i}: {feature_names[feature_idx]} (drop: {drop*100:.2f}%)")
-                else:
-                    # Baseline chain breaks at first non-significant feature
-                    break
+        print("🔍 Detecting baseline features (structural)...")
         
-        if len(baseline_features) > 0:
+        # In a left-associative tree, the first two features (indices 0 and 1) 
+        # ALWAYS form the baseline - they establish the initial conjunctive or disjunctive relationship
+        # This is a structural property, not dependent on accuracy drops
+        if num_features >= 2:
+            baseline_features = [0, 1]
+            
+            # Determine the baseline type from the first aggregator's bias
+            first_bias = assembler.biases[0].item()
+            if assembler.normalize_andness:
+                first_bias = torch.sigmoid(torch.tensor(first_bias)) * 3 - 1
+                first_bias = first_bias.item()
+            
+            baseline_type = "Conjunctive" if first_bias > 0.5 else "Disjunctive"
+            
+            feature_0_idx = assembler.locked_perm[0].item()
+            feature_1_idx = assembler.locked_perm[1].item()
+            
+            print(f"   📌 Baseline: Features 0 and 1 ({feature_names[feature_0_idx]} + {feature_names[feature_1_idx]})")
+            print(f"   📌 Baseline type: {baseline_type} (bias a={first_bias:.4f})")
+            print(f"   📌 These two features establish the initial logical relationship")
             print(f"📌 Baseline detected: {len(baseline_features)} features will NOT be pruned")
         else:
-            print("📌 No baseline detected")
+            print("📌 No baseline detected (fewer than 2 features)")
     
     # Cumulative pruning analysis (skip baseline features)
     print("\n🔬 Cumulative pruning analysis:")
-    for i in range(1, num_features):
+    
+    # Determine where to start pruning
+    start_feature = max(baseline_features) + 1 if baseline_features else 0
+    
+    # Track actual number of features pruned (excluding baseline)
+    # Note: Only iterate up to max_prunable_feature (num_aggregators-1) since there are num_features-1 aggregators
+    for i in range(start_feature, max_prunable_feature + 1):
         # Restore original weights
         for j, w in enumerate(assembler.weights):
             w.data.copy_(original_weights[j])
         assembler.pruned_aggregators.clear()
         
-        # Apply cumulative pruning: prune features 0 through i-1, EXCEPT baseline
-        for k in range(i):
-            if k not in baseline_features:  # Skip baseline features
+        # Apply cumulative pruning: prune features from start_feature through i, EXCEPT baseline
+        for k in range(start_feature, i + 1):
+            if k not in baseline_features:  # Skip baseline features (shouldn't happen with start_feature logic)
                 assembler.prune_features(k)
         
         with torch.no_grad():
@@ -480,8 +491,10 @@ def analyze_feature_importance_with_pruning(
             pruned_accuracy = ((pruned_output > threshold).float() == Y).float().mean().item()
             accuracies.append(pruned_accuracy)
             
-            baseline_note = f" (baseline: {len(baseline_features)})" if baseline_enabled and len(baseline_features) > 0 else ""
-            print(f"   Accuracy after pruning {i} feature(s){baseline_note}: {pruned_accuracy * 100:.2f}%")
+            # Calculate actual number of pruned features (excluding baseline)
+            num_pruned = i - start_feature + 1
+            baseline_note = f" (baseline protected: {len(baseline_features)} features)" if baseline_enabled and len(baseline_features) > 0 else ""
+            print(f"   Pruning feature {i} ({feature_names[assembler.locked_perm[i].item()]}): accuracy = {pruned_accuracy * 100:.2f}% (total pruned: {num_pruned}){baseline_note}")
     
     # Restore original weights
     for j, w in enumerate(assembler.weights):

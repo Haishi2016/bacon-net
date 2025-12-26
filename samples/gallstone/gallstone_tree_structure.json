@@ -3,233 +3,313 @@
   "layout": "left",
   "num_features": 38,
   "num_layers": 37,
+  "original_feature_order": [
+    "Age",
+    "Gender",
+    "Comorbidity",
+    "Coronary Artery Disease (CAD)",
+    "Hypothyroidism",
+    "Hyperlipidemia",
+    "Diabetes Mellitus (DM)",
+    "Height",
+    "Weight",
+    "Body Mass Index (BMI)",
+    "Total Body Water (TBW)",
+    "Extracellular Water (ECW)",
+    "Intracellular Water (ICW)",
+    "Extracellular Fluid/Total Body Water (ECF/TBW)",
+    "Total Body Fat Ratio (TBFR) (%)",
+    "Lean Mass (LM) (%)",
+    "Body Protein Content (Protein) (%)",
+    "Visceral Fat Rating (VFR)",
+    "Bone Mass (BM)",
+    "Muscle Mass (MM)",
+    "Obesity (%)",
+    "Total Fat Content (TFC)",
+    "Visceral Fat Area (VFA)",
+    "Visceral Muscle Area (VMA) (Kg)",
+    "Hepatic Fat Accumulation (HFA)",
+    "Glucose",
+    "Total Cholesterol (TC)",
+    "Low Density Lipoprotein (LDL)",
+    "High Density Lipoprotein (HDL)",
+    "Triglyceride",
+    "Aspartat Aminotransferaz (AST)",
+    "Alanin Aminotransferaz (ALT)",
+    "Alkaline Phosphatase (ALP)",
+    "Creatinine",
+    "Glomerular Filtration Rate (GFR)",
+    "C-Reactive Protein (CRP)",
+    "Hemoglobin (HGB)",
+    "Vitamin D"
+  ],
+  "locked_perm": [
+    29,
+    23,
+    11,
+    3,
+    17,
+    12,
+    21,
+    4,
+    31,
+    0,
+    18,
+    28,
+    25,
+    9,
+    33,
+    16,
+    20,
+    22,
+    10,
+    2,
+    26,
+    5,
+    8,
+    27,
+    15,
+    30,
+    24,
+    34,
+    7,
+    36,
+    19,
+    37,
+    13,
+    6,
+    14,
+    1,
+    32,
+    35
+  ],
   "features": [
     {
       "index": 0,
-      "original_name": "Age",
-      "display_name": "Hypothyroidism",
+      "original_name": "Triglyceride",
+      "display_name": "Triglyceride",
       "transformation": "identity"
     },
     {
       "index": 1,
-      "original_name": "Gender",
-      "display_name": "Body Protein Content (Protein) (%)",
+      "original_name": "Visceral Muscle Area (VMA) (Kg)",
+      "display_name": "Visceral Muscle Area (VMA) (Kg)",
       "transformation": "identity"
     },
     {
       "index": 2,
-      "original_name": "Comorbidity",
-      "display_name": "Total Fat Content (TFC)",
+      "original_name": "Extracellular Water (ECW)",
+      "display_name": "Extracellular Water (ECW)",
       "transformation": "identity"
     },
     {
       "index": 3,
       "original_name": "Coronary Artery Disease (CAD)",
-      "display_name": "Lean Mass (LM) (%)",
-      "transformation": "identity"
+      "display_name": "Coronary Artery Disease (CAD)",
+      "transformation": "stepdown"
     },
     {
       "index": 4,
-      "original_name": "Hypothyroidism",
-      "display_name": "Extracellular Fluid/Total Body Water (ECF/TBW)",
-      "transformation": "identity"
+      "original_name": "Visceral Fat Rating (VFR)",
+      "display_name": "Visceral Fat Rating (VFR)",
+      "transformation": "stepdown"
     },
     {
       "index": 5,
-      "original_name": "Hyperlipidemia",
-      "display_name": "Total Body Water (TBW)",
-      "transformation": "identity"
+      "original_name": "Intracellular Water (ICW)",
+      "display_name": "Intracellular Water (ICW)",
+      "transformation": "stepdown"
     },
     {
       "index": 6,
-      "original_name": "Diabetes Mellitus (DM)",
-      "display_name": "Intracellular Water (ICW)",
-      "transformation": "identity"
+      "original_name": "Total Fat Content (TFC)",
+      "display_name": "Total Fat Content (TFC)",
+      "transformation": "stepdown"
     },
     {
       "index": 7,
-      "original_name": "Height",
-      "display_name": "Weight",
-      "transformation": "identity"
+      "original_name": "Hypothyroidism",
+      "display_name": "Hypothyroidism",
+      "transformation": "stepdown"
     },
     {
       "index": 8,
-      "original_name": "Weight",
-      "display_name": "Vitamin D",
-      "transformation": "identity"
-    },
-    {
-      "index": 9,
-      "original_name": "Body Mass Index (BMI)",
-      "display_name": "Coronary Artery Disease (CAD)",
-      "transformation": "identity"
-    },
-    {
-      "index": 10,
-      "original_name": "Total Body Water (TBW)",
-      "display_name": "Body Mass Index (BMI)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 11,
-      "original_name": "Extracellular Water (ECW)",
-      "display_name": "Height",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 12,
-      "original_name": "Intracellular Water (ICW)",
-      "display_name": "Muscle Mass (MM)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 13,
-      "original_name": "Extracellular Fluid/Total Body Water (ECF/TBW)",
-      "display_name": "Comorbidity",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 14,
-      "original_name": "Total Body Fat Ratio (TBFR) (%)",
-      "display_name": "Age",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 15,
-      "original_name": "Lean Mass (LM) (%)",
-      "display_name": "Total Body Fat Ratio (TBFR) (%)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 16,
-      "original_name": "Body Protein Content (Protein) (%)",
+      "original_name": "Alanin Aminotransferaz (ALT)",
       "display_name": "Alanin Aminotransferaz (ALT)",
       "transformation": "stepdown"
     },
     {
-      "index": 17,
-      "original_name": "Visceral Fat Rating (VFR)",
-      "display_name": "Diabetes Mellitus (DM)",
-      "transformation": "stepdown"
+      "index": 9,
+      "original_name": "Age",
+      "display_name": "NOT Age",
+      "transformation": "negation"
     },
     {
-      "index": 18,
+      "index": 10,
       "original_name": "Bone Mass (BM)",
-      "display_name": "Hepatic Fat Accumulation (HFA)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 19,
-      "original_name": "Muscle Mass (MM)",
-      "display_name": "Hyperlipidemia",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 20,
-      "original_name": "Obesity (%)",
-      "display_name": "Extracellular Water (ECW)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 21,
-      "original_name": "Total Fat Content (TFC)",
-      "display_name": "Total Cholesterol (TC)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 22,
-      "original_name": "Visceral Fat Area (VFA)",
-      "display_name": "Obesity (%)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 23,
-      "original_name": "Visceral Muscle Area (VMA) (Kg)",
-      "display_name": "Creatinine",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 24,
-      "original_name": "Hepatic Fat Accumulation (HFA)",
-      "display_name": "Alkaline Phosphatase (ALP)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 25,
-      "original_name": "Glucose",
-      "display_name": "Aspartat Aminotransferaz (AST)",
-      "transformation": "stepdown"
-    },
-    {
-      "index": 26,
-      "original_name": "Total Cholesterol (TC)",
-      "display_name": "NOT Triglyceride",
-      "transformation": "negation"
-    },
-    {
-      "index": 27,
-      "original_name": "Low Density Lipoprotein (LDL)",
-      "display_name": "NOT Glucose",
-      "transformation": "negation"
-    },
-    {
-      "index": 28,
-      "original_name": "High Density Lipoprotein (HDL)",
-      "display_name": "NOT Hemoglobin (HGB)",
-      "transformation": "negation"
-    },
-    {
-      "index": 29,
-      "original_name": "Triglyceride",
-      "display_name": "NOT Glomerular Filtration Rate (GFR)",
-      "transformation": "negation"
-    },
-    {
-      "index": 30,
-      "original_name": "Aspartat Aminotransferaz (AST)",
-      "display_name": "NOT Low Density Lipoprotein (LDL)",
-      "transformation": "negation"
-    },
-    {
-      "index": 31,
-      "original_name": "Alanin Aminotransferaz (ALT)",
-      "display_name": "NOT Visceral Fat Area (VFA)",
-      "transformation": "negation"
-    },
-    {
-      "index": 32,
-      "original_name": "Alkaline Phosphatase (ALP)",
-      "display_name": "High Density Lipoprotein (HDL)",
-      "transformation": "peak"
-    },
-    {
-      "index": 33,
-      "original_name": "Creatinine",
       "display_name": "NOT Bone Mass (BM)",
       "transformation": "negation"
     },
     {
-      "index": 34,
-      "original_name": "Glomerular Filtration Rate (GFR)",
-      "display_name": "C-Reactive Protein (CRP)",
+      "index": 11,
+      "original_name": "High Density Lipoprotein (HDL)",
+      "display_name": "NOT High Density Lipoprotein (HDL)",
+      "transformation": "negation"
+    },
+    {
+      "index": 12,
+      "original_name": "Glucose",
+      "display_name": "NOT Glucose",
+      "transformation": "negation"
+    },
+    {
+      "index": 13,
+      "original_name": "Body Mass Index (BMI)",
+      "display_name": "NOT Body Mass Index (BMI)",
+      "transformation": "negation"
+    },
+    {
+      "index": 14,
+      "original_name": "Creatinine",
+      "display_name": "NOT Creatinine",
+      "transformation": "negation"
+    },
+    {
+      "index": 15,
+      "original_name": "Body Protein Content (Protein) (%)",
+      "display_name": "NOT Body Protein Content (Protein) (%)",
+      "transformation": "negation"
+    },
+    {
+      "index": 16,
+      "original_name": "Obesity (%)",
+      "display_name": "NOT Obesity (%)",
+      "transformation": "negation"
+    },
+    {
+      "index": 17,
+      "original_name": "Visceral Fat Area (VFA)",
+      "display_name": "NOT Visceral Fat Area (VFA)",
+      "transformation": "negation"
+    },
+    {
+      "index": 18,
+      "original_name": "Total Body Water (TBW)",
+      "display_name": "NOT Total Body Water (TBW)",
+      "transformation": "negation"
+    },
+    {
+      "index": 19,
+      "original_name": "Comorbidity",
+      "display_name": "NOT Comorbidity",
+      "transformation": "negation"
+    },
+    {
+      "index": 20,
+      "original_name": "Total Cholesterol (TC)",
+      "display_name": "NOT Total Cholesterol (TC)",
+      "transformation": "negation"
+    },
+    {
+      "index": 21,
+      "original_name": "Hyperlipidemia",
+      "display_name": "NOT Hyperlipidemia",
+      "transformation": "negation"
+    },
+    {
+      "index": 22,
+      "original_name": "Weight",
+      "display_name": "Weight",
       "transformation": "valley"
     },
     {
-      "index": 35,
-      "original_name": "C-Reactive Protein (CRP)",
-      "display_name": "Gender",
+      "index": 23,
+      "original_name": "Low Density Lipoprotein (LDL)",
+      "display_name": "Low Density Lipoprotein (LDL)",
+      "transformation": "peak"
+    },
+    {
+      "index": 24,
+      "original_name": "Lean Mass (LM) (%)",
+      "display_name": "Lean Mass (LM) (%)",
+      "transformation": "peak"
+    },
+    {
+      "index": 25,
+      "original_name": "Aspartat Aminotransferaz (AST)",
+      "display_name": "Aspartat Aminotransferaz (AST)",
+      "transformation": "peak"
+    },
+    {
+      "index": 26,
+      "original_name": "Hepatic Fat Accumulation (HFA)",
+      "display_name": "Hepatic Fat Accumulation (HFA)",
+      "transformation": "peak"
+    },
+    {
+      "index": 27,
+      "original_name": "Glomerular Filtration Rate (GFR)",
+      "display_name": "Glomerular Filtration Rate (GFR)",
+      "transformation": "peak"
+    },
+    {
+      "index": 28,
+      "original_name": "Height",
+      "display_name": "Height",
+      "transformation": "peak"
+    },
+    {
+      "index": 29,
+      "original_name": "Hemoglobin (HGB)",
+      "display_name": "Hemoglobin (HGB)",
+      "transformation": "peak"
+    },
+    {
+      "index": 30,
+      "original_name": "Muscle Mass (MM)",
+      "display_name": "Muscle Mass (MM)",
+      "transformation": "peak"
+    },
+    {
+      "index": 31,
+      "original_name": "Vitamin D",
+      "display_name": "Vitamin D",
+      "transformation": "peak"
+    },
+    {
+      "index": 32,
+      "original_name": "Extracellular Fluid/Total Body Water (ECF/TBW)",
+      "display_name": "Extracellular Fluid/Total Body Water (ECF/TBW)",
+      "transformation": "peak"
+    },
+    {
+      "index": 33,
+      "original_name": "Diabetes Mellitus (DM)",
+      "display_name": "Diabetes Mellitus (DM)",
       "transformation": "stepdown"
     },
     {
-      "index": 36,
-      "original_name": "Hemoglobin (HGB)",
-      "display_name": "Visceral Fat Rating (VFR)",
+      "index": 34,
+      "original_name": "Total Body Fat Ratio (TBFR) (%)",
+      "display_name": "Total Body Fat Ratio (TBFR) (%)",
+      "transformation": "identity"
+    },
+    {
+      "index": 35,
+      "original_name": "Gender",
+      "display_name": "Gender",
       "transformation": "stepup"
     },
     {
+      "index": 36,
+      "original_name": "Alkaline Phosphatase (ALP)",
+      "display_name": "Alkaline Phosphatase (ALP)",
+      "transformation": "identity"
+    },
+    {
       "index": 37,
-      "original_name": "Vitamin D",
-      "display_name": "Visceral Muscle Area (VMA) (Kg)",
+      "original_name": "C-Reactive Protein (CRP)",
+      "display_name": "C-Reactive Protein (CRP)",
       "transformation": "identity"
     }
   ],
@@ -237,7 +317,7 @@
     {
       "layer": 0,
       "aggregator_index": 0,
-      "andness": 1.423878,
+      "andness": 0.022725,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -245,18 +325,18 @@
       "left_input": {
         "type": "feature",
         "index": 0,
-        "name": "Hypothyroidism"
+        "name": "Triglyceride"
       },
       "right_input": {
         "type": "feature",
         "index": 1,
-        "name": "Body Protein Content (Protein) (%)"
+        "name": "Visceral Muscle Area (VMA) (Kg)"
       }
     },
     {
       "layer": 1,
       "aggregator_index": 1,
-      "andness": 0.41966,
+      "andness": 0.964658,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -268,13 +348,13 @@
       "right_input": {
         "type": "feature",
         "index": 2,
-        "name": "Total Fat Content (TFC)"
+        "name": "Extracellular Water (ECW)"
       }
     },
     {
       "layer": 2,
       "aggregator_index": 2,
-      "andness": 0.529488,
+      "andness": 1.272774,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -286,13 +366,13 @@
       "right_input": {
         "type": "feature",
         "index": 3,
-        "name": "Lean Mass (LM) (%)"
+        "name": "Coronary Artery Disease (CAD)"
       }
     },
     {
       "layer": 3,
       "aggregator_index": 3,
-      "andness": 0.025401,
+      "andness": 0.583606,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -304,13 +384,13 @@
       "right_input": {
         "type": "feature",
         "index": 4,
-        "name": "Extracellular Fluid/Total Body Water (ECF/TBW)"
+        "name": "Visceral Fat Rating (VFR)"
       }
     },
     {
       "layer": 4,
       "aggregator_index": 4,
-      "andness": 0.170195,
+      "andness": 1.299655,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -322,13 +402,13 @@
       "right_input": {
         "type": "feature",
         "index": 5,
-        "name": "Total Body Water (TBW)"
+        "name": "Intracellular Water (ICW)"
       }
     },
     {
       "layer": 5,
       "aggregator_index": 5,
-      "andness": 1.555507,
+      "andness": 1.542706,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -340,13 +420,13 @@
       "right_input": {
         "type": "feature",
         "index": 6,
-        "name": "Intracellular Water (ICW)"
+        "name": "Total Fat Content (TFC)"
       }
     },
     {
       "layer": 6,
       "aggregator_index": 6,
-      "andness": 0.468284,
+      "andness": 0.288764,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -358,13 +438,13 @@
       "right_input": {
         "type": "feature",
         "index": 7,
-        "name": "Weight"
+        "name": "Hypothyroidism"
       }
     },
     {
       "layer": 7,
       "aggregator_index": 7,
-      "andness": 0.410433,
+      "andness": 1.17634,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -376,13 +456,13 @@
       "right_input": {
         "type": "feature",
         "index": 8,
-        "name": "Vitamin D"
+        "name": "Alanin Aminotransferaz (ALT)"
       }
     },
     {
       "layer": 8,
       "aggregator_index": 8,
-      "andness": 1.475665,
+      "andness": 0.31136,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -394,13 +474,13 @@
       "right_input": {
         "type": "feature",
         "index": 9,
-        "name": "Coronary Artery Disease (CAD)"
+        "name": "NOT Age"
       }
     },
     {
       "layer": 9,
       "aggregator_index": 9,
-      "andness": 0.056242,
+      "andness": 1.497592,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -412,13 +492,13 @@
       "right_input": {
         "type": "feature",
         "index": 10,
-        "name": "Body Mass Index (BMI)"
+        "name": "NOT Bone Mass (BM)"
       }
     },
     {
       "layer": 10,
       "aggregator_index": 10,
-      "andness": 0.231133,
+      "andness": 0.307535,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -430,13 +510,13 @@
       "right_input": {
         "type": "feature",
         "index": 11,
-        "name": "Height"
+        "name": "NOT High Density Lipoprotein (HDL)"
       }
     },
     {
       "layer": 11,
       "aggregator_index": 11,
-      "andness": 1.488832,
+      "andness": 1.155425,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -448,13 +528,13 @@
       "right_input": {
         "type": "feature",
         "index": 12,
-        "name": "Muscle Mass (MM)"
+        "name": "NOT Glucose"
       }
     },
     {
       "layer": 12,
       "aggregator_index": 12,
-      "andness": 0.486173,
+      "andness": 0.755762,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -466,13 +546,13 @@
       "right_input": {
         "type": "feature",
         "index": 13,
-        "name": "Comorbidity"
+        "name": "NOT Body Mass Index (BMI)"
       }
     },
     {
       "layer": 13,
       "aggregator_index": 13,
-      "andness": 0.912396,
+      "andness": 1.52914,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -484,13 +564,13 @@
       "right_input": {
         "type": "feature",
         "index": 14,
-        "name": "Age"
+        "name": "NOT Creatinine"
       }
     },
     {
       "layer": 14,
       "aggregator_index": 14,
-      "andness": 0.091262,
+      "andness": 0.065424,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -502,13 +582,13 @@
       "right_input": {
         "type": "feature",
         "index": 15,
-        "name": "Total Body Fat Ratio (TBFR) (%)"
+        "name": "NOT Body Protein Content (Protein) (%)"
       }
     },
     {
       "layer": 15,
       "aggregator_index": 15,
-      "andness": 1.770135,
+      "andness": 0.306288,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -520,13 +600,13 @@
       "right_input": {
         "type": "feature",
         "index": 16,
-        "name": "Alanin Aminotransferaz (ALT)"
+        "name": "NOT Obesity (%)"
       }
     },
     {
       "layer": 16,
       "aggregator_index": 16,
-      "andness": 1.61734,
+      "andness": 1.678161,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -538,13 +618,13 @@
       "right_input": {
         "type": "feature",
         "index": 17,
-        "name": "Diabetes Mellitus (DM)"
+        "name": "NOT Visceral Fat Area (VFA)"
       }
     },
     {
       "layer": 17,
       "aggregator_index": 17,
-      "andness": 0.277891,
+      "andness": 1.752446,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -556,13 +636,13 @@
       "right_input": {
         "type": "feature",
         "index": 18,
-        "name": "Hepatic Fat Accumulation (HFA)"
+        "name": "NOT Total Body Water (TBW)"
       }
     },
     {
       "layer": 18,
       "aggregator_index": 18,
-      "andness": 1.589628,
+      "andness": 1.705927,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -574,13 +654,13 @@
       "right_input": {
         "type": "feature",
         "index": 19,
-        "name": "Hyperlipidemia"
+        "name": "NOT Comorbidity"
       }
     },
     {
       "layer": 19,
       "aggregator_index": 19,
-      "andness": 0.870646,
+      "andness": 1.638662,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -592,13 +672,13 @@
       "right_input": {
         "type": "feature",
         "index": 20,
-        "name": "Extracellular Water (ECW)"
+        "name": "NOT Total Cholesterol (TC)"
       }
     },
     {
       "layer": 20,
       "aggregator_index": 20,
-      "andness": 0.003403,
+      "andness": 0.223027,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -610,13 +690,13 @@
       "right_input": {
         "type": "feature",
         "index": 21,
-        "name": "Total Cholesterol (TC)"
+        "name": "NOT Hyperlipidemia"
       }
     },
     {
       "layer": 21,
       "aggregator_index": 21,
-      "andness": 1.515601,
+      "andness": 1.943984,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -628,13 +708,13 @@
       "right_input": {
         "type": "feature",
         "index": 22,
-        "name": "Obesity (%)"
+        "name": "Weight"
       }
     },
     {
       "layer": 22,
       "aggregator_index": 22,
-      "andness": 1.329179,
+      "andness": -0.986332,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -646,13 +726,13 @@
       "right_input": {
         "type": "feature",
         "index": 23,
-        "name": "Creatinine"
+        "name": "Low Density Lipoprotein (LDL)"
       }
     },
     {
       "layer": 23,
       "aggregator_index": 23,
-      "andness": 1.76093,
+      "andness": 1.895156,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -664,13 +744,13 @@
       "right_input": {
         "type": "feature",
         "index": 24,
-        "name": "Alkaline Phosphatase (ALP)"
+        "name": "Lean Mass (LM) (%)"
       }
     },
     {
       "layer": 24,
       "aggregator_index": 24,
-      "andness": 1.768088,
+      "andness": -0.932236,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -688,7 +768,7 @@
     {
       "layer": 25,
       "aggregator_index": 25,
-      "andness": 0.532266,
+      "andness": -0.169552,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -700,13 +780,13 @@
       "right_input": {
         "type": "feature",
         "index": 26,
-        "name": "NOT Triglyceride"
+        "name": "Hepatic Fat Accumulation (HFA)"
       }
     },
     {
       "layer": 26,
       "aggregator_index": 26,
-      "andness": 0.049444,
+      "andness": -0.608108,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -718,13 +798,13 @@
       "right_input": {
         "type": "feature",
         "index": 27,
-        "name": "NOT Glucose"
+        "name": "Glomerular Filtration Rate (GFR)"
       }
     },
     {
       "layer": 27,
       "aggregator_index": 27,
-      "andness": 1.780229,
+      "andness": 1.495534,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -736,13 +816,13 @@
       "right_input": {
         "type": "feature",
         "index": 28,
-        "name": "NOT Hemoglobin (HGB)"
+        "name": "Height"
       }
     },
     {
       "layer": 28,
       "aggregator_index": 28,
-      "andness": 1.43497,
+      "andness": 0.253844,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -754,13 +834,13 @@
       "right_input": {
         "type": "feature",
         "index": 29,
-        "name": "NOT Glomerular Filtration Rate (GFR)"
+        "name": "Hemoglobin (HGB)"
       }
     },
     {
       "layer": 29,
       "aggregator_index": 29,
-      "andness": 1.651287,
+      "andness": 1.832037,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -772,13 +852,13 @@
       "right_input": {
         "type": "feature",
         "index": 30,
-        "name": "NOT Low Density Lipoprotein (LDL)"
+        "name": "Muscle Mass (MM)"
       }
     },
     {
       "layer": 30,
       "aggregator_index": 30,
-      "andness": -0.73992,
+      "andness": -0.999968,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -790,13 +870,13 @@
       "right_input": {
         "type": "feature",
         "index": 31,
-        "name": "NOT Visceral Fat Area (VFA)"
+        "name": "Vitamin D"
       }
     },
     {
       "layer": 31,
       "aggregator_index": 31,
-      "andness": -0.147621,
+      "andness": 0.006938,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -808,13 +888,13 @@
       "right_input": {
         "type": "feature",
         "index": 32,
-        "name": "High Density Lipoprotein (HDL)"
+        "name": "Extracellular Fluid/Total Body Water (ECF/TBW)"
       }
     },
     {
       "layer": 32,
       "aggregator_index": 32,
-      "andness": 1.236572,
+      "andness": 0.15288,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -826,13 +906,13 @@
       "right_input": {
         "type": "feature",
         "index": 33,
-        "name": "NOT Bone Mass (BM)"
+        "name": "Diabetes Mellitus (DM)"
       }
     },
     {
       "layer": 33,
       "aggregator_index": 33,
-      "andness": -0.971538,
+      "andness": 1.302682,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -844,13 +924,13 @@
       "right_input": {
         "type": "feature",
         "index": 34,
-        "name": "C-Reactive Protein (CRP)"
+        "name": "Total Body Fat Ratio (TBFR) (%)"
       }
     },
     {
       "layer": 34,
       "aggregator_index": 34,
-      "andness": -0.849859,
+      "andness": 1.114403,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -868,7 +948,7 @@
     {
       "layer": 35,
       "aggregator_index": 35,
-      "andness": 1.991548,
+      "andness": -0.412855,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -880,13 +960,13 @@
       "right_input": {
         "type": "feature",
         "index": 36,
-        "name": "Visceral Fat Rating (VFR)"
+        "name": "Alkaline Phosphatase (ALP)"
       }
     },
     {
       "layer": 36,
       "aggregator_index": 36,
-      "andness": 0.862408,
+      "andness": 1.987478,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -898,7 +978,7 @@
       "right_input": {
         "type": "feature",
         "index": 37,
-        "name": "Visceral Muscle Area (VMA) (Kg)"
+        "name": "C-Reactive Protein (CRP)"
       }
     }
   ]
