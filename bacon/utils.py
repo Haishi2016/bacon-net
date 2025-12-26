@@ -391,7 +391,6 @@ def analyze_feature_importance_with_pruning(
     feature_names, 
     threshold=0.5,
     baseline_enabled=False,
-    baseline_drop_threshold=0.05,
     device=None
 ):
     """Analyze feature importance through cumulative pruning.
@@ -435,9 +434,10 @@ def analyze_feature_importance_with_pruning(
     original_weights = [w.data.clone() for w in assembler.weights]
     
     # IMPORTANT: In a left-associative tree, there are num_features-1 aggregators
-    # So we can only prune features 0 through num_features-2
+    # Feature at position i uses aggregator i-1 to combine with previous result
+    # So we can prune features 0 through num_features-1 (all features)
     num_aggregators = len(assembler.weights)
-    max_prunable_feature = num_aggregators - 1
+    max_prunable_feature = num_aggregators  # This equals num_features - 1
     
     # Detect baseline structurally
     if baseline_enabled:
@@ -474,7 +474,7 @@ def analyze_feature_importance_with_pruning(
     start_feature = max(baseline_features) + 1 if baseline_features else 0
     
     # Track actual number of features pruned (excluding baseline)
-    # Note: Only iterate up to max_prunable_feature (num_aggregators-1) since there are num_features-1 aggregators
+    # Note: Only iterate up to max_prunable_feature (num_aggregators) since there are num_features-1 aggregators
     for i in range(start_feature, max_prunable_feature + 1):
         # Restore original weights
         for j, w in enumerate(assembler.weights):
@@ -547,17 +547,50 @@ def export_tree_structure_to_json(model, feature_names=None):
         original_leaf_names = leaf_names.copy()  # Keep permuted but untransformed names
         leaf_names = []
         transformations_applied = []
+        transformation_params = []
+        
         for i, name in enumerate(original_leaf_names):
             transform_idx = selected_transforms[i].item()
             transform_name = transformation_names[transform_idx]
+            transform_obj = model.transformation_layer.transformations[transform_idx]
             transformations_applied.append(transform_name)
-            if transform_name == 'negation':  # negation
+            
+            # Get learned parameters for this transformation
+            params = {}
+            if hasattr(transform_obj, 'get_param_summary'):
+                # Extract params for this transformation from ParameterDict
+                # Parameters are stored as "t{idx}_{param_name}"
+                transform_params_dict = {}
+                for key, value in model.transformation_layer.transform_params.items():
+                    if key.startswith(f"t{transform_idx}_"):
+                        param_name = key[len(f"t{transform_idx}_"):]
+                        transform_params_dict[param_name] = value
+                
+                if transform_params_dict:
+                    params = transform_obj.get_param_summary(transform_params_dict, i)
+            transformation_params.append(params)
+            
+            # Format display name based on transformation type
+            if transform_name == 'negation':
                 leaf_names.append(f"NOT {name}")
-            else:
+            elif transform_name == 'peak':
+                peak_loc = params.get('peak_location', '?')
+                leaf_names.append(f"PEAK({name}, t={peak_loc})")
+            elif transform_name == 'valley':
+                valley_loc = params.get('valley_location', '?')
+                leaf_names.append(f"VALLEY({name}, t={valley_loc})")
+            elif transform_name == 'step_up':
+                threshold = params.get('threshold', '?')
+                leaf_names.append(f"STEP_UP({name}, t={threshold})")
+            elif transform_name == 'step_down':
+                threshold = params.get('threshold', '?')
+                leaf_names.append(f"STEP_DOWN({name}, t={threshold})")
+            else:  # identity or unknown
                 leaf_names.append(name)
     else:
         original_leaf_names = leaf_names.copy()  # No transformations, but keep copy
         transformations_applied = ["identity"] * len(leaf_names)
+        transformation_params = [{}] * len(leaf_names)
     
     # Extract weights and biases
     if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
@@ -585,15 +618,18 @@ def export_tree_structure_to_json(model, feature_names=None):
     # original_leaf_names are the permuted feature names (before transformation display)
     # leaf_names are the display names (after transformation, e.g., "NOT age")
     # transformations_applied are the transformation types
-    for i, (display_name, orig_name, transform) in enumerate(zip(leaf_names, 
-                                                                   original_leaf_names,
-                                                                   transformations_applied)):
-        tree_structure["features"].append({
+    # transformation_params are the learned parameters
+    for i in range(len(leaf_names)):
+        feature_info = {
             "index": i,
-            "original_name": orig_name,  # Permuted but untransformed name
-            "display_name": display_name,  # With transformation applied
-            "transformation": transform
-        })
+            "original_name": original_leaf_names[i],  # Permuted but untransformed name
+            "display_name": leaf_names[i],  # With transformation applied
+            "transformation": transformations_applied[i]
+        }
+        # Add learned parameters if available
+        if transformation_params[i]:
+            feature_info["transformation_params"] = transformation_params[i]
+        tree_structure["features"].append(feature_info)
     
     # Build node structure based on layout
     if effective_layout == 'left':
