@@ -1,0 +1,491 @@
+{
+  "model_type": "binaryTreeLogicNet",
+  "layout": "left",
+  "num_features": 19,
+  "num_layers": 18,
+  "original_feature_order": [
+    "behavior_eating",
+    "behavior_personalHygiene",
+    "intention_aggregation",
+    "intention_commitment",
+    "attitude_consistency",
+    "attitude_spontaneity",
+    "norm_significantPerson",
+    "norm_fulfillment",
+    "perception_vulnerability",
+    "perception_severity",
+    "motivation_strength",
+    "motivation_willingness",
+    "socialSupport_emotionality",
+    "socialSupport_appreciation",
+    "socialSupport_instrumental",
+    "empowerment_knowledge",
+    "empowerment_abilities",
+    "empowerment_desires",
+    "behavior_sexualRisk"
+  ],
+  "locked_perm": [
+    17,
+    3,
+    13,
+    7,
+    14,
+    12,
+    0,
+    4,
+    5,
+    1,
+    15,
+    2,
+    11,
+    8,
+    6,
+    9,
+    18,
+    16,
+    10
+  ],
+  "features": [
+    {
+      "index": 0,
+      "original_name": "empowerment_desires",
+      "display_name": "NOT empowerment_desires",
+      "transformation": "negation"
+    },
+    {
+      "index": 1,
+      "original_name": "intention_commitment",
+      "display_name": "NOT intention_commitment",
+      "transformation": "negation"
+    },
+    {
+      "index": 2,
+      "original_name": "socialSupport_appreciation",
+      "display_name": "NOT socialSupport_appreciation",
+      "transformation": "negation"
+    },
+    {
+      "index": 3,
+      "original_name": "norm_fulfillment",
+      "display_name": "NOT norm_fulfillment",
+      "transformation": "negation"
+    },
+    {
+      "index": 4,
+      "original_name": "socialSupport_instrumental",
+      "display_name": "NOT socialSupport_instrumental",
+      "transformation": "negation"
+    },
+    {
+      "index": 5,
+      "original_name": "socialSupport_emotionality",
+      "display_name": "NOT socialSupport_emotionality",
+      "transformation": "negation"
+    },
+    {
+      "index": 6,
+      "original_name": "behavior_eating",
+      "display_name": "NOT behavior_eating",
+      "transformation": "negation"
+    },
+    {
+      "index": 7,
+      "original_name": "attitude_consistency",
+      "display_name": "NOT attitude_consistency",
+      "transformation": "negation"
+    },
+    {
+      "index": 8,
+      "original_name": "attitude_spontaneity",
+      "display_name": "NOT attitude_spontaneity",
+      "transformation": "negation"
+    },
+    {
+      "index": 9,
+      "original_name": "behavior_personalHygiene",
+      "display_name": "NOT behavior_personalHygiene",
+      "transformation": "negation"
+    },
+    {
+      "index": 10,
+      "original_name": "empowerment_knowledge",
+      "display_name": "NOT empowerment_knowledge",
+      "transformation": "negation"
+    },
+    {
+      "index": 11,
+      "original_name": "intention_aggregation",
+      "display_name": "NOT intention_aggregation",
+      "transformation": "negation"
+    },
+    {
+      "index": 12,
+      "original_name": "motivation_willingness",
+      "display_name": "NOT motivation_willingness",
+      "transformation": "negation"
+    },
+    {
+      "index": 13,
+      "original_name": "perception_vulnerability",
+      "display_name": "NOT perception_vulnerability",
+      "transformation": "negation"
+    },
+    {
+      "index": 14,
+      "original_name": "norm_significantPerson",
+      "display_name": "NOT norm_significantPerson",
+      "transformation": "negation"
+    },
+    {
+      "index": 15,
+      "original_name": "perception_severity",
+      "display_name": "NOT perception_severity",
+      "transformation": "negation"
+    },
+    {
+      "index": 16,
+      "original_name": "behavior_sexualRisk",
+      "display_name": "NOT behavior_sexualRisk",
+      "transformation": "negation"
+    },
+    {
+      "index": 17,
+      "original_name": "empowerment_abilities",
+      "display_name": "NOT empowerment_abilities",
+      "transformation": "negation"
+    },
+    {
+      "index": 18,
+      "original_name": "motivation_strength",
+      "display_name": "NOT motivation_strength",
+      "transformation": "negation"
+    }
+  ],
+  "nodes": [
+    {
+      "layer": 0,
+      "aggregator_index": 0,
+      "andness": 0.17039,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "feature",
+        "index": 0,
+        "name": "NOT empowerment_desires"
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 1,
+        "name": "NOT intention_commitment"
+      }
+    },
+    {
+      "layer": 1,
+      "aggregator_index": 1,
+      "andness": 0.929313,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 0
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 2,
+        "name": "NOT socialSupport_appreciation"
+      }
+    },
+    {
+      "layer": 2,
+      "aggregator_index": 2,
+      "andness": 0.430956,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 1
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 3,
+        "name": "NOT norm_fulfillment"
+      }
+    },
+    {
+      "layer": 3,
+      "aggregator_index": 3,
+      "andness": 0.890935,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 2
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 4,
+        "name": "NOT socialSupport_instrumental"
+      }
+    },
+    {
+      "layer": 4,
+      "aggregator_index": 4,
+      "andness": 0.730916,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 3
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 5,
+        "name": "NOT socialSupport_emotionality"
+      }
+    },
+    {
+      "layer": 5,
+      "aggregator_index": 5,
+      "andness": 1.753448,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 4
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 6,
+        "name": "NOT behavior_eating"
+      }
+    },
+    {
+      "layer": 6,
+      "aggregator_index": 6,
+      "andness": 1.876327,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 5
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 7,
+        "name": "NOT attitude_consistency"
+      }
+    },
+    {
+      "layer": 7,
+      "aggregator_index": 7,
+      "andness": 1.790094,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 6
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 8,
+        "name": "NOT attitude_spontaneity"
+      }
+    },
+    {
+      "layer": 8,
+      "aggregator_index": 8,
+      "andness": 1.289631,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 7
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 9,
+        "name": "NOT behavior_personalHygiene"
+      }
+    },
+    {
+      "layer": 9,
+      "aggregator_index": 9,
+      "andness": 1.452811,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 8
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 10,
+        "name": "NOT empowerment_knowledge"
+      }
+    },
+    {
+      "layer": 10,
+      "aggregator_index": 10,
+      "andness": -0.998475,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 9
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 11,
+        "name": "NOT intention_aggregation"
+      }
+    },
+    {
+      "layer": 11,
+      "aggregator_index": 11,
+      "andness": 1.930563,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 10
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 12,
+        "name": "NOT motivation_willingness"
+      }
+    },
+    {
+      "layer": 12,
+      "aggregator_index": 12,
+      "andness": 1.139521,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 11
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 13,
+        "name": "NOT perception_vulnerability"
+      }
+    },
+    {
+      "layer": 13,
+      "aggregator_index": 13,
+      "andness": -0.99986,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 12
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 14,
+        "name": "NOT norm_significantPerson"
+      }
+    },
+    {
+      "layer": 14,
+      "aggregator_index": 14,
+      "andness": 0.095562,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 13
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 15,
+        "name": "NOT perception_severity"
+      }
+    },
+    {
+      "layer": 15,
+      "aggregator_index": 15,
+      "andness": 0.192717,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 14
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 16,
+        "name": "NOT behavior_sexualRisk"
+      }
+    },
+    {
+      "layer": 16,
+      "aggregator_index": 16,
+      "andness": 0.940751,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 15
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 17,
+        "name": "NOT empowerment_abilities"
+      }
+    },
+    {
+      "layer": 17,
+      "aggregator_index": 17,
+      "andness": -0.865499,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 16
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 18,
+        "name": "NOT motivation_strength"
+      }
+    }
+  ]
+}

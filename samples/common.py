@@ -380,6 +380,33 @@ def run_standard_analysis(
         device=device
     )
     
+    # Perform growing analysis (incremental feature addition)
+    print("\n" + "="*60)
+    print("FEATURE GROWING ANALYSIS")
+    print("="*60)
+    print("📊 Using TEST data for growing analysis")
+    from bacon.utils import analyze_feature_importance_with_growing
+    growing_results = analyze_feature_importance_with_growing(
+        model,
+        X_test,
+        Y_test,
+        feature_names,
+        threshold=pruning_threshold,
+        device=device
+    )
+    
+    # Plot growing analysis
+    if len(growing_results['accuracies']) > 0:
+        plot_title = f"{title_prefix}: Accuracy vs. Number of Features (Growing)" if title_prefix else "Accuracy vs. Number of Features (Growing)"
+        filename = f"{title_prefix.lower().replace(' ', '_')}_growing.png" if title_prefix else "growing.png"
+        
+        from bacon.visualization import plot_feature_growing_analysis
+        plot_feature_growing_analysis(
+            growing_results['accuracies'],
+            title=plot_title,
+            filename=filename
+        )
+    
     # Visualize predictions
     best_threshold = threshold_results['accuracy']['threshold']
     visualize_predictions(model, X_all, Y_all, best_threshold)
@@ -388,5 +415,6 @@ def run_standard_analysis(
     
     return {
         'thresholds': threshold_results,
-        'pruning': pruning_results
+        'pruning': pruning_results,
+        'growing': growing_results
     }
