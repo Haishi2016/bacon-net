@@ -1,0 +1,491 @@
+{
+  "model_type": "binaryTreeLogicNet",
+  "layout": "left",
+  "num_features": 19,
+  "num_layers": 18,
+  "original_feature_order": [
+    "Age",
+    "Sex",
+    "Steroid",
+    "Antivirals",
+    "Fatigue",
+    "Malaise",
+    "Anorexia",
+    "Liver Big",
+    "Liver Firm",
+    "Spleen Palpable",
+    "Spiders",
+    "Ascites",
+    "Varices",
+    "Bilirubin",
+    "Alk Phosphate",
+    "Sgot",
+    "Albumin",
+    "Protime",
+    "Histology"
+  ],
+  "locked_perm": [
+    7,
+    18,
+    4,
+    14,
+    8,
+    9,
+    12,
+    3,
+    10,
+    6,
+    0,
+    1,
+    15,
+    13,
+    16,
+    5,
+    17,
+    2,
+    11
+  ],
+  "features": [
+    {
+      "index": 0,
+      "original_name": "Liver Big",
+      "display_name": "NOT Liver Big",
+      "transformation": "negation"
+    },
+    {
+      "index": 1,
+      "original_name": "Histology",
+      "display_name": "NOT Histology",
+      "transformation": "negation"
+    },
+    {
+      "index": 2,
+      "original_name": "Fatigue",
+      "display_name": "NOT Fatigue",
+      "transformation": "negation"
+    },
+    {
+      "index": 3,
+      "original_name": "Alk Phosphate",
+      "display_name": "NOT Alk Phosphate",
+      "transformation": "negation"
+    },
+    {
+      "index": 4,
+      "original_name": "Liver Firm",
+      "display_name": "NOT Liver Firm",
+      "transformation": "negation"
+    },
+    {
+      "index": 5,
+      "original_name": "Spleen Palpable",
+      "display_name": "NOT Spleen Palpable",
+      "transformation": "negation"
+    },
+    {
+      "index": 6,
+      "original_name": "Varices",
+      "display_name": "NOT Varices",
+      "transformation": "negation"
+    },
+    {
+      "index": 7,
+      "original_name": "Antivirals",
+      "display_name": "NOT Antivirals",
+      "transformation": "negation"
+    },
+    {
+      "index": 8,
+      "original_name": "Spiders",
+      "display_name": "NOT Spiders",
+      "transformation": "negation"
+    },
+    {
+      "index": 9,
+      "original_name": "Anorexia",
+      "display_name": "NOT Anorexia",
+      "transformation": "negation"
+    },
+    {
+      "index": 10,
+      "original_name": "Age",
+      "display_name": "NOT Age",
+      "transformation": "negation"
+    },
+    {
+      "index": 11,
+      "original_name": "Sex",
+      "display_name": "NOT Sex",
+      "transformation": "negation"
+    },
+    {
+      "index": 12,
+      "original_name": "Sgot",
+      "display_name": "NOT Sgot",
+      "transformation": "negation"
+    },
+    {
+      "index": 13,
+      "original_name": "Bilirubin",
+      "display_name": "NOT Bilirubin",
+      "transformation": "negation"
+    },
+    {
+      "index": 14,
+      "original_name": "Albumin",
+      "display_name": "NOT Albumin",
+      "transformation": "negation"
+    },
+    {
+      "index": 15,
+      "original_name": "Malaise",
+      "display_name": "NOT Malaise",
+      "transformation": "negation"
+    },
+    {
+      "index": 16,
+      "original_name": "Protime",
+      "display_name": "NOT Protime",
+      "transformation": "negation"
+    },
+    {
+      "index": 17,
+      "original_name": "Steroid",
+      "display_name": "NOT Steroid",
+      "transformation": "negation"
+    },
+    {
+      "index": 18,
+      "original_name": "Ascites",
+      "display_name": "NOT Ascites",
+      "transformation": "negation"
+    }
+  ],
+  "nodes": [
+    {
+      "layer": 0,
+      "aggregator_index": 0,
+      "andness": 0.016252,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "feature",
+        "index": 0,
+        "name": "NOT Liver Big"
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 1,
+        "name": "NOT Histology"
+      }
+    },
+    {
+      "layer": 1,
+      "aggregator_index": 1,
+      "andness": 0.454718,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 0
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 2,
+        "name": "NOT Fatigue"
+      }
+    },
+    {
+      "layer": 2,
+      "aggregator_index": 2,
+      "andness": 1.703996,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 1
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 3,
+        "name": "NOT Alk Phosphate"
+      }
+    },
+    {
+      "layer": 3,
+      "aggregator_index": 3,
+      "andness": 1.191199,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 2
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 4,
+        "name": "NOT Liver Firm"
+      }
+    },
+    {
+      "layer": 4,
+      "aggregator_index": 4,
+      "andness": 1.14877,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 3
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 5,
+        "name": "NOT Spleen Palpable"
+      }
+    },
+    {
+      "layer": 5,
+      "aggregator_index": 5,
+      "andness": 1.358393,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 4
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 6,
+        "name": "NOT Varices"
+      }
+    },
+    {
+      "layer": 6,
+      "aggregator_index": 6,
+      "andness": 1.625596,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 5
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 7,
+        "name": "NOT Antivirals"
+      }
+    },
+    {
+      "layer": 7,
+      "aggregator_index": 7,
+      "andness": 0.307635,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 6
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 8,
+        "name": "NOT Spiders"
+      }
+    },
+    {
+      "layer": 8,
+      "aggregator_index": 8,
+      "andness": 1.65422,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 7
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 9,
+        "name": "NOT Anorexia"
+      }
+    },
+    {
+      "layer": 9,
+      "aggregator_index": 9,
+      "andness": 0.594339,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 8
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 10,
+        "name": "NOT Age"
+      }
+    },
+    {
+      "layer": 10,
+      "aggregator_index": 10,
+      "andness": 0.192428,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 9
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 11,
+        "name": "NOT Sex"
+      }
+    },
+    {
+      "layer": 11,
+      "aggregator_index": 11,
+      "andness": 1.531568,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 10
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 12,
+        "name": "NOT Sgot"
+      }
+    },
+    {
+      "layer": 12,
+      "aggregator_index": 12,
+      "andness": 1.648623,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 11
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 13,
+        "name": "NOT Bilirubin"
+      }
+    },
+    {
+      "layer": 13,
+      "aggregator_index": 13,
+      "andness": 1.573754,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 12
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 14,
+        "name": "NOT Albumin"
+      }
+    },
+    {
+      "layer": 14,
+      "aggregator_index": 14,
+      "andness": -0.994765,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 13
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 15,
+        "name": "NOT Malaise"
+      }
+    },
+    {
+      "layer": 15,
+      "aggregator_index": 15,
+      "andness": 0.954454,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 14
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 16,
+        "name": "NOT Protime"
+      }
+    },
+    {
+      "layer": 16,
+      "aggregator_index": 16,
+      "andness": 0.67775,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 15
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 17,
+        "name": "NOT Steroid"
+      }
+    },
+    {
+      "layer": 17,
+      "aggregator_index": 17,
+      "andness": -0.629945,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 16
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 18,
+        "name": "NOT Ascites"
+      }
+    }
+  ]
+}
