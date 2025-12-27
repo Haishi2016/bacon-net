@@ -30,14 +30,9 @@ bacon = create_bacon_model(
     aggregator='lsp.half_weight',
     weight_mode='fixed',
     transformations=trans,
-    use_transformation_layer=False,
+    use_transformation_layer=True,
     weight_normalization='softmax',
-    use_class_weighting=False,
-    freeze_loss_threshold=0.07,
-    loss_amplifier=1000,
-    permutation_initial_temperature=5.0,
-    permutation_final_temperature=0.5,
-    weight_penalty_strength=1e-3
+    use_class_weighting=True
 )
 
 # Train model
@@ -45,18 +40,7 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=0.95,
-    use_hierarchical_permutation=True,
-    hierarchical_bleed_ratio=0.5,
-    hierarchical_epochs_per_attempt=3000,
-    hierarchical_group_size=6,
-    loss_weight_perm_sparsity=5.0,
-    sinkhorn_iters=200,
-    freeze_confidence_threshold=0.92,
-    freeze_min_confidence=0.85,
-    freeze_loss_threshold=0.08,
-    frozen_training_epochs=1000,
-    max_epochs=5000
+    acceptance_threshold=0.75
 )
 
 # Run standard analysis
@@ -64,5 +48,5 @@ run_standard_analysis(
     bacon,
     X_train, Y_train, X_test, Y_test,
     feature_names,
-    title_prefix="Breast Cancer"
+    title_prefix="AIDS Clinical Trials"
 )
