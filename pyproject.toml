@@ -38,6 +38,9 @@ dependencies = [
 [project.urls]
 "Homepage" = "https://example.com/bacon-net"
 
+[project.scripts]
+bacon = "bacon.cli:main"
+
 [tool.hatch.version]
 path = "bacon/__init__.py"
 

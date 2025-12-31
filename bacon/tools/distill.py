@@ -25,15 +25,18 @@ import os
 from bacon.utils import distill_bacon_to_code
 
 
-def main():
-    parser = argparse.ArgumentParser(
+def add_distill_parser(subparsers):
+    """Add distill subcommand parser."""
+    parser = subparsers.add_parser(
+        'distill',
+        help='Distill a BACON model to standalone Python code',
         description='Distill a BACON model to standalone Python code',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s model.json inference.py
-  %(prog)s model.json inference.py --aggregator lsp.half_weight
-  %(prog)s heart_disease_tree_structure.json heart_disease_model.py
+  python -m bacon distill model.json inference.py
+  python -m bacon distill model.json inference.py --aggregator lsp.half_weight
+  python -m bacon distill heart_disease_tree_structure.json heart_disease_model.py
         """
     )
     
@@ -70,8 +73,12 @@ Examples:
         help='Enable verbose output'
     )
     
-    args = parser.parse_args()
-    
+    parser.set_defaults(func=run_distill)
+    return parser
+
+
+def run_distill(args):
+    """Execute distill command."""
     # Check if input file exists
     if not os.path.exists(args.json_file):
         print(f"❌ Error: Input file not found: {args.json_file}")
@@ -129,6 +136,31 @@ Examples:
             import traceback
             traceback.print_exc()
         return 1
+
+
+def main():
+    """Standalone entry point for backward compatibility."""
+    parser = argparse.ArgumentParser(
+        description='Distill a BACON model to standalone Python code',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s model.json inference.py
+  %(prog)s model.json inference.py --aggregator lsp.half_weight
+        """
+    )
+    
+    parser.add_argument('json_file', help='Path to the JSON file containing the BACON model structure')
+    parser.add_argument('output_file', help='Path where the generated Python code will be saved')
+    parser.add_argument('--aggregator', '-a', default='lsp.half_weight',
+                        choices=['lsp.half_weight', 'lsp.full_weight', 'math.arithmetic', 'math.geometric'],
+                        help='Type of aggregator used in the model (default: lsp.half_weight)')
+    parser.add_argument('--mode', '-m', default='instance', choices=['instance', 'batch'],
+                        help='Generation mode: instance (zero dependencies, per-sample) or batch (NumPy, vectorized) (default: instance)')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose output')
+    
+    args = parser.parse_args()
+    return run_distill(args)
 
 
 if __name__ == '__main__':
