@@ -17,7 +17,6 @@ class baconNet(nn.Module):
 
     Args:
         input_size (int): Number of input features. This is likely to be removed in the future.
-        freeze_loss_threshold (float, optional): Loss threshold at which to freeze structure learning. Defaults to 0.07. Not if you are using `loss_amplifier`, this will be multiplied by it.
         lock_loss_tolerance (float, optional): Maximum tolerated accuracy loss when locking the structure. Defaults to 0.04. Not if you are using `loss_amplifier`, this will be multiplied by it.
         tree_layout (str, optional): Layout of the tree. Defaults to "left". Other layouts are not supported yet.
         loss_amplifier (float, optional): Amplifier for the loss. Defaults to 1.
@@ -25,7 +24,6 @@ class baconNet(nn.Module):
         normalize_andness (bool, optional): Whether to normalize andness. Defaults to True. This should set to False if the chosen aggregator, such as `bool.min_max`, already normalizes the andness.
         weight_mode (str, optional): Mode for weight configuration. Defaults to "trainable". Use "fixed" for fixed weights (set to 0.5).
         aggregator (str, optional): Aggregator to be used. Defaults to "lsp.full_weight".
-        max_permutations (int, optional): Maximum permutations to explore. Defaults to 10000.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
         early_stop_threshold_large_inputs (float, optional): Early stop threshold for transformation layers with 10+ inputs. Defaults to 0.1. Lower values require more training but achieve higher accuracy.
         transformations (list, optional): List of transformation objects to use. If None, uses all 6 default transformations.
@@ -49,7 +47,6 @@ class baconNet(nn.Module):
         use_class_weighting (bool, optional): Whether to apply class weighting for imbalanced data. Defaults to True. When True, penalizes minority class errors more heavily (pos_weight = neg_count/pos_count). When False, uses standard BCE loss (original behavior).
     """
     def __init__(self, input_size, 
-                 freeze_loss_threshold=0.07, 
                  lock_loss_tolerance=0.04, 
                  tree_layout="left", 
                  loss_amplifier=1, 
@@ -58,7 +55,6 @@ class baconNet(nn.Module):
                  weight_normalization="minmax",
                  aggregator="lsp.full_weight",
                  normalize_andness=True,
-                 max_permutations=10000,
                  is_frozen=False,
                  use_transformation_layer=False,
                  transformation_temperature=None,
@@ -124,7 +120,6 @@ class baconNet(nn.Module):
             logging.info(f"   Types: {[type(t).__name__ for t in transformations]}")
         
         self.assembler = binaryTreeLogicNet(input_size, 
-                                            freeze_loss_threshold=freeze_loss_threshold,
                                             weight_mode=weight_mode,
                                             weight_value=0.5,                                             
                                             weight_range=(0.5, 2.0), 
@@ -133,7 +128,6 @@ class baconNet(nn.Module):
                                             tree_layout=tree_layout,
                                             loss_amplifier=loss_amplifier,
                                             is_frozen = is_frozen,
-                                            permutation_max=max_permutations,
                                             weight_normalization=weight_normalization,
                                             aggregator=aggregator,
                                             weight_penalty_strength = weight_penalty_strength,
@@ -248,7 +242,6 @@ class baconNet(nn.Module):
                         convergence_delta = 0.001,
                         freeze_confidence_threshold = 0.95,
                         freeze_min_confidence = 0.85,  # Minimum confidence for early freeze with low loss (raised from 0.75)
-                        freeze_loss_threshold = None,  # Loss threshold for early freeze (if None, uses 1.5x early_stop_threshold)
                         loss_weight_perm_sparsity = None,
                         sparsity_schedule = None,  # (initial_weight, final_weight, transition_epochs)
                         freeze_aggregation_epochs = 0,  # Freeze aggregation for first N epochs
@@ -278,7 +271,6 @@ class baconNet(nn.Module):
             convergence_delta (float, optional): Minimum loss improvement to reset patience. Defaults to 0.001.
             freeze_confidence_threshold (float, optional): Mean max probability threshold for high-confidence freezing. Defaults to 0.95.
             freeze_min_confidence (float, optional): Minimum confidence for early freeze when combined with low loss. Defaults to 0.85 (raised from 0.75 to be more conservative).
-            freeze_loss_threshold (float, optional): Loss threshold for early freeze (multiplied by loss_amplifier). If None, uses 1.5x early_stop_threshold. Defaults to None.
             sinkhorn_iters (int, optional): Number of Sinkhorn normalization iterations for soft permutation convergence. Higher values improve doubly-stochastic property but increase compute time. Defaults to 100.
             loss_weight_perm_sparsity (float, optional): Weight for permutation sparsity loss (encourages peaked distributions). If None, uses instance default. Defaults to None.
             sparsity_schedule (tuple, optional): Dynamic sparsity weight scheduling as (initial_weight, final_weight, transition_epochs). Example: (10.0, 0.1, 1000) starts with high sparsity emphasis (10.0) and linearly decreases to 0.1 over 1000 epochs. Defaults to None (uses constant loss_weight_perm_sparsity).
@@ -357,8 +349,6 @@ class baconNet(nn.Module):
                     max_noise=cfg.max_noise,
                     is_frozen=False,
                     lock_loss_tolerance=cfg.lock_loss_tolerance / cfg.loss_amplifier,  # unscale
-                    freeze_loss_threshold=cfg.freeze_loss_threshold / cfg.loss_amplifier,  # unscale
-                    permutation_max=cfg.permutation_max,
                     tree_layout=cfg.tree_layout,
                     weight_penalty_strength=cfg.weight_penalty_strength,
                     aggregator=cfg.aggregator,
@@ -385,14 +375,6 @@ class baconNet(nn.Module):
                         )
                         bleed_desc = "hard blocks" if hierarchical_bleed_ratio == 0 else f"bleed={hierarchical_bleed_ratio:.2f}"
                         logging.info(f"   🎯 Initialized permutation matrix with coarse structure ({bleed_desc})")
-
-                # If using transformation layer, disable auto-refine initially
-                # We'll enable it after transformations converge
-                if self.assembler.transformation_layer is not None:
-                    self.assembler.auto_refine = False
-                else:
-                    self.assembler.auto_refine = True
-                self.assembler._auto_refine_every = 10
 
                 # Separate parameter groups with different learning rates
                 # This allows adjusting learning pressure for different components
@@ -562,10 +544,7 @@ class baconNet(nn.Module):
                         self.assembler.transformation_layer.temperature = trans_initial_temp
                         logging.info(f"   🔗 Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {anneal_over_epochs} epochs (decay: {trans_temp_decay_rate:.6f})")
                     else:
-                        trans_temp_decay_rate = None
-                    
-                    # Disable Hungarian search when using annealing
-                    self.assembler.auto_refine = False
+                        trans_temp_decay_rate = None                                        
                 
                 for epoch in range(actual_max_epochs):
                     # Unfreeze aggregation after specified epochs
@@ -860,10 +839,7 @@ class baconNet(nn.Module):
                                     
                                     # NEW: Simple check - if confidence is good AND loss is low, freeze!
                                     # This catches the optimal point before confidence starts dropping
-                                    if freeze_loss_threshold is not None:
-                                        loss_threshold = freeze_loss_threshold * self.assembler.loss_amplifier
-                                    else:
-                                        loss_threshold = early_stop_threshold * self.assembler.loss_amplifier * 1.5  # 1.5x margin
+                                    loss_threshold = early_stop_threshold * self.assembler.loss_amplifier * 1.5  # 1.5x margin
                                     good_confidence_and_loss = (mean_confidence >= freeze_min_confidence and current_loss < loss_threshold)
                                     
                                     confidence_plateaued = (has_converged_before_freeze and 
@@ -905,7 +881,9 @@ class baconNet(nn.Module):
                                     with torch.no_grad():
                                         # Use test data for evaluation
                                         before_output = self.assembler(x_test)
-                                        before_loss = criterion(before_output, y_test)
+                                        before_loss_raw = criterion(before_output, y_test)
+                                        # Handle both scalar and per-sample loss
+                                        before_loss = before_loss_raw.mean() if before_loss_raw.dim() > 0 else before_loss_raw
                                         before_pred = (before_output > 0.5).float()
                                         before_correct = (before_pred == y_test).sum().item()
                                         before_accuracy = before_correct / len(y_test)
@@ -971,7 +949,9 @@ class baconNet(nn.Module):
                                     with torch.no_grad():
                                         # Get predictions on same test set after freeze
                                         after_output = self.assembler(x_test)
-                                        after_loss = criterion(after_output, y_test)
+                                        after_loss_raw = criterion(after_output, y_test)
+                                        # Handle both scalar and per-sample loss
+                                        after_loss = after_loss_raw.mean() if after_loss_raw.dim() > 0 else after_loss_raw
                                         after_pred = (after_output > 0.5).float()
                                         after_correct = (after_pred == y_test).sum().item()
                                         after_accuracy = after_correct / len(y_test)

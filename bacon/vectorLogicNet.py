@@ -30,8 +30,6 @@ class VectorLogicNet(nn.Module):
         aggregator=None,                    # expects .aggregate(left, right, a, w_acc, w_new)
         is_frozen=False,
         lock_loss_tolerance=0.04,
-        freeze_loss_threshold=0.07,
-        permutation_max=10000,
         early_stop_patience=10,
         early_stop_min_delta=1e-4,
         early_stop_threshold=0.01,
@@ -54,9 +52,7 @@ class VectorLogicNet(nn.Module):
 
         self.is_frozen = is_frozen
         self.lock_loss_tolerance = lock_loss_tolerance * self.loss_amplifier
-        self.freeze_loss_threshold = freeze_loss_threshold * self.loss_amplifier
-        self.permutation_max = permutation_max
-
+      
         self.early_stop_patience = early_stop_patience
         self.early_stop_min_delta = early_stop_min_delta
         self.early_stop_threshold = early_stop_threshold
@@ -235,20 +231,6 @@ class VectorLogicNet(nn.Module):
                     elif any(d > 0 for d in diffs):
                         self.input_to_leaf.gumbel_noise_scale = min(self.input_to_leaf.gumbel_noise_scale * noise_increase, max_noise)
 
-            # consider freezing permutation
-            if not self.is_frozen and loss.item() < self.freeze_loss_threshold:
-                best_model, best_perm, best_l, _ = self.sample_best_permutation(self, self.permutation_max, X, Y, noise_std=0.1)
-                if best_model is not None and best_l < self.freeze_loss_threshold + self.lock_loss_tolerance:
-                    # lock permutation
-                    self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
-                    self.input_to_leaf = frozenInputToLeaf(self.locked_perm, self.original_input_size)
-                    self.is_frozen = True
-                    self.reset_optimizer(lr=0.02)
-                    # reset early stopping counters for the frozen phase
-                    best_loss = float('inf')
-                    patience = 0
-                    continue
-
             # early stopping once frozen
             if self.is_frozen:
                 if loss.item() < best_loss - self.early_stop_min_delta:
@@ -277,62 +259,6 @@ class VectorLogicNet(nn.Module):
             A = A / A.sum(dim=1, keepdim=True)
             A = A / A.sum(dim=0, keepdim=True)
         return A
-
-    @torch.no_grad()
-    def sample_best_permutation(self, model_template, topk, X, Y, noise_std=0.1):
-        criterion = nn.BCELoss()
-        if not hasattr(model_template.input_to_leaf, "logits"):
-            raise ValueError("Permutation module has no learnable logits for Sinkhorn.")
-
-        P = self._sinkhorn(model_template.input_to_leaf.logits,
-                           temperature=getattr(model_template.input_to_leaf, "temperature", 1.0))
-        P_np = P.cpu().numpy()
-
-        perms = set()
-        best_loss = float("inf")
-        best_perm = None
-        best_model = None
-        best_index = None
-
-        for index in range(topk * 2):
-            if len(perms) == 0:
-                noisy_P = P_np
-            else:
-                noise = np.random.normal(loc=0.0, scale=noise_std, size=P_np.shape)
-                noisy_P = P_np + noise
-            noisy_P = np.nan_to_num(noisy_P, nan=0.0, posinf=1e6, neginf=-1e6)
-            row_ind, col_ind = linear_sum_assignment(-noisy_P)
-            perm = tuple(col_ind[row_ind.argsort()])
-            if perm in perms:
-                continue
-            perms.add(perm)
-
-            perm_tensor = torch.tensor(perm, dtype=torch.long, device=self.device).clone().detach()
-            temp_model = copy.deepcopy(model_template).to(self.device)
-            temp_model.input_to_leaf = frozenInputToLeaf(perm_tensor, temp_model.original_input_size).to(self.device)
-            X_dev = X.to(self.device)                                               # <-- add
-            Y_dev = Y.to(self.device)                                               # <-- add
-            temp_loss = criterion(temp_model(X_dev), Y_dev)            
-            print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
-
-            if temp_loss > 0.9 and best_index is None:
-                print(f"   🚫 Perm {perm} rejected (high loss).")
-                return None, None, 1.0, -1
-
-            if temp_loss < best_loss:
-                best_loss = temp_loss
-                best_model = temp_model
-                best_perm = perm
-                best_index = index
-
-            if len(perms) >= topk:
-                break
-
-        if best_perm is None:
-            return None, None, 1.0, -1
-
-        print(f"✅ Best permutation selected: {best_perm} (Loss: {best_loss:.4f})")
-        return best_model, best_perm, best_loss, best_index
 
     # ---------- Optional: prune like your original ----------
     def prune_features(self, features):

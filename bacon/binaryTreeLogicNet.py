@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from bacon.inputToLeafSinkhorn import inputToLeafSinkhorn
 from bacon.frozonInputToLeaf import frozenInputToLeaf
-from bacon.inputToCombinationSinkhorn import inputToCombinationSinkhorn
 from bacon.transformationLayer import (
     TransformationLayer,
     IdentityTransformation,
@@ -37,8 +36,6 @@ class binaryTreeLogicNet(nn.Module):
         max_noise (float, optional): Maximum noise level. Defaults to 2.0.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
         lock_loss_tolerance (float, optional): The maximum tolerated accuracy loss when locking the structure. Defaults to 0.04. Note that this is multiplied by `loss_amplifier`.
-        freeze_loss_threshold (float, optional): Loss threshold at which to freeze structure learning. Defaults to 0.07. Note that this is multiplied by `loss_amplifier`.
-        permutation_max (int, optional): Maximum permutations to explore. Defaults to 10000.
         tree_layout (str, optional): Layout of the tree. Defaults to "left".
         weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
         aggregator (callable, optional): Aggregator to be used. Defaults to "lsp.full_weight".
@@ -59,16 +56,12 @@ class binaryTreeLogicNet(nn.Module):
                  max_noise=2.0,
                  is_frozen = False,
                  lock_loss_tolerance=0.04,
-                 freeze_loss_threshold=0.07,
-                 permutation_max=10000,
                  tree_layout="left",
                  weight_penalty_strength=1e-3,
                  aggregator="lsp.full_weight",
                  early_stop_patience = 10,
                  early_stop_min_delta = 1e-4,
                  early_stop_threshold = 0.01,
-                 combination_mode: str = "none",
-                 combination_split: int = None,
                  use_transformation_layer: bool = False,
                  transformation_temperature: float = 1.0,
                  transformation_use_gumbel: bool = False,
@@ -95,8 +88,6 @@ class binaryTreeLogicNet(nn.Module):
         self.early_stop_threshold = early_stop_threshold
         self.lock_loss_tolerance = lock_loss_tolerance * self.loss_amplifier  # Adjust tolerance based on loss amplifier
         self.is_frozen = is_frozen
-        self.freeze_loss_threshold = freeze_loss_threshold * self.loss_amplifier  # Adjust threshold based on loss amplifier
-        self.permutation_max = permutation_max
         self.locked_perm = None  # For frozen models
         self.tree_layout = tree_layout  # Layout for visualization
         self.num_layers = self.num_leaves - 1  # Leaf nodes feed into binary 
@@ -104,13 +95,7 @@ class binaryTreeLogicNet(nn.Module):
         self.weight_penalty_strength = weight_penalty_strength
         self.sinkhorn_iters = sinkhorn_iters  # Sinkhorn iteration count for convergence
         self.layer_outputs = None  # For storing layer outputs during forward pass
-        self.combination_mode = combination_mode  # "none" or "cross"
         self.pruned_aggregators = set()  # Track which aggregators have been pruned
-        if combination_split is None:
-            # default: split in half, e.g. 10/10 for 20D
-            self.combination_split = input_size // 2
-        else:
-            self.combination_split = combination_split
         
         # Transformation layer (optional)
         self.use_transformation_layer = use_transformation_layer
@@ -141,14 +126,7 @@ class binaryTreeLogicNet(nn.Module):
             self.transformation_layer = None
         
         self._reinitialize(weight_mode, weight_value, weight_range, weight_choices, self.is_frozen)
-        self.reset_optimizer()  # Initialize optimizer
-        # Auto refine (sample_best_permutation) during forward
-        self.auto_refine = False
-        self._auto_refine_every = 100  # batches
-        self._batches_since_refine = 0
-        self._auto_refine_topk = min(256, self.permutation_max)
-        self._auto_refine_noise = 0.1
-        self._auto_freeze_threshold = self.freeze_loss_threshold
+        self.reset_optimizer()  # Initialize optimizer        
         self._auto_freeze_tolerance = self.lock_loss_tolerance       
         if hasattr(self.aggregator, "attach_to_tree"):
             self.aggregator.attach_to_tree(self.num_layers)      
@@ -209,24 +187,12 @@ class binaryTreeLogicNet(nn.Module):
         self.is_frozen = is_frozen
         if not self.is_frozen:
             self.locked_perm = None
-            if self.combination_mode == "none":
-                self.input_to_leaf = inputToLeafSinkhorn(
-                    self.original_input_size,
-                    self.num_leaves,
-                    use_gumbel=True,
-                    sinkhorn_iters=self.sinkhorn_iters
-                ).to(self.device)
-            elif self.combination_mode == "cross":
-                 self.input_to_leaf = inputToCombinationSinkhorn(
-                    num_inputs=self.original_input_size,
-                    num_leaves=self.num_leaves,
-                    split_index=self.combination_split,
-                    temperature=3.0,
-                    sinkhorn_iters=20,
-                    use_gumbel=True,
-                ).to(self.device)
-            else:                 
-                raise ValueError(f"Unknown combination_mode: {self.combination_mode}")
+            self.input_to_leaf = inputToLeafSinkhorn(
+                self.original_input_size,
+                self.num_leaves,
+                use_gumbel=True,
+                sinkhorn_iters=self.sinkhorn_iters
+            ).to(self.device)           
         else:
             best_perm = torch.arange(self.num_leaves, dtype=torch.long)
             self.locked_perm = best_perm.clone().detach()
@@ -525,39 +491,6 @@ class binaryTreeLogicNet(nn.Module):
             epsilon = 1e-7
             out = torch.clamp(out, min=epsilon, max=1.0-epsilon)
 
-            # Optional: refine permutation inside forward (baby step integration)
-            if self.training and self.auto_refine and (targets is not None):
-                self._batches_since_refine += 1
-                if self._batches_since_refine >= self._auto_refine_every and not self.is_frozen:
-                    # Check if transformation layer has converged before doing permutation search
-                    can_search_permutations = True
-                    if self.transformation_layer is not None:
-                        # Use adaptive thresholds: lower confidence requirement, allow 70% of features to converge
-                        if not self.transformation_layer.has_converged(confidence_threshold=0.65, min_converged_ratio=0.7):
-                            can_search_permutations = False
-                    
-                    if can_search_permutations:
-                        # Run a small permutation search on current batch
-                        criterion = nn.BCELoss()
-                        best_model, best_perm, best_loss, best_index = self.sample_best_permutation(
-                            model_template=self,
-                            topk=self._auto_refine_topk,
-                            X=x.detach(),
-                            Y=targets.detach(),
-                            noise_std=self._auto_refine_noise
-                        )
-                        if best_model is not None:
-                            # Freeze if good enough
-                            if best_loss < self._auto_freeze_threshold + self._auto_freeze_tolerance:
-                                self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
-                                self.input_to_leaf = frozenInputToLeaf(self.locked_perm, self.original_input_size).to(self.device)
-                            self.is_frozen = True
-                            # Disable auto-refine once frozen to avoid repeated permutation searches
-                            self.auto_refine = False
-                            # Optionally reduce LR externally after this point
-                    # Reset counter regardless
-                    self._batches_since_refine = 0
-
             return out
         except Exception as e:
             logging.error(f"[ERROR] Exception in forward pass: {e}")
@@ -627,35 +560,6 @@ class binaryTreeLogicNet(nn.Module):
                         # self.input_to_leaf.temperature = min(self.input_to_leaf.temperature * 1.2, 5.0)
                         # print(f"🔺 Loss increased. Noise scale: {model.input_to_leaf.gumbel_noise_scale:.4f}")
             
-            if not self.is_frozen and self.combination_mode == "none" and loss.item() < self.freeze_loss_threshold:
-                print(f"🧊 Low loss at epoch {epoch}, sampling top-k permutations...")
-                best_model, best_perm, best_loss, best_index = self.sample_best_permutation(
-                    model_template=self,
-                    topk=self.permutation_max,
-                    X=x,
-                    Y=y,
-                    noise_std=0.1)         
-                if best_model is not None:
-                    best_indexes.append(best_index)
-                if best_model is not None and best_loss < self.freeze_loss_threshold + self.lock_loss_tolerance:
-                    print(f"✅ Freezing best permutation: {best_perm} with loss {best_loss:.4f}")
-                    self.locked_perm = torch.tensor(best_perm, dtype=torch.long).clone().detach()
-                     # Freeze the current model in-place
-                    self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size)
-                    # Re-initialize optimizer for frozen model                    
-                    self.reset_optimizer(learning_rate=0.02)  # Lower learning rate for frozen model
-                    # Mark frozen mode and reset patience
-                    self.is_frozen = True
-                    patience_counter = 0
-                    epoch = 0
-                    best_frozen_loss = float('inf')
-                    continue  # ✅ Continue training the frozen model
-                else:
-                    print("🚫 No good permutation found in top-k. Restarting.")
-                    self.is_frozen = False
-                    self.input_to_leaf = inputToLeafSinkhorn(self.original_input_size, self.num_leaves, use_gumbel=True, sinkhorn_iters=self.sinkhorn_iters).to(self.device)
-                    self.reset_optimizer() 
-
             if self.is_frozen:
                 if loss.item() < best_loss - self.early_stop_min_delta:
                     best_loss = loss.item()
@@ -694,78 +598,7 @@ class binaryTreeLogicNet(nn.Module):
             A = A / A.sum(dim=0, keepdim=True)
 
         return A
-
-    def sample_best_permutation(self, model_template, topk, X, Y, noise_std=0.1):
-        """Sample the best permutation of leaves based on Sinkhorn normalization.
-
-        Args:
-            model_template (binaryTreeLogicNet): Template model to sample from.
-            topk (int): Number of top permutations to sample.
-            X (torch.Tensor): Input tensor of shape (batch_size, input_size).
-            Y (torch.Tensor): Target tensor of shape (batch_size, 1).
-            noise_std (float, optional): Standard deviation of noise to add. Defaults to 0.1.
-        Returns:
-            tuple: Best model, best permutation, best loss, and index of the best permutation.
-        """
-        criterion = nn.BCELoss()
-        with torch.no_grad():
-            if hasattr(model_template.input_to_leaf, "logits"):
-                P = self._sinkhorn(
-                    model_template.input_to_leaf.logits,
-                    temperature=model_template.input_to_leaf.temperature
-                )
-            else:
-                raise ValueError("Model does not have learnable logits for Sinkhorn.")
-
-            P_np = P.cpu().numpy()
-            perms = set()
-            best_loss = float("inf")
-            best_perm = None
-            best_model = None
-            best_index = None
-            for index in range(topk * 2):  # Allow duplicates, just filter later
-                if len(perms) == 0:
-                    noisy_P = P_np  # baseline, no noise
-                else:
-                    noise = np.random.normal(loc=0.0, scale=noise_std, size=P_np.shape)
-                    noisy_P = P_np + noise
-                noisy_P = np.nan_to_num(noisy_P, nan=0.0, posinf=1e6, neginf=-1e6)
-                row_ind, col_ind = linear_sum_assignment(-noisy_P)  # maximize confidence
-                perm = tuple(col_ind[row_ind.argsort()])  # sort by leaf index
-                if perm in perms:
-                    continue
-                perms.add(perm)
-
-                perm_tensor = torch.tensor(perm, dtype=torch.long).clone().detach()
-                temp_model = copy.deepcopy(model_template)
-                temp_model.input_to_leaf = frozenInputToLeaf(perm_tensor, temp_model.original_input_size)
-                
-                # Important: Copy transformation layer state from template to preserve learned transformations
-                if hasattr(model_template, 'transformation_layer') and model_template.transformation_layer is not None:
-                    if hasattr(temp_model, 'transformation_layer') and temp_model.transformation_layer is not None:
-                        temp_model.transformation_layer.logits.data.copy_(model_template.transformation_layer.logits.data)
-                
-                temp_loss = criterion(temp_model(X), Y)
-                print(f"   🔍 Perm {perm} → Loss: {temp_loss.item():.4f}")
-
-                if temp_loss > 0.9 and best_index is None:
-                    print(f"   🚫 Perm {perm} group rejected due to high loss.")
-                    return None, None, 1, -1
-                if temp_loss < best_loss:
-                    best_loss = temp_loss
-                    best_model = temp_model
-                    best_perm = perm       
-                    best_index = index             
-                    
-                if len(perms) >= topk:
-                    break
-
-            if best_perm is None:
-                return None, None, 1, -1
-
-            print(f"✅ Best permutation selected: {best_perm} (Loss: {best_loss:.4f})")
-            return best_model, best_perm, best_loss, best_index
-        
+    
     def prune_features(self, feature_index):
         """Prune a single feature by adjusting its corresponding aggregator weight.
         

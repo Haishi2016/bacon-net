@@ -181,12 +181,8 @@ class BaconAdditionModel(nn.Module):
             normalize_andness=True,
             tree_layout="left",
             loss_amplifier=1.0,
-            is_frozen=False,
-            # NEW:
-            combination_mode="cross",   # use combination layer
-            combination_split=10,       # first 10 vs last 10
-        )
-        self.bacon.auto_refine = False       # keep
+            is_frozen=False            
+        )        
 
     def _concepts_from_images(self, x1: torch.Tensor, x2: torch.Tensor,
                               tau: float, hard: bool) -> torch.Tensor:

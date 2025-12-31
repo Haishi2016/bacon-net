@@ -83,7 +83,6 @@ for end_temperature in end_temperatures:
     
     # # Create model
     # bacon = baconNet(
-    #     freeze_loss_threshold=0.0,
     #     input_size=input_size,
     #     use_transformation_layer=False,
     #     aggregator='bool.min_max',
@@ -135,7 +134,7 @@ for end_temperature in end_temperatures:
     with torch.no_grad():
         # Model should still be soft at this point
         if not hasattr(bacon.assembler.input_to_leaf, 'logits'):
-            print(f"   ⚠️  Warning: Model was frozen during training despite freeze_loss_threshold=999")
+            print(f"   ⚠️  Warning: Model was frozen during training")
             # Extract from frozen model
             soft_perm = bacon.assembler.input_to_leaf.P_hard.cpu().numpy()
             # For frozen models, soft = hard

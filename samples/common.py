@@ -31,7 +31,6 @@ def create_bacon_model(
     transformations=None,
     use_transformation_layer=True,
     loss_amplifier=1000,
-    freeze_loss_threshold=0.07,
     weight_normalization='softmax',
     use_class_weighting=True,
     weight_penalty_strength=1e-3,
@@ -48,7 +47,6 @@ def create_bacon_model(
         transformations: List of transformation layers (default: None)
         use_transformation_layer: Whether to use transformations (default: True)
         loss_amplifier: Loss amplification factor (default: 1000)
-        freeze_loss_threshold: Threshold for freezing (default: 0.07)
         weight_normalization: Weight normalization method (default: 'softmax')
         use_class_weighting: Whether to use class weighting (default: True)
         weight_penalty_strength: Weight penalty strength (default: 1e-3)
@@ -69,7 +67,6 @@ def create_bacon_model(
     
     model = baconNet(
         input_size=input_size,
-        freeze_loss_threshold=freeze_loss_threshold,
         aggregator=aggregator,
         use_transformation_layer=use_transformation_layer,
         transformations=transformations,
@@ -102,7 +99,6 @@ def train_bacon_model(
     sinkhorn_iters=200,
     freeze_confidence_threshold=0.95,
     freeze_min_confidence=0.85,
-    freeze_loss_threshold=0.09,
     frozen_training_epochs=200,
     max_epochs=5000,
     **kwargs
@@ -125,7 +121,6 @@ def train_bacon_model(
         sinkhorn_iters: Sinkhorn iterations (default: 200)
         freeze_confidence_threshold: Confidence threshold for freezing (default: 0.95)
         freeze_min_confidence: Minimum confidence (default: 0.85)
-        freeze_loss_threshold: Loss threshold for freezing (default: 0.09)
         max_epochs: Maximum epochs (default: 5000)
         **kwargs: Additional arguments passed to find_best_model
         
@@ -144,7 +139,6 @@ def train_bacon_model(
         sinkhorn_iters=sinkhorn_iters,        
         freeze_confidence_threshold=freeze_confidence_threshold,
         freeze_min_confidence=freeze_min_confidence,
-        freeze_loss_threshold=freeze_loss_threshold,
         max_epochs=max_epochs,
         frozen_training_epochs=frozen_training_epochs,
         **kwargs
