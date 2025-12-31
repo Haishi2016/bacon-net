@@ -167,7 +167,6 @@ print(f"  Normal: {(len(high_dst) - high_dst['target'].sum()):.0f} ({(1-high_dst
 
 bacon = baconNet(
     input_size=num_features, 
-    freeze_loss_threshold=0.13, 
     lock_loss_tolerance=0.02,
     use_transformation_layer=True,
     transformations=[

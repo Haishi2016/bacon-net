@@ -181,8 +181,7 @@ class BaconAdditionModel(nn.Module):
             tree_layout="left",
             loss_amplifier=1.0,            
             is_frozen=False,
-        )
-        self.bacon.auto_refine = False
+        )        
 
     # ---------- feature / concept helpers ----------
 

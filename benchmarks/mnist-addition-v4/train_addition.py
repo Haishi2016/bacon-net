@@ -144,13 +144,6 @@ def main():
 
             # Optional external gating: switch to hard concepts when gate conditions are met
             use_hard = False
-            if args.auto_refine:
-                cond = True
-                if args.refine_tau_gate is not None:
-                    cond = cond and (tau <= args.refine_tau_gate)
-                if args.refine_acc_gate is not None and last_eval_acc is not None:
-                    cond = cond and (last_eval_acc >= float(args.refine_acc_gate))
-                use_hard = cond
 
             # Backbone: get concept probabilities
             p1, p2 = backbone(x1, x2, tau=tau, hard=use_hard)   # [B,10] each

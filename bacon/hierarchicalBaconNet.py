@@ -22,15 +22,12 @@ class HierarchicalBaconNet(nn.Module):
         feature_groups (dict): Dictionary mapping group names to lists of feature indices.
                               Example: {'payment_history': [0,1,2,3,4,5,6], 'demographics': [7,8,9,10]}
         total_features (int): Total number of input features across all groups.
-        freeze_loss_threshold (float, optional): Loss threshold for freezing global permutation. Defaults to 0.25.
-                                                Note: If using loss_amplifier, this will be multiplied by it.
         weight_mode (str, optional): Weight mode for trees ('fixed' or 'trainable'). Defaults to 'fixed'.
         aggregator (str, optional): Aggregator type. Defaults to 'lsp.half_weight'.
         use_sub_tree_transformation (bool, optional): Enable transformations in sub-trees. Defaults to True.
         use_global_transformation (bool, optional): Enable transformations in global tree. Defaults to True.
         sub_tree_layout (str, optional): Layout for sub-trees. Defaults to 'left'.
         global_tree_layout (str, optional): Layout for global tree. Defaults to 'balanced'.
-        max_permutations (int, optional): Max permutations for global tree. Defaults to 10000.
         loss_amplifier (float, optional): Amplifier for the loss. Defaults to 1.0.
         lr_permutation (float, optional): Learning rate for global permutation. Defaults to 0.3.
         lr_transformation (float, optional): Learning rate for transformations. Defaults to 0.5.
@@ -54,14 +51,12 @@ class HierarchicalBaconNet(nn.Module):
     def __init__(self, 
                  feature_groups,
                  total_features,
-                 freeze_loss_threshold=0.25,
                  weight_mode='fixed',
                  aggregator='lsp.half_weight',
                  use_sub_tree_transformation=True,
                  use_global_transformation=True,
                  sub_tree_layout='left',
                  global_tree_layout='balanced',
-                 max_permutations=10000,
                  loss_amplifier=1.0,
                  lr_permutation=0.3,
                  lr_transformation=0.5,
@@ -143,14 +138,12 @@ class HierarchicalBaconNet(nn.Module):
             # Each sub-tree: transformations + aggregation + optional permutation learning
             sub_tree = binaryTreeLogicNet(
                 input_size=num_features_in_group,
-                freeze_loss_threshold=freeze_loss_threshold if enable_permutation else 999.9,
                 weight_mode=weight_mode,
                 tree_layout=sub_tree_layout,
                 aggregator=aggregator,
                 use_transformation_layer=use_sub_tree_transformation,
                 transformations=sub_tree_trans,
                 is_frozen=not enable_permutation,  # Frozen if NOT learning permutation
-                permutation_max=max_permutations if enable_permutation else 1,
                 normalize_andness=True,
                 weight_penalty_strength=1e-3,
                 loss_amplifier=loss_amplifier
@@ -180,14 +173,12 @@ class HierarchicalBaconNet(nn.Module):
         # This tree learns: (1) permutation, (2) transformations, (3) aggregation
         self.global_tree = binaryTreeLogicNet(
             input_size=self.num_global_inputs,  # Groups + single features
-            freeze_loss_threshold=freeze_loss_threshold,
             weight_mode=weight_mode,
             tree_layout=global_tree_layout,
             aggregator=aggregator,
             use_transformation_layer=use_global_transformation,  # Transform all inputs
             transformations=global_tree_trans,
             is_frozen=False,  # Learn permutation
-            permutation_max=max_permutations,
             normalize_andness=True,
             weight_penalty_strength=1e-3,
             loss_amplifier=loss_amplifier
@@ -475,7 +466,6 @@ class HierarchicalBaconNet(nn.Module):
             cfg = self.global_tree
             self.global_tree = binaryTreeLogicNet(
                 input_size=self.num_global_inputs,  # Groups + single features
-                freeze_loss_threshold=cfg.freeze_loss_threshold / cfg.loss_amplifier,
                 weight_mode=cfg.weight_mode,
                 tree_layout=cfg.tree_layout,
                 aggregator=cfg.aggregator,
@@ -484,7 +474,6 @@ class HierarchicalBaconNet(nn.Module):
                 transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
                 transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,  # Preserve custom transformations
                 is_frozen=False,
-                permutation_max=cfg.permutation_max,
                 device=device
             )
             
@@ -643,27 +632,7 @@ class HierarchicalBaconNet(nn.Module):
                 # Anneal transformation temperatures (force convergence to single choice per feature)
                 for layer_name, trans_layer in trans_layers:
                     trans_layer.temperature *= trans_temp_decay
-                
-                # Auto-freeze global tree permutation when loss threshold is reached
-                if not self.global_tree.is_frozen and loss.item() < self.global_tree.freeze_loss_threshold:
-                    from bacon.frozonInputToLeaf import frozenInputToLeaf
-                    from scipy.optimize import linear_sum_assignment
-                    # Get current best permutation from Sinkhorn using Hungarian algorithm
-                    if hasattr(self.global_tree, 'input_to_leaf') and hasattr(self.global_tree.input_to_leaf, 'logits'):
-                        soft_perm = torch.softmax(self.global_tree.input_to_leaf.logits, dim=1)
-                        soft_perm_np = soft_perm.detach().cpu().numpy()
-                        row_ind, col_ind = linear_sum_assignment(-soft_perm_np)
-                        hard_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long)
-                        self.global_tree.locked_perm = hard_perm.clone().detach()
-                        self.global_tree.is_frozen = True
-                        # Replace Sinkhorn with frozen permutation
-                        self.global_tree.input_to_leaf = frozenInputToLeaf(
-                            self.global_tree.locked_perm,
-                            self.global_tree.original_input_size
-                        ).to(self.global_tree.device)
-                        logging.info(f"   🔒 Froze global tree permutation at epoch {epoch + 1}, loss: {loss.item():.4f}")
-                        logging.info(f"      Locked permutation: {self.global_tree.locked_perm.cpu().numpy()}")
-                
+                                
                 # Logging
                 if (epoch + 1) % 500 == 0:
                     logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}")

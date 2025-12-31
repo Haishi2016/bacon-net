@@ -33,7 +33,6 @@ bacon = create_bacon_model(
     use_transformation_layer=False,
     weight_normalization='softmax',
     use_class_weighting=False,
-    freeze_loss_threshold=0.07,
     loss_amplifier=1000,
     permutation_initial_temperature=5.0,
     permutation_final_temperature=0.5,
@@ -54,7 +53,6 @@ train_bacon_model(
     sinkhorn_iters=200,
     freeze_confidence_threshold=0.92,
     freeze_min_confidence=0.85,
-    freeze_loss_threshold=0.08,
     frozen_training_epochs=1000,
     max_epochs=5000
 )
