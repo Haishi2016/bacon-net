@@ -259,7 +259,8 @@ class baconNet(nn.Module):
                         hierarchical_epochs_per_attempt = None,
                         hierarchical_bleed_ratio = 0.1,
                         hierarchical_bleed_decay = 2.0,
-                        sinkhorn_iters = 100):
+                        sinkhorn_iters = 100,
+                        binary_threshold=0.5):
         """ Find the best model by training multiple times and evaluating accuracy.
 
         Args:
@@ -298,7 +299,12 @@ class baconNet(nn.Module):
                 logging.info(f"📂 Found saved model at {save_path}, loading...")
                 self.load_model(save_path)
                 if self.assembler.is_frozen:
-                    acc = self.evaluate(x_test, y_test)
+                    if binary_threshold >= 0:
+                        acc = self.evaluate(x_test, y_test, threshold=binary_threshold)
+                    else:
+                        output = self.inference_raw(x_test)
+                        mae = (output - y_test).abs().mean().item()
+                        acc = 1.0 - min(mae, 1.0)
                     logging.info(f"✅ Loaded model accuracy: {acc:.4f}")
                     if acc >= acceptance_threshold:
                         return self.assembler.state_dict(), acc
@@ -1185,7 +1191,12 @@ class baconNet(nn.Module):
 
                 # Always evaluate each attempt, regardless of freeze status
                 # This ensures we track the best permutation even if it didn't fully freeze
-                accuracy = self.evaluate(x_test, y_test)
+                if binary_threshold >= 0:
+                    accuracy = self.evaluate(x_test, y_test, threshold=binary_threshold)
+                else:
+                    output = self.inference_raw(x_test)
+                    mae = (output - y_test).abs().mean().item()
+                    accuracy = 1.0 - min(mae, 1.0)
                 # Check actual frozen status, not just the flag
                 actually_frozen = not hasattr(self.assembler.input_to_leaf, 'logits')
                 frozen_status = "frozen" if actually_frozen else "unfrozen"
