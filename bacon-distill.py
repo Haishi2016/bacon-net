@@ -11,7 +11,7 @@ See python bacon-distill.py --help for more information.
 """
 
 import sys
-from bacon.distill import main
+from bacon.tools.distill import main
 
 if __name__ == '__main__':
     sys.exit(main())

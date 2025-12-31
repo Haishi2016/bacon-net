@@ -1,11 +1,12 @@
-"""
-BACON Distillation CLI - Make the bacon.distill module executable.
+"""BACON __main__ - Allows running 'python -m bacon'.
 
-This allows running: python -m bacon.distill <args>
+This is a fallback for backwards compatibility.
+The primary entry point is 'bacon' command installed via pyproject.toml.
 """
 
-from bacon.distill import main
+from bacon.cli import main
+import sys
 
 if __name__ == '__main__':
-    import sys
     sys.exit(main())
+
