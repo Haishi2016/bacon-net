@@ -168,7 +168,6 @@ print(f"  Normal: {(len(high_dst) - high_dst['target'].sum()):.0f} ({(1-high_dst
 bacon = baconNet(
     input_size=num_features, 
     freeze_loss_threshold=0.13, 
-    tree_layout='balanced',
     lock_loss_tolerance=0.02,
     use_transformation_layer=True,
     transformations=[
@@ -204,7 +203,7 @@ best_model, best_accuracy = bacon.find_best_model(
     hierarchical_bleed_ratio=0.5,        
     max_epochs=12000,
     attempts=1, 
-    acceptance_threshold=1.0
+    acceptance_threshold=0.85
 )
 print(f"✅ Best accuracy: {best_accuracy * 100:.2f}%")
 

@@ -59,9 +59,6 @@ if tree_structure is not None:
     # Get feature order from JSON
     locked_perm = tree_structure['locked_perm']
     
-    
-    highchol_idx = 8
-
     # Find HighChol position in the tree
     highchol_position = locked_perm.index(highchol_idx)
     print(f"\nHighChol is at position {highchol_position} in the tree")
