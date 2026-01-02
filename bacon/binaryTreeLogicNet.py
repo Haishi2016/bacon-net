@@ -294,6 +294,13 @@ class binaryTreeLogicNet(nn.Module):
         # Now load weights
         self.load_state_dict(state_dict, strict=True)
         self.to(self.device)
+        
+        # Clamp bias parameters to valid range when normalize_andness is False
+        # This fixes models saved with out-of-bounds bias values
+        if not self.normalize_andness:
+            with torch.no_grad():
+                for bias in self.biases:
+                    bias.clamp_(-0.99, 1.99)  # Leave small margin from exact bounds
 
     def build_balanced_tree(self, node_outputs, weights, biases):
         """Build a balanced binary tree from node outputs.
@@ -313,7 +320,14 @@ class binaryTreeLogicNet(nn.Module):
             right = combine(mid + 1, end, depth + 1)
 
             idx = combine.node_index
-            a_scaled = biases[idx]
+            bias = biases[idx]
+            
+            # Apply andness normalization if enabled
+            if self.normalize_andness:
+                a_scaled = torch.sigmoid(bias) * 3 - 1
+            else:
+                a_scaled = bias
+            
             w = weights[idx]
             
             # Handle weight indexing for different weight modes

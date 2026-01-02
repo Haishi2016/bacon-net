@@ -36,48 +36,48 @@
     "fractal_dimension3"
   ],
   "locked_perm": [
-    29,
-    28,
-    19,
-    18,
-    1,
-    23,
-    5,
     16,
-    4,
-    15,
-    9,
-    14,
-    24,
     8,
-    11,
-    0,
-    25,
-    17,
-    13,
-    12,
-    2,
-    10,
+    19,
+    14,
     3,
-    27,
-    20,
-    7,
-    26,
+    15,
+    11,
+    18,
+    0,
+    2,
+    13,
+    9,
+    28,
+    4,
+    25,
+    5,
+    12,
+    17,
+    9,
+    29,
+    10,
+    24,
+    21,
+    10,
     22,
-    6,
-    21
+    7,
+    20,
+    23,
+    26,
+    6
   ],
   "features": [
     {
       "index": 0,
-      "original_name": "fractal_dimension3",
-      "display_name": "fractal_dimension3",
+      "original_name": "concavity2",
+      "display_name": "concavity2",
       "transformation": "identity"
     },
     {
       "index": 1,
-      "original_name": "symmetry3",
-      "display_name": "symmetry3",
+      "original_name": "symmetry1",
+      "display_name": "symmetry1",
       "transformation": "identity"
     },
     {
@@ -88,86 +88,86 @@
     },
     {
       "index": 3,
-      "original_name": "symmetry2",
-      "display_name": "symmetry2",
-      "transformation": "identity"
-    },
-    {
-      "index": 4,
-      "original_name": "texture1",
-      "display_name": "texture1",
-      "transformation": "identity"
-    },
-    {
-      "index": 5,
-      "original_name": "area3",
-      "display_name": "area3",
-      "transformation": "identity"
-    },
-    {
-      "index": 6,
-      "original_name": "compactness1",
-      "display_name": "compactness1",
-      "transformation": "identity"
-    },
-    {
-      "index": 7,
-      "original_name": "concavity2",
-      "display_name": "concavity2",
-      "transformation": "identity"
-    },
-    {
-      "index": 8,
-      "original_name": "smoothness1",
-      "display_name": "smoothness1",
-      "transformation": "identity"
-    },
-    {
-      "index": 9,
-      "original_name": "compactness2",
-      "display_name": "compactness2",
-      "transformation": "identity"
-    },
-    {
-      "index": 10,
-      "original_name": "fractal_dimension1",
-      "display_name": "fractal_dimension1",
-      "transformation": "identity"
-    },
-    {
-      "index": 11,
       "original_name": "smoothness2",
       "display_name": "smoothness2",
       "transformation": "identity"
     },
     {
-      "index": 12,
-      "original_name": "smoothness3",
-      "display_name": "smoothness3",
+      "index": 4,
+      "original_name": "area1",
+      "display_name": "area1",
       "transformation": "identity"
     },
     {
-      "index": 13,
-      "original_name": "symmetry1",
-      "display_name": "symmetry1",
+      "index": 5,
+      "original_name": "compactness2",
+      "display_name": "compactness2",
       "transformation": "identity"
     },
     {
-      "index": 14,
+      "index": 6,
       "original_name": "texture2",
       "display_name": "texture2",
       "transformation": "identity"
     },
     {
-      "index": 15,
+      "index": 7,
+      "original_name": "symmetry2",
+      "display_name": "symmetry2",
+      "transformation": "identity"
+    },
+    {
+      "index": 8,
       "original_name": "radius1",
       "display_name": "radius1",
       "transformation": "identity"
     },
     {
-      "index": 16,
+      "index": 9,
+      "original_name": "perimeter1",
+      "display_name": "perimeter1",
+      "transformation": "identity"
+    },
+    {
+      "index": 10,
+      "original_name": "area2",
+      "display_name": "area2",
+      "transformation": "identity"
+    },
+    {
+      "index": 11,
+      "original_name": "fractal_dimension1",
+      "display_name": "fractal_dimension1",
+      "transformation": "identity"
+    },
+    {
+      "index": 12,
+      "original_name": "symmetry3",
+      "display_name": "symmetry3",
+      "transformation": "identity"
+    },
+    {
+      "index": 13,
+      "original_name": "smoothness1",
+      "display_name": "smoothness1",
+      "transformation": "identity"
+    },
+    {
+      "index": 14,
       "original_name": "compactness3",
       "display_name": "compactness3",
+      "transformation": "identity"
+    },
+    {
+      "index": 15,
+      "original_name": "compactness1",
+      "display_name": "compactness1",
+      "transformation": "identity"
+    },
+    {
+      "index": 16,
+      "original_name": "perimeter2",
+      "display_name": "perimeter2",
       "transformation": "identity"
     },
     {
@@ -178,44 +178,44 @@
     },
     {
       "index": 18,
-      "original_name": "area2",
-      "display_name": "area2",
+      "original_name": "fractal_dimension1",
+      "display_name": "fractal_dimension1",
       "transformation": "identity"
     },
     {
       "index": 19,
-      "original_name": "perimeter2",
-      "display_name": "perimeter2",
+      "original_name": "fractal_dimension3",
+      "display_name": "fractal_dimension3",
       "transformation": "identity"
     },
     {
       "index": 20,
-      "original_name": "perimeter1",
-      "display_name": "perimeter1",
-      "transformation": "identity"
-    },
-    {
-      "index": 21,
       "original_name": "radius2",
       "display_name": "radius2",
       "transformation": "identity"
     },
     {
+      "index": 21,
+      "original_name": "smoothness3",
+      "display_name": "smoothness3",
+      "transformation": "identity"
+    },
+    {
       "index": 22,
-      "original_name": "area1",
-      "display_name": "area1",
+      "original_name": "texture3",
+      "display_name": "texture3",
       "transformation": "identity"
     },
     {
       "index": 23,
-      "original_name": "concave_points3",
-      "display_name": "concave_points3",
+      "original_name": "radius2",
+      "display_name": "radius2",
       "transformation": "identity"
     },
     {
       "index": 24,
-      "original_name": "radius3",
-      "display_name": "radius3",
+      "original_name": "perimeter3",
+      "display_name": "perimeter3",
       "transformation": "identity"
     },
     {
@@ -226,26 +226,26 @@
     },
     {
       "index": 26,
+      "original_name": "radius3",
+      "display_name": "radius3",
+      "transformation": "identity"
+    },
+    {
+      "index": 27,
+      "original_name": "area3",
+      "display_name": "area3",
+      "transformation": "identity"
+    },
+    {
+      "index": 28,
       "original_name": "concavity3",
       "display_name": "concavity3",
       "transformation": "identity"
     },
     {
-      "index": 27,
-      "original_name": "perimeter3",
-      "display_name": "perimeter3",
-      "transformation": "identity"
-    },
-    {
-      "index": 28,
+      "index": 29,
       "original_name": "concavity1",
       "display_name": "concavity1",
-      "transformation": "identity"
-    },
-    {
-      "index": 29,
-      "original_name": "texture3",
-      "display_name": "texture3",
       "transformation": "identity"
     }
   ],
@@ -253,7 +253,7 @@
     {
       "layer": 0,
       "aggregator_index": 0,
-      "andness": 1.039009,
+      "andness": 0.300568,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -261,18 +261,18 @@
       "left_input": {
         "type": "feature",
         "index": 0,
-        "name": "fractal_dimension3"
+        "name": "concavity2"
       },
       "right_input": {
         "type": "feature",
         "index": 1,
-        "name": "symmetry3"
+        "name": "symmetry1"
       }
     },
     {
       "layer": 1,
       "aggregator_index": 1,
-      "andness": 1.25695,
+      "andness": 0.256756,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -290,7 +290,7 @@
     {
       "layer": 2,
       "aggregator_index": 2,
-      "andness": 0.640138,
+      "andness": 0.358287,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -302,13 +302,13 @@
       "right_input": {
         "type": "feature",
         "index": 3,
-        "name": "symmetry2"
+        "name": "smoothness2"
       }
     },
     {
       "layer": 3,
       "aggregator_index": 3,
-      "andness": 0.380773,
+      "andness": -0.466296,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -320,13 +320,13 @@
       "right_input": {
         "type": "feature",
         "index": 4,
-        "name": "texture1"
+        "name": "area1"
       }
     },
     {
       "layer": 4,
       "aggregator_index": 4,
-      "andness": -0.508426,
+      "andness": -0.51673,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -338,13 +338,13 @@
       "right_input": {
         "type": "feature",
         "index": 5,
-        "name": "area3"
+        "name": "compactness2"
       }
     },
     {
       "layer": 5,
       "aggregator_index": 5,
-      "andness": -0.375768,
+      "andness": 0.692173,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -356,13 +356,13 @@
       "right_input": {
         "type": "feature",
         "index": 6,
-        "name": "compactness1"
+        "name": "texture2"
       }
     },
     {
       "layer": 6,
       "aggregator_index": 6,
-      "andness": 1.139724,
+      "andness": 1.246212,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -374,13 +374,13 @@
       "right_input": {
         "type": "feature",
         "index": 7,
-        "name": "concavity2"
+        "name": "symmetry2"
       }
     },
     {
       "layer": 7,
       "aggregator_index": 7,
-      "andness": 0.533371,
+      "andness": 0.896813,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -392,13 +392,13 @@
       "right_input": {
         "type": "feature",
         "index": 8,
-        "name": "smoothness1"
+        "name": "radius1"
       }
     },
     {
       "layer": 8,
       "aggregator_index": 8,
-      "andness": 0.467245,
+      "andness": 0.5,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -410,13 +410,13 @@
       "right_input": {
         "type": "feature",
         "index": 9,
-        "name": "compactness2"
+        "name": "perimeter1"
       }
     },
     {
       "layer": 9,
       "aggregator_index": 9,
-      "andness": -0.513435,
+      "andness": 0.785022,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -428,13 +428,13 @@
       "right_input": {
         "type": "feature",
         "index": 10,
-        "name": "fractal_dimension1"
+        "name": "area2"
       }
     },
     {
       "layer": 10,
       "aggregator_index": 10,
-      "andness": 0.755438,
+      "andness": 1.456804,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -446,16 +446,16 @@
       "right_input": {
         "type": "feature",
         "index": 11,
-        "name": "smoothness2"
+        "name": "fractal_dimension1"
       }
     },
     {
       "layer": 11,
       "aggregator_index": 11,
-      "andness": -0.450275,
+      "andness": -0.469195,
       "weights": {
-        "left": 0.498863,
-        "right": 0.501137
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -464,16 +464,16 @@
       "right_input": {
         "type": "feature",
         "index": 12,
-        "name": "smoothness3"
+        "name": "symmetry3"
       }
     },
     {
       "layer": 12,
       "aggregator_index": 12,
-      "andness": 0.210291,
+      "andness": -0.449469,
       "weights": {
-        "left": 0.515372,
-        "right": 0.484628
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -482,16 +482,16 @@
       "right_input": {
         "type": "feature",
         "index": 13,
-        "name": "symmetry1"
+        "name": "smoothness1"
       }
     },
     {
       "layer": 13,
       "aggregator_index": 13,
-      "andness": 0.205743,
+      "andness": 1.366527,
       "weights": {
-        "left": 0.497486,
-        "right": 0.502514
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -500,16 +500,16 @@
       "right_input": {
         "type": "feature",
         "index": 14,
-        "name": "texture2"
+        "name": "compactness3"
       }
     },
     {
       "layer": 14,
       "aggregator_index": 14,
-      "andness": -0.522779,
+      "andness": 0.582605,
       "weights": {
-        "left": 0.29013,
-        "right": 0.70987
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -518,16 +518,16 @@
       "right_input": {
         "type": "feature",
         "index": 15,
-        "name": "radius1"
+        "name": "compactness1"
       }
     },
     {
       "layer": 15,
       "aggregator_index": 15,
-      "andness": -0.435253,
+      "andness": 1.911742,
       "weights": {
-        "left": 0.7836,
-        "right": 0.2164
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -536,16 +536,16 @@
       "right_input": {
         "type": "feature",
         "index": 16,
-        "name": "compactness3"
+        "name": "perimeter2"
       }
     },
     {
       "layer": 16,
       "aggregator_index": 16,
-      "andness": -0.417179,
+      "andness": 1.431861,
       "weights": {
-        "left": 0.81558,
-        "right": 0.18442
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -560,10 +560,10 @@
     {
       "layer": 17,
       "aggregator_index": 17,
-      "andness": 0.546251,
+      "andness": 0.940344,
       "weights": {
-        "left": 0.771684,
-        "right": 0.228316
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -572,16 +572,16 @@
       "right_input": {
         "type": "feature",
         "index": 18,
-        "name": "area2"
+        "name": "fractal_dimension1"
       }
     },
     {
       "layer": 18,
       "aggregator_index": 18,
-      "andness": 0.129282,
+      "andness": 1.013518,
       "weights": {
-        "left": 0.476183,
-        "right": 0.523817
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -590,16 +590,16 @@
       "right_input": {
         "type": "feature",
         "index": 19,
-        "name": "perimeter2"
+        "name": "fractal_dimension3"
       }
     },
     {
       "layer": 19,
       "aggregator_index": 19,
-      "andness": 1.336721,
+      "andness": -0.907631,
       "weights": {
-        "left": 0.088443,
-        "right": 0.911557
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -608,16 +608,16 @@
       "right_input": {
         "type": "feature",
         "index": 20,
-        "name": "perimeter1"
+        "name": "radius2"
       }
     },
     {
       "layer": 20,
       "aggregator_index": 20,
-      "andness": 0.568054,
+      "andness": 1.997187,
       "weights": {
-        "left": 0.368011,
-        "right": 0.631989
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -626,16 +626,16 @@
       "right_input": {
         "type": "feature",
         "index": 21,
-        "name": "radius2"
+        "name": "smoothness3"
       }
     },
     {
       "layer": 21,
       "aggregator_index": 21,
-      "andness": 0.967923,
+      "andness": -0.13672,
       "weights": {
-        "left": 0.173292,
-        "right": 0.826708
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -644,16 +644,16 @@
       "right_input": {
         "type": "feature",
         "index": 22,
-        "name": "area1"
+        "name": "texture3"
       }
     },
     {
       "layer": 22,
       "aggregator_index": 22,
-      "andness": 0.248761,
+      "andness": 0.24239,
       "weights": {
-        "left": 0.141353,
-        "right": 0.858647
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -662,16 +662,16 @@
       "right_input": {
         "type": "feature",
         "index": 23,
-        "name": "concave_points3"
+        "name": "radius2"
       }
     },
     {
       "layer": 23,
       "aggregator_index": 23,
-      "andness": 0.849414,
+      "andness": 1.979507,
       "weights": {
-        "left": 0.021656,
-        "right": 0.978344
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -680,16 +680,16 @@
       "right_input": {
         "type": "feature",
         "index": 24,
-        "name": "radius3"
+        "name": "perimeter3"
       }
     },
     {
       "layer": 24,
       "aggregator_index": 24,
-      "andness": 1.127326,
+      "andness": 1.776951,
       "weights": {
-        "left": 0.012362,
-        "right": 0.987638
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -704,10 +704,10 @@
     {
       "layer": 25,
       "aggregator_index": 25,
-      "andness": 1.008654,
+      "andness": 1.24402,
       "weights": {
-        "left": 0.952291,
-        "right": 0.047709
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -716,16 +716,16 @@
       "right_input": {
         "type": "feature",
         "index": 26,
-        "name": "concavity3"
+        "name": "radius3"
       }
     },
     {
       "layer": 26,
       "aggregator_index": 26,
-      "andness": 1.651002,
+      "andness": 1.229607,
       "weights": {
-        "left": 0.200125,
-        "right": 0.799875
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -734,16 +734,16 @@
       "right_input": {
         "type": "feature",
         "index": 27,
-        "name": "perimeter3"
+        "name": "area3"
       }
     },
     {
       "layer": 27,
       "aggregator_index": 27,
-      "andness": 1.433526,
+      "andness": 0.828369,
       "weights": {
-        "left": 0.994633,
-        "right": 0.005367
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -752,16 +752,16 @@
       "right_input": {
         "type": "feature",
         "index": 28,
-        "name": "concavity1"
+        "name": "concavity3"
       }
     },
     {
       "layer": 28,
       "aggregator_index": 28,
-      "andness": 1.316809,
+      "andness": 1.072178,
       "weights": {
-        "left": 0.716802,
-        "right": 0.283198
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -770,7 +770,7 @@
       "right_input": {
         "type": "feature",
         "index": 29,
-        "name": "texture3"
+        "name": "concavity1"
       }
     }
   ]
