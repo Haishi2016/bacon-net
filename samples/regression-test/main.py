@@ -31,11 +31,12 @@ trans = [
 # Using math.avg aggregator for continuous output
 bacon = baconNet(
     input_size, 
-    aggregator='lsp.half_weight',
-    weight_mode='fixed',
-    normalize_andness=False,    
+    aggregator='lsp.full_weight',
+    weight_mode='trainable',    
     use_transformation_layer=True,
     transformations=trans,
+    weight_normalization='softmax',
+    weight_penalty_strength=1e-3
 )
 
 # Train the model
@@ -48,8 +49,8 @@ print("🔧 Training BACON model...")
     hierarchical_bleed_ratio=0.5,
     acceptance_threshold=1.0,  # High threshold for small dataset
     attempts=5,
-    max_epochs=2000,
-    save_model=False,
+    max_epochs=2000,    
+    save_model=True,
     binary_threshold=-1.0  # Disable binarization for regression
 )
 

@@ -27,8 +27,8 @@ trans = [
 # Create model
 bacon = create_bacon_model(
     input_size=num_features,
-    aggregator='lsp.half_weight',
-    weight_mode='fixed',
+    aggregator='lsp.full_weight',
+    weight_mode='trainable',
     transformations=trans,
     use_transformation_layer=False,
     weight_normalization='softmax',
@@ -48,7 +48,7 @@ train_bacon_model(
     use_hierarchical_permutation=True,
     hierarchical_bleed_ratio=0.5,
     hierarchical_epochs_per_attempt=3000,
-    hierarchical_group_size=6,
+    hierarchical_group_size=8,
     loss_weight_perm_sparsity=5.0,
     sinkhorn_iters=200,
     freeze_confidence_threshold=0.92,

@@ -397,6 +397,7 @@ def run_standard_analysis(
         from bacon.visualization import plot_feature_growing_analysis
         plot_feature_growing_analysis(
             growing_results['accuracies'],
+            f1_scores=growing_results.get('f1_scores'),
             title=plot_title,
             filename=filename
         )

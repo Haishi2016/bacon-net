@@ -28,10 +28,6 @@ class baconNet(nn.Module):
         early_stop_threshold_large_inputs (float, optional): Early stop threshold for transformation layers with 10+ inputs. Defaults to 0.1. Lower values require more training but achieve higher accuracy.
         transformations (list, optional): List of transformation objects to use. If None, uses all 6 default transformations.
                                           Example: [IdentityTransformation(n), NegationTransformation(n)] for identity+negation only.
-        reheat_plateau_window (int, optional): Number of epochs to check for plateau detection. Defaults to 200. Smaller = more aggressive reheating.
-        reheat_improvement_threshold (float, optional): Minimum loss improvement over plateau_window to avoid reheating. Defaults to 1.0. Smaller = more aggressive.
-        reheat_cooldown (int, optional): Minimum epochs between reheats. Defaults to 300. Prevents oscillation.
-        reheat_temperature (float, optional): Temperature to use when reheating. Defaults to 10.0. Higher = more exploration.
         permutation_initial_temperature (float, optional): Starting temperature for permutation annealing. Defaults to 5.0. Higher = more initial exploration.
         permutation_final_temperature (float, optional): Final temperature for permutation annealing. Defaults to 0.1. Lower = harder final permutation.
         transformation_initial_temperature (float, optional): Starting temperature for transformation layer. Defaults to 1.0. Should be lower than permutation since transformation is simpler (2^n vs n! states).
@@ -61,10 +57,6 @@ class baconNet(nn.Module):
                  transformation_use_gumbel=False,
                  transformations=None,
                  early_stop_threshold_large_inputs=0.1,
-                 reheat_plateau_window=200,
-                 reheat_improvement_threshold=1.0,
-                 reheat_cooldown=300,
-                 reheat_temperature=10.0,
                  permutation_initial_temperature=5.0,
                  permutation_final_temperature=0.1,
                  transformation_initial_temperature=1.0,
@@ -85,10 +77,6 @@ class baconNet(nn.Module):
         aggregator = aggregator_class()
         self.is_frozen = is_frozen
         self.early_stop_threshold_large_inputs = early_stop_threshold_large_inputs
-        self.reheat_plateau_window = reheat_plateau_window
-        self.reheat_improvement_threshold = reheat_improvement_threshold
-        self.reheat_cooldown = reheat_cooldown
-        self.reheat_temperature = reheat_temperature
         self.permutation_initial_temperature = permutation_initial_temperature
         self.permutation_final_temperature = permutation_final_temperature
         self.transformation_initial_temperature = transformation_initial_temperature
@@ -140,41 +128,17 @@ class baconNet(nn.Module):
         if self.assembler.transformation_layer:
             actual_trans = self.assembler.transformation_layer.transformations
             logging.info(f"✅ Assembler created with {len(actual_trans)} transformations: {[type(t).__name__ for t in actual_trans]}")
-    def forward(self, x):
-        """ Forward pass through the BACON network.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
-        Returns:
-            torch.Tensor: Output tensor of shape (batch_size, 1).
-        """
+    def forward(self, x):        
         output = self.assembler(x)
         return output
-    def train_model(self, x, y, epochs):
-        """ Train the BACON network.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
-            y (torch.Tensor): Target tensor of shape (batch_size, 1).
-            epochs (int): Number of training epochs.
-        Returns:
-            dict: Training output containing loss and accuracy.
-        """
+    def train_model(self, x, y, epochs):        
         try:
             output = self.assembler.train_model(x,y, epochs, self.is_frozen)
         except RuntimeError as e:
                 # We'll raise the error now as there's only one binaryTreeLogicNet
             raise e
         return output
-    def inference(self, x, threshold=0.5):
-        """ Perform inference on the BACON network.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
-            threshold (float, optional): Threshold for binarizing the output. Defaults to 0.5.
-        Returns:
-            torch.Tensor: Binarized output tensor of shape (batch_size, 1).
-        """
+    def inference(self, x, threshold=0.5):        
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
@@ -182,28 +146,12 @@ class baconNet(nn.Module):
             # predictions = (probs > 0.5).float() 
             predictions = (outputs > threshold).float()
             return predictions
-    def inference_raw(self, x):
-        """ Perform raw inference on the BACON network. Returns the level of truth in [0,1] instead of binarized output.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
-        Returns:
-            torch.Tensor: Raw output tensor of shape (batch_size, 1).
-        """
+    def inference_raw(self, x):        
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
             return outputs
-    def evaluate(self, x, y, threshold=0.5):
-        """ Evaluate the BACON network.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, input_size).
-            y (torch.Tensor): Target tensor of shape (batch_size, 1).
-            threshold (float, optional): Threshold for binarizing the output. Defaults to 0.5.
-        Returns:
-            float: Accuracy of the model on the input data.
-        """
+    def evaluate(self, x, y, threshold=0.5):        
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             outputs = self.forward(x)
@@ -212,24 +160,70 @@ class baconNet(nn.Module):
             predictions = (outputs > threshold).float()  # Binarize the output to match the target labels (0 or 1)
             accuracy = (predictions == y).float().mean()
             return accuracy.item()
+        
     def save_model(self, filepath):
-        """ Save the BACON network model to a file.
-
-        Args:
-            filepath (str): Path to save the model.
-        """        
         directory = os.path.dirname(filepath)
         if directory:
             os.makedirs(directory, exist_ok=True)
         self.assembler.save_model(filepath)
 
     def load_model(self, filepath):
-        """ Load the BACON network model from a file.
-
-        Args:
-            filepath (str): Path to load the model from.
-        """
         self.assembler.load_model(filepath)
+
+    def make_param_groups(self):        
+        param_groups = []
+        
+        # Group 1: Permutation layer (input_to_leaf)
+        # Higher LR - needs to explore large combinatorial space (n! permutations)
+        if hasattr(self.assembler, 'input_to_leaf') and hasattr(self.assembler.input_to_leaf, 'logits'):
+            param_groups.append({
+                'params': [self.assembler.input_to_leaf.logits],
+                'lr': self.lr_permutation,
+                'name': 'permutation'
+            })
+        
+        # Group 2: Transformation layer (if exists)
+        # Highest LR - simpler problem (2^n states), can move faster
+        if self.assembler.transformation_layer is not None:
+            trans_params = list(self.assembler.transformation_layer.parameters())
+            if trans_params:
+                param_groups.append({
+                    'params': trans_params,
+                    'lr': self.lr_transformation,
+                    'name': 'transformation'
+                })
+        
+        # Group 3: Aggregator weights (only if it has parameters)
+        # Lower LR - tree structure should be more stable
+        if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'parameters'):
+            try:
+                agg_params = list(self.assembler.aggregator.parameters())
+                if agg_params:
+                    param_groups.append({
+                        'params': agg_params,
+                        'lr': self.lr_aggregator,
+                        'name': 'aggregator'
+                    })
+            except:
+                pass  # Some aggregators don't have learnable parameters
+        
+        # Group 4: Any other parameters (fallback)
+        # Conservative LR for general weights
+        registered_params = set()
+        for group in param_groups:
+            for p in group['params']:
+                registered_params.add(id(p))
+        
+        other_params = [p for p in self.assembler.parameters() 
+                       if id(p) not in registered_params]
+        if other_params:
+            param_groups.append({
+                'params': other_params,
+                'lr': self.lr_other,
+                'name': 'other'
+            })
+        
+        return param_groups
 
     def find_best_model(self, x, y, x_test, y_test, 
                         attempts = 100, 
@@ -286,6 +280,7 @@ class baconNet(nn.Module):
         """
         best_accuracy = 0.0
         best_model = None        
+
         if os.path.exists(save_path):
             try:
                 logging.info(f"📂 Found saved model at {save_path}, loading...")
@@ -378,57 +373,7 @@ class baconNet(nn.Module):
 
                 # Separate parameter groups with different learning rates
                 # This allows adjusting learning pressure for different components
-                param_groups = []
-                
-                # Group 1: Permutation layer (input_to_leaf)
-                # Higher LR - needs to explore large combinatorial space (n! permutations)
-                if hasattr(self.assembler, 'input_to_leaf') and hasattr(self.assembler.input_to_leaf, 'logits'):
-                    param_groups.append({
-                        'params': [self.assembler.input_to_leaf.logits],
-                        'lr': self.lr_permutation,
-                        'name': 'permutation'
-                    })
-                
-                # Group 2: Transformation layer (if exists)
-                # Highest LR - simpler problem (2^n states), can move faster
-                if self.assembler.transformation_layer is not None:
-                    trans_params = list(self.assembler.transformation_layer.parameters())
-                    if trans_params:
-                        param_groups.append({
-                            'params': trans_params,
-                            'lr': self.lr_transformation,
-                            'name': 'transformation'
-                        })
-                
-                # Group 3: Aggregator weights (only if it has parameters)
-                # Lower LR - tree structure should be more stable
-                if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'parameters'):
-                    try:
-                        agg_params = list(self.assembler.aggregator.parameters())
-                        if agg_params:
-                            param_groups.append({
-                                'params': agg_params,
-                                'lr': self.lr_aggregator,
-                                'name': 'aggregator'
-                            })
-                    except:
-                        pass  # Some aggregators don't have learnable parameters
-                
-                # Group 4: Any other parameters (fallback)
-                # Conservative LR for general weights
-                registered_params = set()
-                for group in param_groups:
-                    for p in group['params']:
-                        registered_params.add(id(p))
-                
-                other_params = [p for p in self.assembler.parameters() 
-                               if id(p) not in registered_params]
-                if other_params:
-                    param_groups.append({
-                        'params': other_params,
-                        'lr': self.lr_other,
-                        'name': 'other'
-                    })
+                param_groups = self.make_param_groups()
                 
                 # Create optimizer with parameter groups
                 optimizer = torch.optim.Adam(param_groups)
@@ -494,8 +439,6 @@ class baconNet(nn.Module):
                 transformation_converged = False
                 loss_history = []
                 accuracy_history = []  # Track accuracy for smarter plateau detection
-                last_reheat_epoch = -1000  # Track when we last reheated
-                min_epochs_between_reheats = 500  # Minimum gap between reheating attempts
                 freeze_confidence_warning_shown = False  # Track if we've already warned about low confidence
                 
                 # Convergence tracking
@@ -982,92 +925,7 @@ class baconNet(nn.Module):
                     if not just_froze:
                         loss.backward()
                         optimizer.step()
-                    
-                    # ADAPTIVE REHEATING: Check periodically if we should escape current basin
-                    # Key insight: Don't wait for plateau - proactively check if we're making good enough progress
-                    # Check if we have a learnable permutation layer with temperature
-                    can_reheat = False  # DISABLED: Testing if natural annealing works better than reheating
-                    
-                    # Periodic accuracy check: every N epochs, assess if progress is adequate
-                    reheat_check_interval = 500  # Check every 500 epochs (less frequent than window size)
-                    
-                    if can_reheat and (epoch + 1) % reheat_check_interval == 0:
-                        if (epoch - last_reheat_epoch) >= min_epochs_between_reheats and not self.assembler.is_frozen:
-                            # Check recent progress over a larger window for more stable detection
-                            window_size = min(300, len(accuracy_history))  # Use 300 epochs for smoother trend
-                            
-                            if window_size > 0:
-                                old_accuracy = accuracy_history[-window_size]
-                                new_accuracy = accuracy_history[-1]
-                                accuracy_improvement = new_accuracy - old_accuracy
-                                
-                                old_loss = loss_history[-window_size]
-                                new_loss = loss_history[-1]
-                                loss_improvement = old_loss - new_loss
-                                
-                                # Debug: Log what we're checking
-                                if (epoch + 1) % (reheat_check_interval * 5) == 0:  # Every 500 epochs
-                                    logging.info(f"   📊 Reheat check @ epoch {epoch+1}: Acc {new_accuracy:.1%} (Δ{accuracy_improvement:+.1%}), Loss {new_loss:.1f} (Δ{loss_improvement:+.1f})")
-                                
-                                # Proactive reheating strategy:
-                                # Reheat when accuracy plateaus (< 1% improvement over window)
-                                # BUT NOT if we've already achieved high accuracy (≥ 99%)
-                                # If accuracy stops improving, we're likely stuck in a local optimum
-                                
-                                accuracy_plateau = accuracy_improvement < 0.01  # Less than 1% improvement
-                                loss_plateau = loss_improvement < self.reheat_improvement_threshold
-                                accuracy_already_good = new_accuracy >= 0.99  # Don't reheat if we're already at target!
-                                
-                                # Reheat if BOTH loss and accuracy have plateaued AND accuracy isn't already good
-                                # (If accuracy is 99%+, we've found a great solution - don't destroy it!)
-                                both_stuck = accuracy_plateau and loss_plateau and not accuracy_already_good
-                                
-                                should_reheat = both_stuck and epoch > 500  # Give it time to settle first
-                                
-                                # Debug logging to diagnose reheating
-                                if (epoch + 1) % (reheat_check_interval * 5) == 0 and both_stuck:
-                                    logging.info(f"   🔍 Conditions: both_stuck={both_stuck}, epoch>{500}={epoch > 500}")
-                                    logging.info(f"   🔍 Should reheat: {should_reheat}")
-                                
-                                if should_reheat:
-                                    # ADAPTIVE REHEATING: Temperature based on how stuck we are
-                                    # Key insight: If we're close to optimal (high accuracy), gentle reheat
-                                    #              If we're far from optimal (low accuracy), strong reheat
-                                    old_temp = self.assembler.input_to_leaf.temperature
-                                    
-                                    # Calculate adaptive reheat temperature using continuous formula
-                                    # Multiplier formula: 2.0 + 8.0 * (1 - accuracy)^2
-                                    # This gives smooth scaling:
-                                    #   accuracy=1.00 → 2.0x (very gentle)
-                                    #   accuracy=0.95 → 2.2x (gentle)
-                                    #   accuracy=0.90 → 2.8x (moderate)
-                                    #   accuracy=0.80 → 4.32x (stronger)
-                                    #   accuracy=0.70 → 6.72x (strong)
-                                    #   accuracy=0.50 → 10.0x (maximum)
-                                    reheat_multiplier = 2.0 + 8.0 * ((1.0 - new_accuracy) ** 2)
-                                    adaptive_reheat_temp = min(old_temp * reheat_multiplier, self.reheat_temperature)
-                                    
-                                    self.assembler.input_to_leaf.temperature = adaptive_reheat_temp
-                                    
-                                    # Synchronize transformation layer temperature when reheating
-                                    # Both layers should re-explore together
-                                    if self.assembler.transformation_layer is not None:
-                                        self.assembler.transformation_layer.temperature = adaptive_reheat_temp
-                                    
-                                    self.assembler.is_frozen = False
-                                    last_reheat_epoch = epoch
-                                    
-                                    # Log why we're reheating
-                                    logging.info(f"   🔥 Accuracy plateau detected! Acc: {new_accuracy:.1%}, improvement: {accuracy_improvement:.1%} over {window_size} epochs")
-                                    logging.info(f"   🔥 Adaptive reheating: temp {old_temp:.3f} → {adaptive_reheat_temp:.1f} (multiplier: {reheat_multiplier if reheat_multiplier else 'max'})")
-                                    
-                                    # Clear some loss/accuracy history to avoid immediate re-trigger
-                                    loss_history = loss_history[-100:]
-                                    accuracy_history = accuracy_history[-100:]
-                    elif len(loss_history) == self.reheat_plateau_window and not use_temperature_annealing:
-                        # Debug: log once why reheating is disabled (only if not using annealing)
-                        logging.info(f"   ℹ️  Reheating disabled: input_to_leaf type = {type(self.assembler.input_to_leaf).__name__}")
-                    
+                                        
                     # Check if transformation layer has converged
                     # Only check transformation convergence when transformation temperature is low
                     # This ensures transformation converges based on its own schedule, not permutation
@@ -1251,12 +1109,5 @@ class baconNet(nn.Module):
             self.save_model(save_path)
         return best_model, best_accuracy
     
-    def prune_features(self, features):
-        """ Prune the features of the BACON network.
-        
-        Args:
-            features (int): Number of features to prune.
-        Returns:
-            torch.Tensor: Pruned features.
-        """
+    def prune_features(self, features):        
         return self.assembler.prune_features(features=features)    

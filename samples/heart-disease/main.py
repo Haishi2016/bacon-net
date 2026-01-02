@@ -21,13 +21,14 @@ print(f"\n📊 Model will use {num_features} input features (after one-hot encod
 # Create model with standard configuration
 bacon = create_bacon_model(
     input_size=num_features,
-    aggregator='lsp.half_weight',
+    aggregator='lsp.full_weight',
     weight_mode='fixed',
     use_transformation_layer=True,
     weight_normalization='softmax',
     use_class_weighting=True,
     permutation_initial_temperature=5.0,
-    permutation_final_temperature=4.0
+    permutation_final_temperature=4.0,
+    weight_penalty_strength=1e-3
 )
 
 # Train model
@@ -35,7 +36,7 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=0.80,
+    acceptance_threshold=0.75,
     hierarchical_epochs_per_attempt=3000,
     hierarchical_group_size=8
 )
