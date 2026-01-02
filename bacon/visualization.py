@@ -320,7 +320,7 @@ def visualize_tree_structure(model, labels=None, layout=None):
     if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
         w_list = model.weights
     else:
-        w_list = [torch.sigmoid(w) for w in model.weights]
+        w_list = [F.softmax(w, dim=0) for w in model.weights]
 
     def add_parent(parent, left, right, idx):
         node_dict[parent] = (left, right)
@@ -577,7 +577,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
             if i < model.num_layers - 1:
                 print(
                     fmt_label(new_leaf)
-                    + f"─{1-weights[i][1]:.2f}".rjust(5)
+                    + f"─{weights[i][1]:.2f}".rjust(5)
                     + "─" * indent
                     + operator
                     + f"─{weights[i+1][0]:.2f}".rjust(5)
@@ -586,7 +586,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
             else:
                 print(
                     fmt_label(new_leaf)
-                    + f"─{1-weights[i][1]:.2f}".rjust(5)
+                    + f"─{weights[i][1]:.2f}".rjust(5)
                     + "─" * indent
                     + f"{operator}──OUTPUT"
                 )
@@ -1231,24 +1231,32 @@ def plot_feature_pruning_analysis(accuracies, baseline_features=None, title="Acc
     plt.show()
 
 
-def plot_feature_growing_analysis(accuracies, title="Accuracy vs. Number of Features (Growing)", filename=None):
+def plot_feature_growing_analysis(accuracies, f1_scores=None, title="Accuracy vs. Number of Features (Growing)", filename=None):
     """Plot accuracy vs number of features as tree grows from baseline.
     
     Args:
         accuracies: List of accuracies [baseline_2_features, after_adding_feature_2, after_adding_feature_3, ...]
+        f1_scores: List of F1 scores (optional)
         title: Plot title
         filename: If provided, save plot to this file
     """
     plt.figure(figsize=(10, 5))
     # X-axis represents number of features: starts at 2 (baseline), then 3, 4, 5, ...
     num_features = list(range(2, 2 + len(accuracies)))
-    plt.plot(num_features, [a * 100 for a in accuracies], marker='o', linewidth=2, color='green')
+    plt.plot(num_features, [a * 100 for a in accuracies], marker='o', linewidth=2, color='green', label='Accuracy')
+    
+    # Plot F1 scores as dotted line if provided
+    if f1_scores is not None and len(f1_scores) == len(accuracies):
+        plt.plot(num_features, [f * 100 for f in f1_scores], marker='s', linewidth=2, linestyle='--', color='blue', label='F1 Score')
+        plt.legend()
     
     plt.title(title)
     plt.xlabel("Number of Features (Growing from Baseline)")
-    plt.ylabel("Accuracy (%)")
+    plt.ylabel("Score (%)")
     plt.grid(True, alpha=0.3)
-    plt.xticks(num_features)  # Show all tick marks
+    # Show x-axis labels every 5 samples
+    xtick_positions = [n for n in num_features if (n - 2) % 5 == 0 or n == num_features[0] or n == num_features[-1]]
+    plt.xticks(xtick_positions)
     plt.tight_layout()
     
     if filename:

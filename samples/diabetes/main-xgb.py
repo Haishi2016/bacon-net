@@ -132,7 +132,7 @@ print("TOP 10 MOST IMPORTANT FEATURES")
 print("="*60)
 
 feature_importance = best_model.feature_importances_
-top_indices = np.argsort(feature_importance)[-10:][::-1]
+top_indices = np.argsort(feature_importance)[-20:][::-1]
 
 for rank, idx in enumerate(top_indices, 1):
     importance = feature_importance[idx]

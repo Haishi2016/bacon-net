@@ -475,6 +475,7 @@ def analyze_feature_importance_with_growing(
     
     num_aggregators = len(assembler.weights)
     accuracies = []
+    f1_scores = []
     feature_order = list(range(num_features))
     
     print("\n🌱 Incremental growing analysis:")
@@ -509,9 +510,23 @@ def analyze_feature_importance_with_growing(
                     assembler.biases[j].data = torch.tensor(0.5, dtype=torch.float32, device=device)
         
         baseline_output = assembler(X)
-        baseline_accuracy = ((baseline_output > threshold).float() == Y).float().mean().item()
+        baseline_pred = (baseline_output > threshold).float()
+        baseline_accuracy = (baseline_pred == Y).float().mean().item()
+        
+        # Compute additional metrics
+        from sklearn.metrics import precision_score, recall_score, f1_score, average_precision_score
+        baseline_pred_np = baseline_pred.cpu().numpy().flatten()
+        Y_np = Y.cpu().numpy().flatten()
+        baseline_output_np = baseline_output.cpu().numpy().flatten()
+        
+        baseline_precision = precision_score(Y_np, baseline_pred_np, zero_division=0)
+        baseline_recall = recall_score(Y_np, baseline_pred_np, zero_division=0)
+        baseline_f1 = f1_score(Y_np, baseline_pred_np, zero_division=0)
+        baseline_auprc = average_precision_score(Y_np, baseline_output_np)
+        
         accuracies.append(baseline_accuracy)
-        print(f"   Baseline (features 0-1): accuracy = {baseline_accuracy * 100:.2f}%")
+        f1_scores.append(baseline_f1)
+        print(f"   Baseline (features 0-1): acc={baseline_accuracy*100:.2f}%, prec={baseline_precision*100:.2f}%, rec={baseline_recall*100:.2f}%, F1={baseline_f1*100:.2f}%, AUPRC={baseline_auprc:.4f}")
     
     # Step 2: Incrementally grow by adding features 2 onwards
     for i in range(2, num_features):
@@ -525,31 +540,36 @@ def analyze_feature_importance_with_growing(
                 else:
                     assembler.biases[j].data = original_biases[j].clone()
             
-            # Feature i uses aggregator i-1
-            # We want to include features 0 through i
-            # So restore aggregators 0 through i-1 to original values
-            # Set aggregators i onwards to neutrality (pass left input through)
+            # In left-balanced tree:
+            #   - Aggregator 0 combines features 0 and 1
+            #   - Aggregator 1 combines (agg0 result) with feature 2
+            #   - Aggregator 2 combines (agg1 result) with feature 3, etc.
+            # To include features 0 through i:
+            #   - Keep aggregators 0 through i-1 (which processes features up to i)
+            #   - Neutralize aggregators i onwards (just pass through left input)
             for j in range(i, num_aggregators):
-                assembler.weights[j].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=device)
+                assembler.weights[j].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=device)                
                 # Set bias to 0.5 (logical neutrality)
-                if assembler.normalize_andness:
-                    # If normalize_andness, bias is logit-transformed: logit(0.5) = 0
-                    if assembler.biases[j].numel() == 1:
-                        assembler.biases[j].data.fill_(0.0)
-                    else:
-                        assembler.biases[j].data = torch.tensor(0.0, dtype=torch.float32, device=device)
-                else:
-                    if assembler.biases[j].numel() == 1:
-                        assembler.biases[j].data.fill_(0.5)
-                    else:
-                        assembler.biases[j].data = torch.tensor(0.5, dtype=torch.float32, device=device)
+                assembler.biases[j].data.fill_(0.5)
             
             grown_output = assembler(X)
-            grown_accuracy = ((grown_output > threshold).float() == Y).float().mean().item()
+            grown_pred = (grown_output > threshold).float()
+            grown_accuracy = (grown_pred == Y).float().mean().item()
+            
+            # Compute additional metrics
+            grown_pred_np = grown_pred.cpu().numpy().flatten()
+            grown_output_np = grown_output.cpu().numpy().flatten()
+            
+            grown_precision = precision_score(Y_np, grown_pred_np, zero_division=0)
+            grown_recall = recall_score(Y_np, grown_pred_np, zero_division=0)
+            grown_f1 = f1_score(Y_np, grown_pred_np, zero_division=0)
+            grown_auprc = average_precision_score(Y_np, grown_output_np)
+            
             accuracies.append(grown_accuracy)
+            f1_scores.append(grown_f1)
             
             feature_name = feature_names[assembler.locked_perm[i].item()]
-            print(f"   Growing to feature {i} ({feature_name}): accuracy = {grown_accuracy * 100:.2f}% (total features: {i+1})")
+            print(f"   Growing to feature {i} ({feature_name}): acc={grown_accuracy*100:.2f}%, prec={grown_precision*100:.2f}%, rec={grown_recall*100:.2f}%, F1={grown_f1*100:.2f}%, AUPRC={grown_auprc:.4f} (total: {i+1})")
     
     # Restore original weights and biases
     with torch.no_grad():
@@ -563,6 +583,7 @@ def analyze_feature_importance_with_growing(
     
     return {
         'accuracies': accuracies,
+        'f1_scores': f1_scores,
         'feature_order': feature_order
     }
 

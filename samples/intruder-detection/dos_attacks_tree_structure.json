@@ -1,0 +1,985 @@
+{
+  "model_type": "binaryTreeLogicNet",
+  "layout": "left",
+  "num_features": 38,
+  "num_layers": 37,
+  "original_feature_order": [
+    "duration",
+    "src_bytes",
+    "dst_bytes",
+    "land",
+    "wrong_fragment",
+    "urgent",
+    "hot",
+    "num_failed_logins",
+    "logged_in",
+    "num_compromised",
+    "root_shell",
+    "su_attempted",
+    "num_root",
+    "num_file_creations",
+    "num_shells",
+    "num_access_files",
+    "num_outbound_cmds",
+    "is_host_login",
+    "is_guest_login",
+    "count",
+    "srv_count",
+    "serror_rate",
+    "srv_serror_rate",
+    "rerror_rate",
+    "srv_rerror_rate",
+    "same_srv_rate",
+    "diff_srv_rate",
+    "srv_diff_host_rate",
+    "dst_host_count",
+    "dst_host_srv_count",
+    "dst_host_same_srv_rate",
+    "dst_host_diff_srv_rate",
+    "dst_host_same_src_port_rate",
+    "dst_host_srv_diff_host_rate",
+    "dst_host_serror_rate",
+    "dst_host_srv_serror_rate",
+    "dst_host_rerror_rate",
+    "dst_host_srv_rerror_rate"
+  ],
+  "locked_perm": [
+    14,
+    6,
+    8,
+    12,
+    18,
+    29,
+    10,
+    11,
+    16,
+    17,
+    26,
+    21,
+    27,
+    9,
+    24,
+    36,
+    28,
+    23,
+    30,
+    37,
+    4,
+    1,
+    31,
+    3,
+    2,
+    0,
+    5,
+    7,
+    15,
+    13,
+    25,
+    32,
+    33,
+    22,
+    34,
+    19,
+    35,
+    20
+  ],
+  "features": [
+    {
+      "index": 0,
+      "original_name": "num_shells",
+      "display_name": "num_shells",
+      "transformation": "identity"
+    },
+    {
+      "index": 1,
+      "original_name": "hot",
+      "display_name": "hot",
+      "transformation": "identity"
+    },
+    {
+      "index": 2,
+      "original_name": "logged_in",
+      "display_name": "logged_in",
+      "transformation": "identity"
+    },
+    {
+      "index": 3,
+      "original_name": "num_root",
+      "display_name": "num_root",
+      "transformation": "identity"
+    },
+    {
+      "index": 4,
+      "original_name": "is_guest_login",
+      "display_name": "is_guest_login",
+      "transformation": "identity"
+    },
+    {
+      "index": 5,
+      "original_name": "dst_host_srv_count",
+      "display_name": "dst_host_srv_count",
+      "transformation": "identity"
+    },
+    {
+      "index": 6,
+      "original_name": "root_shell",
+      "display_name": "root_shell",
+      "transformation": "identity"
+    },
+    {
+      "index": 7,
+      "original_name": "su_attempted",
+      "display_name": "su_attempted",
+      "transformation": "identity"
+    },
+    {
+      "index": 8,
+      "original_name": "num_outbound_cmds",
+      "display_name": "num_outbound_cmds",
+      "transformation": "identity"
+    },
+    {
+      "index": 9,
+      "original_name": "is_host_login",
+      "display_name": "is_host_login",
+      "transformation": "identity"
+    },
+    {
+      "index": 10,
+      "original_name": "diff_srv_rate",
+      "display_name": "diff_srv_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 11,
+      "original_name": "serror_rate",
+      "display_name": "serror_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 12,
+      "original_name": "srv_diff_host_rate",
+      "display_name": "srv_diff_host_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 13,
+      "original_name": "num_compromised",
+      "display_name": "num_compromised",
+      "transformation": "identity"
+    },
+    {
+      "index": 14,
+      "original_name": "srv_rerror_rate",
+      "display_name": "srv_rerror_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 15,
+      "original_name": "dst_host_rerror_rate",
+      "display_name": "NOT dst_host_rerror_rate",
+      "transformation": "negation"
+    },
+    {
+      "index": 16,
+      "original_name": "dst_host_count",
+      "display_name": "NOT dst_host_count",
+      "transformation": "negation"
+    },
+    {
+      "index": 17,
+      "original_name": "rerror_rate",
+      "display_name": "NOT rerror_rate",
+      "transformation": "negation"
+    },
+    {
+      "index": 18,
+      "original_name": "dst_host_same_srv_rate",
+      "display_name": "NOT dst_host_same_srv_rate",
+      "transformation": "negation"
+    },
+    {
+      "index": 19,
+      "original_name": "dst_host_srv_rerror_rate",
+      "display_name": "NOT dst_host_srv_rerror_rate",
+      "transformation": "negation"
+    },
+    {
+      "index": 20,
+      "original_name": "wrong_fragment",
+      "display_name": "NOT wrong_fragment",
+      "transformation": "negation"
+    },
+    {
+      "index": 21,
+      "original_name": "src_bytes",
+      "display_name": "NOT src_bytes",
+      "transformation": "negation"
+    },
+    {
+      "index": 22,
+      "original_name": "dst_host_diff_srv_rate",
+      "display_name": "NOT dst_host_diff_srv_rate",
+      "transformation": "negation"
+    },
+    {
+      "index": 23,
+      "original_name": "land",
+      "display_name": "NOT land",
+      "transformation": "negation"
+    },
+    {
+      "index": 24,
+      "original_name": "dst_bytes",
+      "display_name": "NOT dst_bytes",
+      "transformation": "negation"
+    },
+    {
+      "index": 25,
+      "original_name": "duration",
+      "display_name": "NOT duration",
+      "transformation": "negation"
+    },
+    {
+      "index": 26,
+      "original_name": "urgent",
+      "display_name": "NOT urgent",
+      "transformation": "negation"
+    },
+    {
+      "index": 27,
+      "original_name": "num_failed_logins",
+      "display_name": "num_failed_logins",
+      "transformation": "identity"
+    },
+    {
+      "index": 28,
+      "original_name": "num_access_files",
+      "display_name": "num_access_files",
+      "transformation": "identity"
+    },
+    {
+      "index": 29,
+      "original_name": "num_file_creations",
+      "display_name": "NOT num_file_creations",
+      "transformation": "negation"
+    },
+    {
+      "index": 30,
+      "original_name": "same_srv_rate",
+      "display_name": "NOT same_srv_rate",
+      "transformation": "negation"
+    },
+    {
+      "index": 31,
+      "original_name": "dst_host_same_src_port_rate",
+      "display_name": "dst_host_same_src_port_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 32,
+      "original_name": "dst_host_srv_diff_host_rate",
+      "display_name": "dst_host_srv_diff_host_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 33,
+      "original_name": "srv_serror_rate",
+      "display_name": "srv_serror_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 34,
+      "original_name": "dst_host_serror_rate",
+      "display_name": "dst_host_serror_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 35,
+      "original_name": "count",
+      "display_name": "count",
+      "transformation": "identity"
+    },
+    {
+      "index": 36,
+      "original_name": "dst_host_srv_serror_rate",
+      "display_name": "dst_host_srv_serror_rate",
+      "transformation": "identity"
+    },
+    {
+      "index": 37,
+      "original_name": "srv_count",
+      "display_name": "srv_count",
+      "transformation": "identity"
+    }
+  ],
+  "nodes": [
+    {
+      "layer": 0,
+      "aggregator_index": 0,
+      "andness": 0.468675,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "feature",
+        "index": 0,
+        "name": "num_shells"
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 1,
+        "name": "hot"
+      }
+    },
+    {
+      "layer": 1,
+      "aggregator_index": 1,
+      "andness": 0.045782,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 0
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 2,
+        "name": "logged_in"
+      }
+    },
+    {
+      "layer": 2,
+      "aggregator_index": 2,
+      "andness": 1.360812,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 1
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 3,
+        "name": "num_root"
+      }
+    },
+    {
+      "layer": 3,
+      "aggregator_index": 3,
+      "andness": -0.169017,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 2
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 4,
+        "name": "is_guest_login"
+      }
+    },
+    {
+      "layer": 4,
+      "aggregator_index": 4,
+      "andness": 1.582618,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 3
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 5,
+        "name": "dst_host_srv_count"
+      }
+    },
+    {
+      "layer": 5,
+      "aggregator_index": 5,
+      "andness": 0.360015,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 4
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 6,
+        "name": "root_shell"
+      }
+    },
+    {
+      "layer": 6,
+      "aggregator_index": 6,
+      "andness": 0.197736,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 5
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 7,
+        "name": "su_attempted"
+      }
+    },
+    {
+      "layer": 7,
+      "aggregator_index": 7,
+      "andness": 0.605964,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 6
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 8,
+        "name": "num_outbound_cmds"
+      }
+    },
+    {
+      "layer": 8,
+      "aggregator_index": 8,
+      "andness": 0.026977,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 7
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 9,
+        "name": "is_host_login"
+      }
+    },
+    {
+      "layer": 9,
+      "aggregator_index": 9,
+      "andness": 1.206918,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 8
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 10,
+        "name": "diff_srv_rate"
+      }
+    },
+    {
+      "layer": 10,
+      "aggregator_index": 10,
+      "andness": 0.553368,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 9
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 11,
+        "name": "serror_rate"
+      }
+    },
+    {
+      "layer": 11,
+      "aggregator_index": 11,
+      "andness": 0.18155,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 10
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 12,
+        "name": "srv_diff_host_rate"
+      }
+    },
+    {
+      "layer": 12,
+      "aggregator_index": 12,
+      "andness": 1.51653,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 11
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 13,
+        "name": "num_compromised"
+      }
+    },
+    {
+      "layer": 13,
+      "aggregator_index": 13,
+      "andness": 1.558129,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 12
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 14,
+        "name": "srv_rerror_rate"
+      }
+    },
+    {
+      "layer": 14,
+      "aggregator_index": 14,
+      "andness": 0.21419,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 13
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 15,
+        "name": "NOT dst_host_rerror_rate"
+      }
+    },
+    {
+      "layer": 15,
+      "aggregator_index": 15,
+      "andness": 1.605721,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 14
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 16,
+        "name": "NOT dst_host_count"
+      }
+    },
+    {
+      "layer": 16,
+      "aggregator_index": 16,
+      "andness": 1.614284,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 15
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 17,
+        "name": "NOT rerror_rate"
+      }
+    },
+    {
+      "layer": 17,
+      "aggregator_index": 17,
+      "andness": 1.457078,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 16
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 18,
+        "name": "NOT dst_host_same_srv_rate"
+      }
+    },
+    {
+      "layer": 18,
+      "aggregator_index": 18,
+      "andness": 0.368651,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 17
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 19,
+        "name": "NOT dst_host_srv_rerror_rate"
+      }
+    },
+    {
+      "layer": 19,
+      "aggregator_index": 19,
+      "andness": 0.741667,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 18
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 20,
+        "name": "NOT wrong_fragment"
+      }
+    },
+    {
+      "layer": 20,
+      "aggregator_index": 20,
+      "andness": 1.526172,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 19
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 21,
+        "name": "NOT src_bytes"
+      }
+    },
+    {
+      "layer": 21,
+      "aggregator_index": 21,
+      "andness": 0.219265,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 20
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 22,
+        "name": "NOT dst_host_diff_srv_rate"
+      }
+    },
+    {
+      "layer": 22,
+      "aggregator_index": 22,
+      "andness": 1.080689,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 21
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 23,
+        "name": "NOT land"
+      }
+    },
+    {
+      "layer": 23,
+      "aggregator_index": 23,
+      "andness": 1.22504,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 22
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 24,
+        "name": "NOT dst_bytes"
+      }
+    },
+    {
+      "layer": 24,
+      "aggregator_index": 24,
+      "andness": 0.886013,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 23
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 25,
+        "name": "NOT duration"
+      }
+    },
+    {
+      "layer": 25,
+      "aggregator_index": 25,
+      "andness": 1.047609,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 24
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 26,
+        "name": "NOT urgent"
+      }
+    },
+    {
+      "layer": 26,
+      "aggregator_index": 26,
+      "andness": -0.913862,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 25
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 27,
+        "name": "num_failed_logins"
+      }
+    },
+    {
+      "layer": 27,
+      "aggregator_index": 27,
+      "andness": -0.492087,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 26
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 28,
+        "name": "num_access_files"
+      }
+    },
+    {
+      "layer": 28,
+      "aggregator_index": 28,
+      "andness": -0.615714,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 27
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 29,
+        "name": "NOT num_file_creations"
+      }
+    },
+    {
+      "layer": 29,
+      "aggregator_index": 29,
+      "andness": 0.82798,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 28
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 30,
+        "name": "NOT same_srv_rate"
+      }
+    },
+    {
+      "layer": 30,
+      "aggregator_index": 30,
+      "andness": 1.656073,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 29
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 31,
+        "name": "dst_host_same_src_port_rate"
+      }
+    },
+    {
+      "layer": 31,
+      "aggregator_index": 31,
+      "andness": 1.135416,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 30
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 32,
+        "name": "dst_host_srv_diff_host_rate"
+      }
+    },
+    {
+      "layer": 32,
+      "aggregator_index": 32,
+      "andness": 0.756203,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 31
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 33,
+        "name": "srv_serror_rate"
+      }
+    },
+    {
+      "layer": 33,
+      "aggregator_index": 33,
+      "andness": -0.311782,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 32
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 34,
+        "name": "dst_host_serror_rate"
+      }
+    },
+    {
+      "layer": 34,
+      "aggregator_index": 34,
+      "andness": 1.966393,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 33
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 35,
+        "name": "count"
+      }
+    },
+    {
+      "layer": 35,
+      "aggregator_index": 35,
+      "andness": 1.459254,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 34
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 36,
+        "name": "dst_host_srv_serror_rate"
+      }
+    },
+    {
+      "layer": 36,
+      "aggregator_index": 36,
+      "andness": 0.779158,
+      "weights": {
+        "left": 0.5,
+        "right": 0.5
+      },
+      "left_input": {
+        "type": "aggregator",
+        "layer": 35
+      },
+      "right_input": {
+        "type": "feature",
+        "index": 37,
+        "name": "srv_count"
+      }
+    }
+  ]
+}
