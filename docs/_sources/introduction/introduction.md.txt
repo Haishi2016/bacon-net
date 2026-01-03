@@ -6,7 +6,7 @@ As robotics and autonomous agents take on more mission-critical and potentially 
 
 BACON is a neural-symbolic decision network designed to transform raw inputs into transparent, interpretable decisions. Each input represents a graded truth value—for example, “the cell boundary is irregular” may carry a 0.85 truth score on a scale from 0 to 1. BACON incrementally aggregates these truth values through a structured decision tree, where each node applies a symbolic graded logic operator such as the [graded conjunction/disjunction (GCD) aggregator](https://ieeexplore.ieee.org/document/8471076). This produces a final decision such as “there is a 0.62 likelihood of malignancy.”
 
-Unlike conventional deep neural networks, BACON is fully interpretable by design. Every aggregation step is symbolic, mathematically defined, and aligned with human reasoning primitives (e.g., AND-like, OR-like, and compensatory logic). This allows BACON to generate step-by-step explanations that attribute why a decision was made. A sample explanation of a BACON network diagnosing breast cancer is available [here](./sample_report.md) (excerpt from https://arxiv.org/pdf/2505.14510).
+Unlike conventional deep neural networks, BACON is fully interpretable by design. Every aggregation step is symbolic, mathematically defined, and aligned with human reasoning primitives (e.g., AND-like, OR-like, and compensatory logic). This allows BACON to generate step-by-step explanations that attribute why a decision was made. A sample explanation of a BACON network diagnosing breast cancer is available [here](./sample_report.md) (excerpt from [https://arxiv.org/pdf/2505.14510](https://arxiv.org/pdf/2505.14510)).
 
 BACON is also highly versatile and can function in multiple roles:
 
