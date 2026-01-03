@@ -3,6 +3,8 @@ import torch
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 import logging
 import os
+from dataclasses import dataclass
+from typing import Optional
 from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator
 from bacon.aggregators.bool import MinMaxAggregator
 
@@ -11,6 +13,35 @@ _aggregator_registry = {
     "lsp.half_weight": HalfWeightAggregator,
     "bool.min_max": MinMaxAggregator
 }
+
+@dataclass
+class TrainingSetup:
+    """Encapsulates all training setup state for a single attempt."""
+    optimizer: torch.optim.Optimizer
+    criterion: nn.Module
+    pos_weight: Optional[float]
+    param_groups: list
+    aggregation_frozen: bool
+    actual_max_epochs: int
+    use_temperature_annealing: bool
+    perm_temp_decay_rate: Optional[float]
+    trans_temp_decay_rate: Optional[float]
+    anneal_over_epochs: int
+    original_sparsity_weight: Optional[float]
+    # Tracking variables
+    loss_history: list
+    accuracy_history: list
+    freeze_confidence_warning_shown: bool
+    best_loss_for_convergence: float
+    epochs_without_improvement: int
+    epoch_when_frozen: Optional[int]
+    has_converged_before_freeze: bool
+    best_confidence: float
+    epochs_without_confidence_improvement: int
+    best_loss: float
+    epochs_since_improvement: int
+    temp_paused: bool
+    transformation_converged: bool
 class baconNet(nn.Module):
     """
     Represents a BACON network for interpretable decision-making using graded logic.
@@ -221,6 +252,168 @@ class baconNet(nn.Module):
             })
         
         return param_groups
+    
+    def _setup_training_attempt(self, y, coarse_perm, hierarchical_group_size, 
+                                hierarchical_bleed_ratio, hierarchical_bleed_decay,
+                                sinkhorn_iters, loss_weight_perm_sparsity,
+                                freeze_aggregation_epochs, epochs_per_attempt, annealing_epochs):
+        """Set up all components needed for a training attempt.
+        
+        Returns:
+            TrainingSetup: Dataclass containing all setup state
+        """
+        # Re-initialize assembler
+        cfg = self.assembler
+        self.assembler = binaryTreeLogicNet(
+            cfg.original_input_size,
+            weight_mode=cfg.weight_mode,
+            weight_normalization=cfg.weight_normalization,
+            weight_value=cfg.weight_value,
+            weight_range=cfg.weight_range,
+            weight_choices=None,
+            noise_increase=cfg.noise_increase,
+            noise_decrease=cfg.noise_decrease,
+            loss_amplifier=cfg.loss_amplifier,
+            normalize_andness=cfg.normalize_andness,
+            min_noise=cfg.min_noise,
+            max_noise=cfg.max_noise,
+            is_frozen=False,
+            tree_layout=cfg.tree_layout,
+            weight_penalty_strength=cfg.weight_penalty_strength,
+            aggregator=cfg.aggregator,
+            early_stop_patience=cfg.early_stop_patience,
+            early_stop_min_delta=cfg.early_stop_min_delta,
+            early_stop_threshold=cfg.early_stop_threshold,
+            use_transformation_layer=cfg.use_transformation_layer,
+            transformation_temperature=self.transformation_initial_temperature,
+            transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
+            transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,
+            device=cfg.device,
+            sinkhorn_iters=sinkhorn_iters,
+        )
+        
+        # Initialize hierarchical permutation if provided
+        if coarse_perm is not None:
+            if hasattr(self.assembler, 'input_to_leaf') and hasattr(self.assembler.input_to_leaf, 'initialize_from_coarse_permutation'):
+                self.assembler.input_to_leaf.initialize_from_coarse_permutation(
+                    coarse_perm, 
+                    group_size=hierarchical_group_size,
+                    block_std=0.5,
+                    bleed_ratio=hierarchical_bleed_ratio,
+                    bleed_decay=hierarchical_bleed_decay
+                )
+                bleed_desc = "hard blocks" if hierarchical_bleed_ratio == 0 else f"bleed={hierarchical_bleed_ratio:.2f}"
+                logging.info(f"   🎯 Initialized permutation matrix with coarse structure ({bleed_desc})")
+        
+        # Create parameter groups and optimizer
+        param_groups = self.make_param_groups()
+        optimizer = torch.optim.Adam(param_groups)
+        
+        # Log learning rates
+        logging.info(f"   📚 Learning rates:")
+        for group in param_groups:
+            logging.info(f"      {group['name']}: {group['lr']}")
+        
+        # Log loss weighting
+        total_weight = self.loss_weight_main + self.loss_weight_perm_entropy + self.loss_weight_trans_entropy + self.loss_weight_perm_sparsity
+        if total_weight > 0:
+            norm_main = self.loss_weight_main / total_weight
+            norm_perm = self.loss_weight_perm_entropy / total_weight
+            norm_trans = self.loss_weight_trans_entropy / total_weight
+            norm_sparsity = self.loss_weight_perm_sparsity / total_weight
+            if self.loss_weight_perm_entropy > 0 or self.loss_weight_trans_entropy > 0 or self.loss_weight_perm_sparsity > 0:
+                logging.info(f"   ⚖️  Loss weights (normalized): main={norm_main:.3f}, perm_entropy={norm_perm:.3f}, trans_entropy={norm_trans:.3f}, perm_sparsity={norm_sparsity:.3f}")
+        
+        # Setup criterion with class weighting
+        if self.use_class_weighting:
+            pos_count = y.sum().item()
+            neg_count = len(y) - pos_count
+            if pos_count > 0:
+                pos_weight = neg_count / pos_count
+                logging.info(f"   ⚖️  Class weighting enabled: {pos_count} positives, {neg_count} negatives")
+                logging.info(f"   ⚖️  Positive class weight: {pos_weight:.2f}x (penalizes defaults {pos_weight:.2f}x more)")
+                criterion = nn.BCELoss(reduction='none')
+            else:
+                logging.warning(f"   ⚠️  Class weighting enabled but no positive samples found, using standard BCE")
+                criterion = nn.BCELoss()
+                pos_weight = None
+        else:
+            logging.info(f"   ⚖️  Class weighting disabled: using standard BCE loss (original behavior)")
+            criterion = nn.BCELoss()
+            pos_weight = None
+        
+        # Handle sparsity weight override
+        original_sparsity_weight = None
+        if loss_weight_perm_sparsity is not None:
+            original_sparsity_weight = self.loss_weight_perm_sparsity
+            self.loss_weight_perm_sparsity = loss_weight_perm_sparsity
+            logging.info(f"   🎯 Using custom sparsity loss weight: {loss_weight_perm_sparsity}")
+        
+        # Freeze aggregation if requested
+        aggregation_frozen = False
+        if freeze_aggregation_epochs > 0:
+            for group in param_groups:
+                if group['name'] in ['aggregator', 'other']:
+                    for p in group['params']:
+                        p.requires_grad = False
+                    aggregation_frozen = True
+            if aggregation_frozen:
+                logging.info(f"   🧊 Aggregation frozen for first {freeze_aggregation_epochs} epochs (permutation-only learning)")
+        
+        # Temperature annealing setup
+        use_temperature_annealing = (hasattr(self.assembler, 'input_to_leaf') and 
+                                     hasattr(self.assembler.input_to_leaf, 'temperature') and
+                                     hasattr(self.assembler.input_to_leaf, 'logits'))
+        
+        perm_temp_decay_rate = None
+        trans_temp_decay_rate = None
+        anneal_over_epochs_val = epochs_per_attempt
+        
+        if use_temperature_annealing:
+            self.assembler.input_to_leaf.temperature = self.permutation_initial_temperature
+            perm_initial_temp = self.permutation_initial_temperature
+            perm_final_temp = self.permutation_final_temperature
+            anneal_over_epochs_val = annealing_epochs if annealing_epochs else epochs_per_attempt
+            perm_temp_decay_rate = (perm_final_temp / perm_initial_temp) ** (1.0 / anneal_over_epochs_val)
+            logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {anneal_over_epochs_val} epochs (decay: {perm_temp_decay_rate:.6f})")
+            if annealing_epochs and annealing_epochs < epochs_per_attempt:
+                logging.info(f"   ⏱️  Frozen training: {epochs_per_attempt - anneal_over_epochs_val} epochs after hardening")
+            
+            if self.assembler.transformation_layer is not None:
+                trans_initial_temp = self.transformation_initial_temperature
+                trans_final_temp = self.transformation_final_temperature
+                trans_temp_decay_rate = (trans_final_temp / trans_initial_temp) ** (1.0 / anneal_over_epochs_val)
+                self.assembler.transformation_layer.temperature = trans_initial_temp
+                logging.info(f"   🔗 Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {anneal_over_epochs_val} epochs (decay: {trans_temp_decay_rate:.6f})")
+        
+        # Return dataclass with all setup state
+        return TrainingSetup(
+            optimizer=optimizer,
+            criterion=criterion,
+            pos_weight=pos_weight,
+            param_groups=param_groups,
+            aggregation_frozen=aggregation_frozen,
+            actual_max_epochs=epochs_per_attempt,
+            use_temperature_annealing=use_temperature_annealing,
+            perm_temp_decay_rate=perm_temp_decay_rate,
+            trans_temp_decay_rate=trans_temp_decay_rate,
+            anneal_over_epochs=anneal_over_epochs_val,
+            original_sparsity_weight=original_sparsity_weight,
+            # Initialize tracking variables
+            loss_history=[],
+            accuracy_history=[],
+            freeze_confidence_warning_shown=False,
+            best_loss_for_convergence=float('inf'),
+            epochs_without_improvement=0,
+            epoch_when_frozen=None,
+            has_converged_before_freeze=False,
+            best_confidence=0.0,
+            epochs_without_confidence_improvement=0,
+            best_loss=float('inf'),
+            epochs_since_improvement=0,
+            temp_paused=False,
+            transformation_converged=False
+        )
     
     def _compute_composite_loss(self, outputs, y, criterion, pos_weight, epoch, 
                                 sparsity_schedule, use_temperature_annealing, current_sparsity_weight):
@@ -579,227 +772,80 @@ class baconNet(nn.Module):
             torch.manual_seed(torch.initial_seed() + attempt)
 
             try:
-                # Re-initialize a fresh assembler for this attempt, preserving config
-                cfg = self.assembler
-                self.assembler = binaryTreeLogicNet(
-                    cfg.original_input_size,
-                    weight_mode=cfg.weight_mode,
-                    weight_normalization=cfg.weight_normalization,
-                    weight_value=cfg.weight_value,
-                    weight_range=cfg.weight_range,
-                    weight_choices=None,
-                    noise_increase=cfg.noise_increase,
-                    noise_decrease=cfg.noise_decrease,
-                    loss_amplifier=cfg.loss_amplifier,
-                    normalize_andness=cfg.normalize_andness,
-                    min_noise=cfg.min_noise,
-                    max_noise=cfg.max_noise,
-                    is_frozen=False,
-                    tree_layout=cfg.tree_layout,
-                    weight_penalty_strength=cfg.weight_penalty_strength,
-                    aggregator=cfg.aggregator,
-                    early_stop_patience=cfg.early_stop_patience,
-                    early_stop_min_delta=cfg.early_stop_min_delta,
-                    early_stop_threshold=cfg.early_stop_threshold,
-                    use_transformation_layer=cfg.use_transformation_layer,
-                    transformation_temperature=self.transformation_initial_temperature,
-                    transformation_use_gumbel=cfg.transformation_layer.use_gumbel if cfg.transformation_layer else False,
-                    transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,  # Preserve custom transformations
-                    device=cfg.device,
-                    sinkhorn_iters=sinkhorn_iters,
+                # Setup training for this attempt (assembler, optimizer, criterion, etc.)
+                setup = self._setup_training_attempt(
+                    y, coarse_perms[attempt], hierarchical_group_size,
+                    hierarchical_bleed_ratio, hierarchical_bleed_decay,
+                    sinkhorn_iters, loss_weight_perm_sparsity,
+                    freeze_aggregation_epochs, epochs_per_attempt, annealing_epochs
                 )
-
-                # Initialize permutation matrix with coarse-grained structure if using hierarchical mode
-                if use_hierarchical_permutation and coarse_perms[attempt] is not None:
-                    if hasattr(self.assembler, 'input_to_leaf') and hasattr(self.assembler.input_to_leaf, 'initialize_from_coarse_permutation'):
-                        self.assembler.input_to_leaf.initialize_from_coarse_permutation(
-                            coarse_perms[attempt], 
-                            group_size=hierarchical_group_size,
-                            block_std=0.5,
-                            bleed_ratio=hierarchical_bleed_ratio,
-                            bleed_decay=hierarchical_bleed_decay
-                        )
-                        bleed_desc = "hard blocks" if hierarchical_bleed_ratio == 0 else f"bleed={hierarchical_bleed_ratio:.2f}"
-                        logging.info(f"   🎯 Initialized permutation matrix with coarse structure ({bleed_desc})")
-
-                # Separate parameter groups with different learning rates
-                # This allows adjusting learning pressure for different components
-                param_groups = self.make_param_groups()
                 
-                # Create optimizer with parameter groups
-                optimizer = torch.optim.Adam(param_groups)
-                
-                # Log learning rates
-                logging.info(f"   📚 Learning rates:")
-                for group in param_groups:
-                    logging.info(f"      {group['name']}: {group['lr']}")
-                
-                # Log loss weighting configuration
-                total_weight = self.loss_weight_main + self.loss_weight_perm_entropy + self.loss_weight_trans_entropy + self.loss_weight_perm_sparsity
-                if total_weight > 0:
-                    norm_main = self.loss_weight_main / total_weight
-                    norm_perm = self.loss_weight_perm_entropy / total_weight
-                    norm_trans = self.loss_weight_trans_entropy / total_weight
-                    norm_sparsity = self.loss_weight_perm_sparsity / total_weight
-                    if self.loss_weight_perm_entropy > 0 or self.loss_weight_trans_entropy > 0 or self.loss_weight_perm_sparsity > 0:
-                        logging.info(f"   ⚖️  Loss weights (normalized): main={norm_main:.3f}, perm_entropy={norm_perm:.3f}, trans_entropy={norm_trans:.3f}, perm_sparsity={norm_sparsity:.3f}")
-                
-                # Compute class weights for imbalanced data (if enabled)
-                # pos_weight = (# negative samples) / (# positive samples)
-                if self.use_class_weighting:
-                    pos_count = y.sum().item()
-                    neg_count = len(y) - pos_count
-                    if pos_count > 0:
-                        pos_weight = neg_count / pos_count
-                        logging.info(f"   ⚖️  Class weighting enabled: {pos_count} positives, {neg_count} negatives")
-                        logging.info(f"   ⚖️  Positive class weight: {pos_weight:.2f}x (penalizes defaults {pos_weight:.2f}x more)")
-                        # BCELoss doesn't support pos_weight directly, so we'll use weighted loss manually
-                        criterion = nn.BCELoss(reduction='none')
-                    else:
-                        logging.warning(f"   ⚠️  Class weighting enabled but no positive samples found, using standard BCE")
-                        criterion = nn.BCELoss()
-                        pos_weight = None
-                else:
-                    logging.info(f"   ⚖️  Class weighting disabled: using standard BCE loss (original behavior)")
-                    criterion = nn.BCELoss()
-                    pos_weight = None
-
-                # Override sparsity loss weight if provided
-                if loss_weight_perm_sparsity is not None:
-                    original_sparsity_weight = self.loss_weight_perm_sparsity
-                    self.loss_weight_perm_sparsity = loss_weight_perm_sparsity
-                    logging.info(f"   🎯 Using custom sparsity loss weight: {loss_weight_perm_sparsity}")
-                else:
-                    original_sparsity_weight = None
-                
-                # Freeze aggregation parameters if requested (permutation-only training phase)
-                aggregation_frozen = False
-                if freeze_aggregation_epochs > 0:
-                    # Find and freeze aggregation parameters
-                    for group in param_groups:
-                        if group['name'] in ['aggregator', 'other']:
-                            for p in group['params']:
-                                p.requires_grad = False
-                            aggregation_frozen = True
-                    if aggregation_frozen:
-                        logging.info(f"   🧊 Aggregation frozen for first {freeze_aggregation_epochs} epochs (permutation-only learning)")
-
-                # Use epochs_per_attempt instead of max_epochs for hierarchical mode
-                actual_max_epochs = epochs_per_attempt
-
-                transformation_converged = False
-                loss_history = []
-                accuracy_history = []  # Track accuracy for smarter plateau detection
-                freeze_confidence_warning_shown = False  # Track if we've already warned about low confidence
-                
-                # Convergence tracking
-                best_loss_for_convergence = float('inf')
-                epochs_without_improvement = 0
-                epoch_when_frozen = None  # Track when we froze to count frozen training epochs
-                has_converged_before_freeze = False
-                
-                # Confidence tracking for plateau detection
-                best_confidence = 0.0
-                epochs_without_confidence_improvement = 0
-                confidence_plateau_patience = 1000  # Freeze if confidence doesn't improve for this many epochs after loss convergence
-                
-                # Adaptive temperature annealing tracking
-                best_loss = float('inf')
-                epochs_since_improvement = 0
+                # Adaptive temperature annealing parameters
                 improvement_patience = 150  # Pause temp decay if no improvement for this many epochs
                 improvement_window = 100  # Check improvement over this many epochs (larger = more stable)
                 min_improvement_delta = 0.005  # Minimum loss decrease over window (0.5% improvement required)
-                temp_paused = False
+                confidence_plateau_patience = 1000  # Freeze if confidence doesn't improve for this many epochs after loss convergence
                 
-                # Temperature annealing setup
-                use_temperature_annealing = (hasattr(self.assembler, 'input_to_leaf') and 
-                                            hasattr(self.assembler.input_to_leaf, 'temperature') and
-                                            hasattr(self.assembler.input_to_leaf, 'logits'))
-                
-                if use_temperature_annealing:
-                    # Permutation temperature schedule
-                    self.assembler.input_to_leaf.temperature = self.permutation_initial_temperature
-                    perm_initial_temp = self.permutation_initial_temperature
-                    perm_final_temp = self.permutation_final_temperature
-                    # Use annealing_epochs if specified, otherwise anneal over all epochs
-                    anneal_over_epochs = annealing_epochs if annealing_epochs else actual_max_epochs
-                    perm_temp_decay_rate = (perm_final_temp / perm_initial_temp) ** (1.0 / anneal_over_epochs)
-                    logging.info(f"   🌡️  Permutation annealing: {perm_initial_temp:.1f} → {perm_final_temp:.1f} over {anneal_over_epochs} epochs (decay: {perm_temp_decay_rate:.6f})")
-                    if annealing_epochs and annealing_epochs < actual_max_epochs:
-                        logging.info(f"   ⏱️  Frozen training: {actual_max_epochs - anneal_over_epochs} epochs after hardening")
-                    
-                    # Transformation temperature schedule (faster cooling for simpler problem)
-                    # Transformation has 2^n states, permutation has n! states
-                    # So transformation should converge faster
-                    if self.assembler.transformation_layer is not None:
-                        trans_initial_temp = self.transformation_initial_temperature
-                        trans_final_temp = self.transformation_final_temperature
-                        trans_temp_decay_rate = (trans_final_temp / trans_initial_temp) ** (1.0 / anneal_over_epochs)
-                        self.assembler.transformation_layer.temperature = trans_initial_temp
-                        logging.info(f"   🔗 Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {anneal_over_epochs} epochs (decay: {trans_temp_decay_rate:.6f})")
-                    else:
-                        trans_temp_decay_rate = None                                        
-                
-                for epoch in range(actual_max_epochs):
+                for epoch in range(setup.actual_max_epochs):
                     # Unfreeze aggregation after specified epochs
-                    if aggregation_frozen and epoch == freeze_aggregation_epochs:
-                        for group in param_groups:
+                    if setup.aggregation_frozen and epoch == freeze_aggregation_epochs:
+                        for group in setup.param_groups:
                             if group['name'] in ['aggregator', 'other']:
                                 for p in group['params']:
                                     p.requires_grad = True
-                        aggregation_frozen = False
+                        setup.aggregation_frozen = False
                         logging.info(f"   🔓 Aggregation unfrozen at epoch {epoch} (joint training begins)")
                     
                     self.assembler.train()
-                    optimizer.zero_grad(set_to_none=True)
+                    setup.optimizer.zero_grad(set_to_none=True)
                     just_froze = False  # Flag to skip backward if we freeze during this iteration
                     outputs = self.assembler(x, targets=y)
                     
                     # Compute composite loss with all regularization terms
                     current_sparsity_weight = self.loss_weight_perm_sparsity
                     loss = self._compute_composite_loss(
-                        outputs, y, criterion, pos_weight, epoch,
-                        sparsity_schedule, use_temperature_annealing, current_sparsity_weight
+                        outputs, y, setup.criterion, setup.pos_weight, epoch,
+                        sparsity_schedule, setup.use_temperature_annealing, current_sparsity_weight
                     )
                     
                     # Track loss and accuracy for smarter plateau detection
-                    loss_history.append(loss.item())
+                    setup.loss_history.append(loss.item())
                     
                     # Compute training accuracy every epoch for plateau detection
                     # This is cheap since we already have outputs
                     with torch.no_grad():
                         train_predictions = (outputs > 0.5).float()
                         train_accuracy = (train_predictions == y).float().mean().item()
-                        accuracy_history.append(train_accuracy)
+                        setup.accuracy_history.append(train_accuracy)
                     
                     # CHECK CONVERGENCE: If frozen, count epochs. If converged before freeze, wait for freeze.
                     current_loss = loss.item()
                     if self.assembler.is_frozen:
                         # Model is frozen - count epochs since freeze
-                        if epoch_when_frozen is None:
-                            epoch_when_frozen = epoch
+                        if setup.epoch_when_frozen is None:
+                            setup.epoch_when_frozen = epoch
                             logging.info(f"   🎯 Model frozen at epoch {epoch + 1}, will train for {frozen_training_epochs} more epochs")
                         
-                        epochs_since_freeze = epoch - epoch_when_frozen
+                        epochs_since_freeze = epoch - setup.epoch_when_frozen
                         if epochs_since_freeze >= frozen_training_epochs:
                             logging.info(f"   ✅ Completed {frozen_training_epochs} epochs of frozen training, stopping")
                             break
                     else:
                         # Model not frozen yet - check if converged (waiting to freeze)
-                        if current_loss < best_loss_for_convergence - convergence_delta:
-                            best_loss_for_convergence = current_loss
-                            epochs_without_improvement = 0
+                        if current_loss < setup.best_loss_for_convergence - convergence_delta:
+                            setup.best_loss_for_convergence = current_loss
+                            setup.epochs_without_improvement = 0
                         else:
-                            epochs_without_improvement += 1
+                            setup.epochs_without_improvement += 1
                         
-                        if epochs_without_improvement >= convergence_patience and not has_converged_before_freeze:
-                            has_converged_before_freeze = True
+                        if setup.epochs_without_improvement >= convergence_patience and not setup.has_converged_before_freeze:
+                            setup.has_converged_before_freeze = True
                             logging.info(f"   📊 Training converged at epoch {epoch + 1} (no improvement for {convergence_patience} epochs)")
                             logging.info(f"      Loss: {current_loss:.4f}, waiting for permutation confidence > {freeze_confidence_threshold:.2f} to freeze...")
                     
                     # Display epoch progress every 100 epochs
                     if (epoch + 1) % 100 == 0:
-                        if use_temperature_annealing and not self.assembler.is_frozen:
+                        if setup.use_temperature_annealing and not self.assembler.is_frozen:
                             perm_temp = self.assembler.input_to_leaf.temperature
                             
                             # Calculate permutation confidence for monitoring convergence
@@ -826,89 +872,89 @@ class baconNet(nn.Module):
                             logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}")
                     
                     # ADAPTIVE TEMPERATURE ANNEALING: Track loss improvement
-                    if use_temperature_annealing and not self.assembler.is_frozen:
+                    if setup.use_temperature_annealing and not self.assembler.is_frozen:
                         # Track if loss is improving (check over a window for gradual improvements)
                         current_loss = loss.item()
                         
                         # Update best_loss if current is better (for logging)
-                        if current_loss < best_loss:
-                            best_loss = current_loss
+                        if current_loss < setup.best_loss:
+                            setup.best_loss = current_loss
                         
                         # Check improvement over a window (catches gradual progress)
-                        if len(loss_history) >= improvement_window:
-                            old_loss = loss_history[-improvement_window]
+                        if len(setup.loss_history) >= improvement_window:
+                            old_loss = setup.loss_history[-improvement_window]
                             loss_improvement = old_loss - current_loss
                             
                             if loss_improvement > min_improvement_delta:
                                 # Making progress over the window
-                                epochs_since_improvement = 0
-                                if temp_paused:
+                                setup.epochs_since_improvement = 0
+                                if setup.temp_paused:
                                     # Only log resume if we're not already at minimum temperature
                                     perm_temp = self.assembler.input_to_leaf.temperature
-                                    perm_at_min = perm_temp <= perm_final_temp * 1.01
+                                    perm_at_min = perm_temp <= self.permutation_final_temperature * 1.01
                                     if not perm_at_min:
                                         logging.info(f"   ▶️  Resuming temperature annealing (loss improved {loss_improvement:.4f} over {improvement_window} epochs)")
-                                    temp_paused = False
+                                    setup.temp_paused = False
                             else:
                                 # Not enough improvement over window
-                                epochs_since_improvement += 1
+                                setup.epochs_since_improvement += 1
                         else:
                             # Not enough history yet, assume making progress
-                            epochs_since_improvement = 0
+                            setup.epochs_since_improvement = 0
                         
                         # Only anneal temperature if making progress AND within annealing period
-                        within_annealing_period = epoch < anneal_over_epochs
-                        should_anneal = epochs_since_improvement < improvement_patience and within_annealing_period
+                        within_annealing_period = epoch < setup.anneal_over_epochs
+                        should_anneal = setup.epochs_since_improvement < improvement_patience and within_annealing_period
                         
                         if should_anneal:
                             # Cool permutation layer
-                            self.assembler.input_to_leaf.temperature *= perm_temp_decay_rate
+                            self.assembler.input_to_leaf.temperature *= setup.perm_temp_decay_rate
                             
                             # Cool transformation layer independently
-                            if self.assembler.transformation_layer is not None and trans_temp_decay_rate is not None:
-                                self.assembler.transformation_layer.temperature *= trans_temp_decay_rate
+                            if self.assembler.transformation_layer is not None and setup.trans_temp_decay_rate is not None:
+                                self.assembler.transformation_layer.temperature *= setup.trans_temp_decay_rate
                         else:
                             # Pause temperature annealing - keep exploring at current temperature
                             # Only log if we haven't paused before AND temperatures aren't already at minimum
                             perm_temp = self.assembler.input_to_leaf.temperature
-                            perm_at_min = perm_temp <= perm_final_temp * 1.01  # Within 1% of final
+                            perm_at_min = perm_temp <= self.permutation_final_temperature * 1.01  # Within 1% of final
                             
-                            if not temp_paused and not perm_at_min:
+                            if not setup.temp_paused and not perm_at_min:
                                 trans_temp = self.assembler.transformation_layer.temperature if self.assembler.transformation_layer is not None else None
                                 logging.info(f"   ⏸️  Pausing temperature annealing (no improvement for {improvement_patience} epochs)")
                                 trans_temp_str = f"{trans_temp:.3f}" if trans_temp is not None else "N/A"
                                 logging.info(f"   🌡️  Frozen temps: Perm={perm_temp:.3f}, Trans={trans_temp_str}")
-                                temp_paused = True
+                                setup.temp_paused = True
                         
                         # Check confidence periodically to catch optimal freezing point
                         should_check_early_freeze = (epoch + 1) % 100 == 0  # Check every 100 epochs
-                        temp_ready_to_freeze = self.assembler.input_to_leaf.temperature < perm_final_temp * 1.1
+                        temp_ready_to_freeze = self.assembler.input_to_leaf.temperature < self.permutation_final_temperature * 1.1
                         should_check_freeze = temp_ready_to_freeze or should_check_early_freeze
                         
                         if should_check_freeze:
                             # Attempt to freeze permutation if conditions are met
-                            just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown = \
+                            just_froze, setup.best_confidence, setup.epochs_without_confidence_improvement, setup.freeze_confidence_warning_shown = \
                                 self._check_and_freeze_permutation(
-                                    epoch, x_test, y_test, criterion,
+                                    epoch, x_test, y_test, setup.criterion,
                                     freeze_confidence_threshold, freeze_min_confidence,
-                                    early_stop_threshold, perm_final_temp,
-                                    has_converged_before_freeze, best_confidence,
-                                    epochs_without_confidence_improvement, confidence_plateau_patience,
-                                    freeze_confidence_warning_shown, current_loss
+                                    early_stop_threshold, self.permutation_final_temperature,
+                                    setup.has_converged_before_freeze, setup.best_confidence,
+                                    setup.epochs_without_confidence_improvement, confidence_plateau_patience,
+                                    setup.freeze_confidence_warning_shown, current_loss
                                 )
                     
                     # Perform backward pass and optimizer step (unless we just froze)
                     if not just_froze:
                         loss.backward()
-                        optimizer.step()
+                        setup.optimizer.step()
                                         
                     # Check if transformation layer has converged
                     # Only check transformation convergence when transformation temperature is low
                     # This ensures transformation converges based on its own schedule, not permutation
-                    if not transformation_converged and self.assembler.transformation_layer is not None:
+                    if not setup.transformation_converged and self.assembler.transformation_layer is not None:
                         # Check if transformation temperature is near its final value
                         transformation_is_cool = False
-                        if use_temperature_annealing:
+                        if setup.use_temperature_annealing:
                             trans_temp = self.assembler.transformation_layer.temperature
                             # Consider transformation cool when temp is within 2x of final (e.g., < 0.2 for final 0.1)
                             transformation_is_cool = trans_temp < (self.transformation_final_temperature * 2.0)
@@ -919,7 +965,7 @@ class baconNet(nn.Module):
                         if transformation_is_cool:
                             # Use adaptive convergence: 65% confidence for 70% of features
                             if self.assembler.transformation_layer.has_converged(confidence_threshold=0.65, min_converged_ratio=0.7):
-                                transformation_converged = True
+                                setup.transformation_converged = True
                                 logging.info(f"   ✅ Transformation layer converged at epoch {epoch + 1} (permutation hardened)")
 
                     # Early stop when frozen/hardened and loss is small
@@ -933,14 +979,14 @@ class baconNet(nn.Module):
                     
                     # Also early stop if we achieve perfect training accuracy (no need to continue)
                     # BUT only if temperature is low enough that the solution is stable AND loss is reasonable
-                    if len(accuracy_history) > 0 and accuracy_history[-1] >= 0.999:
+                    if len(setup.accuracy_history) > 0 and setup.accuracy_history[-1] >= 0.999:
                         # Check if loss is reasonable (not just lucky predictions with bad model)
                         # With loss_amplifier, acceptable loss threshold is early_stop_threshold * loss_amplifier
                         loss_reasonable = loss.item() < (early_stop_threshold * self.assembler.loss_amplifier * 2.0)  # 2x margin for perfect accuracy
                         
                         if loss_reasonable:
                             # Check if permutation is stable AND confident (temperature low or frozen)
-                            if use_temperature_annealing and not self.assembler.is_frozen:
+                            if setup.use_temperature_annealing and not self.assembler.is_frozen:
                                 current_perm_temp = self.assembler.input_to_leaf.temperature
                                 permutation_stable = current_perm_temp < 1.0  # Temperature cool enough for stable solution
                                 
@@ -1062,8 +1108,8 @@ class baconNet(nn.Module):
                 logging.error(f"🔥 Attempt {attempt + 1} failed with error: {e}")
             finally:
                 # Restore original sparsity weight if it was overridden
-                if original_sparsity_weight is not None:
-                    self.loss_weight_perm_sparsity = original_sparsity_weight
+                if setup.original_sparsity_weight is not None:
+                    self.loss_weight_perm_sparsity = setup.original_sparsity_weight
         
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
