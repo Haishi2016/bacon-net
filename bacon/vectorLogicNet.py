@@ -29,7 +29,6 @@ class VectorLogicNet(nn.Module):
         weight_penalty_strength=1e-3,
         aggregator=None,                    # expects .aggregate(left, right, a, w_acc, w_new)
         is_frozen=False,
-        lock_loss_tolerance=0.04,
         early_stop_patience=10,
         early_stop_min_delta=1e-4,
         early_stop_threshold=0.01,
@@ -51,7 +50,6 @@ class VectorLogicNet(nn.Module):
         self.aggregator = aggregator
 
         self.is_frozen = is_frozen
-        self.lock_loss_tolerance = lock_loss_tolerance * self.loss_amplifier
       
         self.early_stop_patience = early_stop_patience
         self.early_stop_min_delta = early_stop_min_delta

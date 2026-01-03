@@ -118,7 +118,6 @@ num_features = X_train.shape[1]
 
 bacon = baconNet(
     input_size=num_features, 
-    lock_loss_tolerance=0.02,
     use_transformation_layer=True,
     transformations=[
         IdentityTransformation(num_features),
