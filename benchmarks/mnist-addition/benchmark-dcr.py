@@ -2,13 +2,16 @@
 # -*- coding: utf-8 -*-
 
 import argparse, math, random, os, sys
-from typing import Iterator
+from typing import Iterator, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, IterableDataset, DataLoader
 from torchvision import datasets, transforms
+
+import torch_explain as te
+from torch_explain.nn.concepts import ConceptReasoningLayer
 
 
 # ------------------------------------------------------------
@@ -100,76 +103,60 @@ class SmallCnn(nn.Module):
 
 
 # ------------------------------------------------------------
-# 10-way concept head per image (Gumbel-Softmax, same as BACON v1)
+# DCR concept head per image: embeddings + Gumbel probs
 # ------------------------------------------------------------
-class ImageConceptHead(nn.Module):
-    def __init__(self, feat_dim: int, n_concepts=10):
+class ImageConceptHeadDCR(nn.Module):
+    def __init__(self, feat_dim: int, n_concepts=10, emb_size=30):
         super().__init__()
+        self.embed = te.nn.ConceptEmbedding(feat_dim, n_concepts, emb_size)
         self.logit_head = nn.Linear(feat_dim, n_concepts)
 
-    def forward(self, features, tau: float, hard: bool = False) -> torch.Tensor:
-        logits = self.logit_head(features)
-        probs = F.gumbel_softmax(logits, tau=tau, hard=hard, dim=1)  # [B,10], sum=1
-        return probs
+    def forward(self, features, tau: float, hard: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+        # c_emb: [B,10,emb_size], _ are concept activations we don't use explicitly
+        c_emb, _ = self.embed(features)
+        logits = self.logit_head(features)  # [B,10]
+        probs = F.gumbel_softmax(logits, tau=tau, hard=hard, dim=1)  # [B,10]
+        return c_emb, probs
 
 
 # ------------------------------------------------------------
-# DeepProbLog-style head (19 classes) on top of BACON backbone
+# DCR head (19-class addition)
 # ------------------------------------------------------------
-class DeepProbLogMultiHead(nn.Module):
-    """
-    Same backbone as BACON v1:
-      - Two SmallCnn towers
-      - Two Gumbel concept heads -> p1, p2 (digit distributions)
-
-    But instead of BACON trees, implements the classic DeepProbLog sum rule:
-
-        P(y = k) = sum_{i+j=k} p1(i) * p2(j)
-
-    forward(x1, x2, tau, hard) returns:
-      y_prob: [B,19] (sum probabilities)
-      c_prob: [B,20] (concept probabilities [p1, p2]) for entropy regularization.
-    """
-    def __init__(self):
+class DCRMultiHead(nn.Module):
+    def __init__(self, emb_size=30):
         super().__init__()
         self.tower1 = SmallCnn(128)
         self.tower2 = SmallCnn(128)
-        self.head1 = ImageConceptHead(128, 10)
-        self.head2 = ImageConceptHead(128, 10)
+        self.head1 = ImageConceptHeadDCR(128, 10, emb_size)
+        self.head2 = ImageConceptHeadDCR(128, 10, emb_size)
+
+        # Concept reasoning over 20 concepts (10+10) into 19 classes (0..18)
+        self.core = ConceptReasoningLayer(emb_size, n_classes=19)
+
+        # Auxiliary head on concept probabilities (like v1 DCR)
+        self.aux = nn.Sequential(
+            nn.Linear(20, 30), nn.ReLU(),
+            nn.Linear(30, 19)
+        )
 
     def forward(self, x1, x2, tau: float, hard: bool = False):
-        # CNN towers + Gumbel concept heads
         z1 = self.tower1(x1)
         z2 = self.tower2(x2)
-        p1 = self.head1(z1, tau=tau, hard=hard)  # [B,10]
-        p2 = self.head2(z2, tau=tau, hard=hard)  # [B,10]
 
-        # Outer product over digits -> [B,10,10]
-        B = p1.size(0)
-        outer = p1.unsqueeze(2) * p2.unsqueeze(1)  # [B,10,10]
+        emb1, p1 = self.head1(z1, tau=tau, hard=hard)  # [B,10,emb], [B,10]
+        emb2, p2 = self.head2(z2, tau=tau, hard=hard)  # [B,10,emb], [B,10]
 
-        # Sum rule: y_k = sum_{i+j=k} outer[i,j]
-        y_list = []
-        for k in range(19):
-            mask = outer.new_zeros(10, 10)
-            for i in range(10):
-                j = k - i
-                if 0 <= j <= 9:
-                    mask[i, j] = 1.0
-            mk = mask.unsqueeze(0).expand(B, 10, 10)          # [B,10,10]
-            yk = (outer * mk).sum(dim=(1, 2))                 # [B]
-            y_list.append(yk.unsqueeze(1))
-        y_prob = torch.cat(y_list, dim=1)                     # [B,19]
+        c_emb = torch.cat([emb1, emb2], dim=1)         # [B,20,emb]
+        c_prob = torch.cat([p1, p2], dim=1)            # [B,20]
 
-        # Normalize to be safe
-        y_prob = y_prob / (y_prob.sum(dim=1, keepdim=True) + 1e-9)
+        y_pred = self.core(c_emb, c_prob)              # [B,19] probabilities
+        y_aux = self.aux(c_prob)                       # [B,19] logits
 
-        c_prob = torch.cat([p1, p2], dim=1)                   # [B,20]
-        return y_prob, c_prob
+        return y_pred, y_aux, c_emb, c_prob
 
 
 # ------------------------------------------------------------
-# Utils (same entropy as BACON v1)
+# Utils
 # ------------------------------------------------------------
 def group_entropy_loss(c_prob):
     eps = 1e-8
@@ -179,11 +166,20 @@ def group_entropy_loss(c_prob):
     return (ent / math.log(10)).mean()
 
 
-def print_pair_rules_all(model, test_loader, tau_eval=0.8, device='cpu'):
+def triangle_class_weights():
     """
-    For interpretability: use hard concepts to see (i,j) pairs picked
-    for each predicted sum k (same style as BACON rule printer, but
-    now using the DeepProbLog sum head).
+    Analytic counts for sums: #{(i,j): i+j=k} = min(k,18-k)+1, normalized inverse.
+    """
+    counts = np.array([min(k, 18 - k) + 1 for k in range(19)], dtype=np.float32)
+    inv = 1.0 / counts
+    w = inv / inv.mean()
+    return torch.tensor(w, dtype=torch.float32)
+
+
+def print_pair_rules_dcr(model, test_loader, tau_eval=0.8, device='cpu'):
+    """
+    Optional: compute pairwise digit pairs (i,j) contributing to each sum k,
+    using hard concepts at eval, like in your DCR v1 script.
     """
     model.eval()
     pair_sum = torch.zeros(19, 10, 10, device=device)
@@ -191,22 +187,22 @@ def print_pair_rules_all(model, test_loader, tau_eval=0.8, device='cpu'):
     with torch.no_grad():
         for (x1, x2), _ in test_loader:
             x1, x2 = x1.to(device), x2.to(device)
-            # Get hard concept predictions
+            # Get hard one-hot concepts
             z1 = model.tower1(x1); z2 = model.tower2(x2)
-            p1 = model.head1(z1, tau=tau_eval, hard=True)  # [B,10]
-            p2 = model.head2(z2, tau=tau_eval, hard=True)  # [B,10]
+            _, p1 = model.head1(z1, tau=tau_eval, hard=True)  # [B,10]
+            _, p2 = model.head2(z2, tau=tau_eval, hard=True)  # [B,10]
 
-            # Compute y_prob using the same forward (but with hard concepts)
-            y_prob, _ = model(x1, x2, tau=tau_eval, hard=True)
-            k = y_prob.argmax(1)  # [B]
+            # Predict sums
+            y_pred, _, _, _ = model(x1, x2, tau=tau_eval, hard=True)
+            k = y_pred.argmax(1)  # [B]
 
             outer = p1.unsqueeze(2) * p2.unsqueeze(1)  # [B,10,10]
             for kk in range(19):
                 mask = (k == kk).float().view(-1, 1, 1)
                 pair_sum[kk] += (outer * mask).sum(dim=0)
-                count_k[kk] += mask.sum()
+                count_k[kk]  += mask.sum()
 
-    print("\n=== DeepProbLog-style Pairwise rules (valid pairs i∧j with i+j=k) ===")
+    print("\n=== DCR Pairwise rules (valid pairs i∧j with i+j=k) ===")
     for kk in range(19):
         if count_k[kk] == 0:
             print(f"y_{kk}: (no samples)")
@@ -221,7 +217,7 @@ def print_pair_rules_all(model, test_loader, tau_eval=0.8, device='cpu'):
 
 
 # ------------------------------------------------------------
-# Train / Eval (DeepProbLog-style atop BACON backbone)
+# Train / Eval (DCR)
 # ------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
@@ -231,18 +227,14 @@ def main():
     ap.add_argument("--batch-size", default=128, type=int)
     ap.add_argument("--epochs", default=120, type=int)
     ap.add_argument("--lr", default=1e-3, type=float)
+    ap.add_argument("--emb", default=30, type=int)
+    ap.add_argument("--aux", default=1.0, type=float, help="aux CE weight")
     ap.add_argument("--entropy", default=0.0005, type=float)
     ap.add_argument("--tau-start", default=3.0, type=float)
     ap.add_argument("--tau-end", default=0.6, type=float)
     ap.add_argument("--seed", default=0, type=int)
     ap.add_argument("--patience", default=15, type=int)
     ap.add_argument("--pretrained", default=None, type=str)
-    ap.add_argument("--auto-refine", action="store_true",
-                    help="enable gated hard concepts (optional, same idea as BACON)")
-    ap.add_argument("--refine-tau-gate", default=None, type=float,
-                    help="enable hard concepts only when tau <= this value")
-    ap.add_argument("--refine-acc-gate", default=None, type=float,
-                    help="enable hard concepts only when eval acc >= this value (0..1)")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -257,9 +249,9 @@ def main():
     test_ds = MnistAdditionFixed(args.data, train=False, size_pairs=args.test_pairs, seed=999)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
-    model = DeepProbLogMultiHead().to(device)
+    model = DCRMultiHead(emb_size=args.emb).to(device)
 
-    # Pretrained (optional)
+    # Optional: load pretrained DCR weights
     if args.pretrained is not None:
         if not os.path.isfile(args.pretrained):
             raise FileNotFoundError(f"Checkpoint not found: {args.pretrained}")
@@ -270,12 +262,14 @@ def main():
         except Exception as e:
             print(f"Safe load (weights_only=True) failed: {e}. Falling back to standard torch.load (unsafe).")
             ckpt = torch.load(args.pretrained, map_location=device)
+
         if isinstance(ckpt, dict) and "state_dict" in ckpt:
             state_dict = ckpt["state_dict"]
         elif hasattr(ckpt, "state_dict"):
             state_dict = ckpt.state_dict()
         else:
             state_dict = ckpt
+
         cleaned = { (k[7:] if k.startswith("module.") else k): v for k, v in state_dict.items() }
         missing, unexpected = model.load_state_dict(cleaned, strict=False)
         if missing: print(f"Warning: missing keys: {sorted(missing)}")
@@ -287,29 +281,31 @@ def main():
             for (x1, x2), y in test_loader:
                 x1, x2 = x1.to(device), x2.to(device)
                 y = y.to(device)
-                y_prob, _ = model(x1, x2, tau=args.tau_end, hard=True)
-                pred = y_prob.argmax(1)
+                y_pred, _, _, _ = model(x1, x2, tau=args.tau_end, hard=True)
+                pred = y_pred.argmax(1)
                 correct += (pred == y).sum().item()
                 tot += y.size(0)
             acc = correct / max(1, tot)
-        print(f"Pretrained eval | DeepProbLog-style acc={acc*100:.2f}% | tau={args.tau_end:.3f}")
-        print_pair_rules_all(model, test_loader, tau_eval=args.tau_end, device=device)
+        print(f"Pretrained eval | DCR acc={acc*100:.2f}% | tau={args.tau_end:.3f}")
+        print_pair_rules_dcr(model, test_loader, tau_eval=args.tau_end, device=device)
         return
 
-    # Loss/optim (same structure as BACON v1: CE + entropy)
-    ce = nn.CrossEntropyLoss()
+    # Class weights for imbalanced sums
+    class_weights = triangle_class_weights().to(device)
+    ce = nn.CrossEntropyLoss(weight=class_weights)
+
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs, eta_min=1e-4)
 
     best_acc = 0.0
     bad_epochs = 0
-    last_eval_acc = None
 
     for epoch in range(1, args.epochs + 1):
+        # τ linear annealing
         t = (epoch - 1) / max(1, args.epochs - 1)
         tau = args.tau_start + (args.tau_end - args.tau_start) * t
 
-        # ---------------- Train ----------------
+        # ---- Train ----
         model.train()
         running_loss, seen = 0.0, 0
 
@@ -317,15 +313,19 @@ def main():
             x1, x2 = x1.to(device), x2.to(device)
             y = y.to(device)
 
-            # Optional external gating: switch to hard concepts when gate conditions are met
-            use_hard = False
+            y_pred, y_aux, _, c_prob = model(x1, x2, tau=tau, hard=False)
 
-            y_prob, c_prob = model(x1, x2, tau=tau, hard=use_hard)
+            # main CE on y_pred (probabilities -> logits)
+            main_logits = torch.logit(y_pred.clamp(1e-6, 1 - 1e-6))
+            loss_main = ce(main_logits, y)
 
-            logits = torch.logit(y_prob.clamp(1e-6, 1 - 1e-6))
-            loss_main = ce(logits, y)
+            # auxiliary CE on y_aux logits
+            loss_aux = ce(y_aux, y)
+
+            # entropy regularizer over concepts
             loss_ent = group_entropy_loss(c_prob) * args.entropy
-            loss = loss_main + loss_ent
+
+            loss = loss_main + args.aux * loss_aux + loss_ent
 
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -341,35 +341,34 @@ def main():
         sched.step()
         train_loss = running_loss / max(1, seen)
 
-        # ---------------- Eval ----------------
+        # ---- Eval ----
         model.eval()
         with torch.no_grad():
             tot, correct = 0, 0
             for (x1, x2), y in test_loader:
                 x1, x2 = x1.to(device), x2.to(device)
                 y = y.to(device)
-                y_prob, _ = model(x1, x2, tau=args.tau_end, hard=True)
-                pred = y_prob.argmax(1)
+                y_pred, _, _, _ = model(x1, x2, tau=args.tau_end, hard=True)
+                pred = y_pred.argmax(1)
                 correct += (pred == y).sum().item()
                 tot += y.size(0)
-            acc = correct / max(1, tot)
+            acc = correct / tot
 
-        print(f"Epoch {epoch:03d} | train_loss={train_loss:.4f} | DeepProbLog_acc={acc*100:.2f}% | tau={tau:.3f}")
-        last_eval_acc = acc
+        print(f"Epoch {epoch:03d} | train_loss={train_loss:.4f} | DCR_acc={acc*100:.2f}% | tau={tau:.3f}")
 
         # Early stopping
         if acc > best_acc:
             best_acc = acc
             bad_epochs = 0
-            torch.save(model.state_dict(), "best_deepproblog_mnist_addition_from_bacon.pt")
+            torch.save(model.state_dict(), "best_dcr_mnist_addition_from_bacon.pt")
         else:
             bad_epochs += 1
             if bad_epochs >= args.patience:
                 print(f"Early stopping (no improvement for {args.patience} epochs).")
                 break
 
-    print(f"\nBest DeepProbLog-style acc: {best_acc*100:.2f}% (checkpoint: best_deepproblog_mnist_addition_from_bacon.pt)")
-    print_pair_rules_all(model, test_loader, tau_eval=args.tau_end, device=device)
+    print(f"\nBest DCR acc: {best_acc*100:.2f}% (checkpoint: best_dcr_mnist_addition_from_bacon.pt)")
+    print_pair_rules_dcr(model, test_loader, tau_eval=args.tau_end, device=device)
 
 
 if __name__ == "__main__":
