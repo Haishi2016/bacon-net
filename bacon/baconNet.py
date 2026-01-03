@@ -17,7 +17,6 @@ class baconNet(nn.Module):
 
     Args:
         input_size (int): Number of input features. This is likely to be removed in the future.
-        lock_loss_tolerance (float, optional): Maximum tolerated accuracy loss when locking the structure. Defaults to 0.04. Not if you are using `loss_amplifier`, this will be multiplied by it.
         tree_layout (str, optional): Layout of the tree. Defaults to "left". Other layouts are not supported yet.
         loss_amplifier (float, optional): Amplifier for the loss. Defaults to 1.
         weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
@@ -43,7 +42,6 @@ class baconNet(nn.Module):
         use_class_weighting (bool, optional): Whether to apply class weighting for imbalanced data. Defaults to True. When True, penalizes minority class errors more heavily (pos_weight = neg_count/pos_count). When False, uses standard BCE loss (original behavior).
     """
     def __init__(self, input_size, 
-                 lock_loss_tolerance=0.04, 
                  tree_layout="left", 
                  loss_amplifier=1, 
                  weight_penalty_strength=1e-3,
@@ -111,7 +109,6 @@ class baconNet(nn.Module):
                                             weight_mode=weight_mode,
                                             weight_value=0.5,                                             
                                             weight_range=(0.5, 2.0), 
-                                            lock_loss_tolerance=lock_loss_tolerance,
                                             normalize_andness=normalize_andness,
                                             tree_layout=tree_layout,
                                             loss_amplifier=loss_amplifier,
@@ -343,7 +340,6 @@ class baconNet(nn.Module):
                     min_noise=cfg.min_noise,
                     max_noise=cfg.max_noise,
                     is_frozen=False,
-                    lock_loss_tolerance=cfg.lock_loss_tolerance / cfg.loss_amplifier,  # unscale
                     tree_layout=cfg.tree_layout,
                     weight_penalty_strength=cfg.weight_penalty_strength,
                     aggregator=cfg.aggregator,

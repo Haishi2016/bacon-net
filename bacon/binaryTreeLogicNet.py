@@ -35,7 +35,6 @@ class binaryTreeLogicNet(nn.Module):
         min_noise (float, optional): Minimum noise level. Defaults to 0.0.
         max_noise (float, optional): Maximum noise level. Defaults to 2.0.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
-        lock_loss_tolerance (float, optional): The maximum tolerated accuracy loss when locking the structure. Defaults to 0.04. Note that this is multiplied by `loss_amplifier`.
         tree_layout (str, optional): Layout of the tree. Defaults to "left".
         weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
         aggregator (callable, optional): Aggregator to be used. Defaults to "lsp.full_weight".
@@ -55,7 +54,6 @@ class binaryTreeLogicNet(nn.Module):
                  min_noise=0.0,
                  max_noise=2.0,
                  is_frozen = False,
-                 lock_loss_tolerance=0.04,
                  tree_layout="left",
                  weight_penalty_strength=1e-3,
                  aggregator="lsp.full_weight",
@@ -86,7 +84,6 @@ class binaryTreeLogicNet(nn.Module):
         self.early_stop_patience = early_stop_patience
         self.early_stop_min_delta = early_stop_min_delta
         self.early_stop_threshold = early_stop_threshold
-        self.lock_loss_tolerance = lock_loss_tolerance * self.loss_amplifier  # Adjust tolerance based on loss amplifier
         self.is_frozen = is_frozen
         self.locked_perm = None  # For frozen models
         self.tree_layout = tree_layout  # Layout for visualization
@@ -127,7 +124,6 @@ class binaryTreeLogicNet(nn.Module):
         
         self._reinitialize(weight_mode, weight_value, weight_range, weight_choices, self.is_frozen)
         self.reset_optimizer()  # Initialize optimizer        
-        self._auto_freeze_tolerance = self.lock_loss_tolerance       
         if hasattr(self.aggregator, "attach_to_tree"):
             self.aggregator.attach_to_tree(self.num_layers)      
             self.add_module("aggregator", self.aggregator)
