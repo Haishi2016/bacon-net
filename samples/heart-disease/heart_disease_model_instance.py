@@ -134,52 +134,52 @@ def predict(input_array):
     # Apply permutation and transformations
     features = []
 
-    features.append(apply_negation(input_array[10]))  # NOT cp_2
+    features.append(apply_identity(input_array[11]))  # cp_3
+    features.append(apply_identity(input_array[9]))  # cp_1
+    features.append(apply_identity(input_array[19]))  # thal_3.0
+    features.append(apply_identity(input_array[15]))  # restecg_2
+    features.append(apply_identity(input_array[4]))  # fbs
+    features.append(apply_identity(input_array[20]))  # thal_6.0
+    features.append(apply_identity(input_array[5]))  # thalach
     features.append(apply_identity(input_array[3]))  # chol
-    features.append(apply_negation(input_array[19]))  # NOT thal_3.0
-    features.append(apply_negation(input_array[4]))  # NOT fbs
-    features.append(apply_negation(input_array[11]))  # NOT cp_3
-    features.append(apply_negation(input_array[5]))  # NOT thalach
-    features.append(apply_negation(input_array[0]))  # NOT age
-    features.append(apply_negation(input_array[9]))  # NOT cp_1
-    features.append(apply_negation(input_array[20]))  # NOT thal_6.0
-    features.append(apply_negation(input_array[2]))  # NOT trestbps
-    features.append(apply_negation(input_array[14]))  # NOT restecg_1
-    features.append(apply_negation(input_array[13]))  # NOT restecg_0
-    features.append(apply_negation(input_array[15]))  # NOT restecg_2
-    features.append(apply_negation(input_array[16]))  # NOT slope_1
-    features.append(apply_negation(input_array[18]))  # NOT slope_3
-    features.append(apply_identity(input_array[6]))  # exang
+    features.append(apply_identity(input_array[13]))  # restecg_0
+    features.append(apply_identity(input_array[16]))  # slope_1
+    features.append(apply_identity(input_array[14]))  # restecg_1
+    features.append(apply_identity(input_array[10]))  # cp_2
+    features.append(apply_identity(input_array[2]))  # trestbps
+    features.append(apply_identity(input_array[18]))  # slope_3
     features.append(apply_identity(input_array[1]))  # sex
-    features.append(apply_identity(input_array[17]))  # slope_2
-    features.append(apply_identity(input_array[12]))  # cp_4
+    features.append(apply_identity(input_array[0]))  # age
     features.append(apply_identity(input_array[8]))  # ca
-    features.append(apply_identity(input_array[21]))  # thal_7.0
     features.append(apply_identity(input_array[7]))  # oldpeak
+    features.append(apply_identity(input_array[17]))  # slope_2
+    features.append(apply_identity(input_array[6]))  # exang
+    features.append(apply_identity(input_array[21]))  # thal_7.0
+    features.append(apply_identity(input_array[12]))  # cp_4
 
     # Aggregate through the tree
 
-    agg_0 = lsp_half_weight_aggregate(features[0], features[1], 1.394565, 0.5, 0.5)  # Layer 0
-    agg_1 = lsp_half_weight_aggregate(agg_0, features[2], 0.759179, 0.5, 0.5)  # Layer 1
-    agg_2 = lsp_half_weight_aggregate(agg_1, features[3], 0.759023, 0.5, 0.5)  # Layer 2
-    agg_3 = lsp_half_weight_aggregate(agg_2, features[4], 1.474444, 0.5, 0.5)  # Layer 3
-    agg_4 = lsp_half_weight_aggregate(agg_3, features[5], 1.594871, 0.5, 0.5)  # Layer 4
-    agg_5 = lsp_half_weight_aggregate(agg_4, features[6], 1.759846, 0.5, 0.5)  # Layer 5
-    agg_6 = lsp_half_weight_aggregate(agg_5, features[7], 1.120825, 0.5, 0.5)  # Layer 6
-    agg_7 = lsp_half_weight_aggregate(agg_6, features[8], 1.790639, 0.5, 0.5)  # Layer 7
-    agg_8 = lsp_half_weight_aggregate(agg_7, features[9], 1.335201, 0.5, 0.5)  # Layer 8
-    agg_9 = lsp_half_weight_aggregate(agg_8, features[10], 1.389699, 0.5, 0.5)  # Layer 9
-    agg_10 = lsp_half_weight_aggregate(agg_9, features[11], 1.478436, 0.5, 0.5)  # Layer 10
-    agg_11 = lsp_half_weight_aggregate(agg_10, features[12], 0.803273, 0.5, 0.5)  # Layer 11
-    agg_12 = lsp_half_weight_aggregate(agg_11, features[13], 0.291596, 0.5, 0.5)  # Layer 12
-    agg_13 = lsp_half_weight_aggregate(agg_12, features[14], 1.636478, 0.5, 0.5)  # Layer 13
-    agg_14 = lsp_half_weight_aggregate(agg_13, features[15], 1.671562, 0.5, 0.5)  # Layer 14
-    agg_15 = lsp_half_weight_aggregate(agg_14, features[16], -0.767567, 0.5, 0.5)  # Layer 15
-    agg_16 = lsp_half_weight_aggregate(agg_15, features[17], 1.555183, 0.5, 0.5)  # Layer 16
-    agg_17 = lsp_half_weight_aggregate(agg_16, features[18], 0.103279, 0.5, 0.5)  # Layer 17
-    agg_18 = lsp_half_weight_aggregate(agg_17, features[19], 1.937871, 0.5, 0.5)  # Layer 18
-    agg_19 = lsp_half_weight_aggregate(agg_18, features[20], 0.854496, 0.5, 0.5)  # Layer 19
-    agg_20 = lsp_half_weight_aggregate(agg_19, features[21], 0.753907, 0.5, 0.5)  # Layer 20
+    agg_0 = lsp_half_weight_aggregate(features[0], features[1], 0.827083, 0.5, 0.5)  # Layer 0
+    agg_1 = lsp_half_weight_aggregate(agg_0, features[2], -0.513749, 0.5, 0.5)  # Layer 1
+    agg_2 = lsp_half_weight_aggregate(agg_1, features[3], -0.625657, 0.5, 0.5)  # Layer 2
+    agg_3 = lsp_half_weight_aggregate(agg_2, features[4], -0.254279, 0.5, 0.5)  # Layer 3
+    agg_4 = lsp_half_weight_aggregate(agg_3, features[5], -0.083511, 0.5, 0.5)  # Layer 4
+    agg_5 = lsp_half_weight_aggregate(agg_4, features[6], 0.520075, 0.5, 0.5)  # Layer 5
+    agg_6 = lsp_half_weight_aggregate(agg_5, features[7], -0.565187, 0.5, 0.5)  # Layer 6
+    agg_7 = lsp_half_weight_aggregate(agg_6, features[8], 0.654859, 0.5, 0.5)  # Layer 7
+    agg_8 = lsp_half_weight_aggregate(agg_7, features[9], 0.581074, 0.5, 0.5)  # Layer 8
+    agg_9 = lsp_half_weight_aggregate(agg_8, features[10], -0.084794, 0.5, 0.5)  # Layer 9
+    agg_10 = lsp_half_weight_aggregate(agg_9, features[11], -0.122285, 0.5, 0.5)  # Layer 10
+    agg_11 = lsp_half_weight_aggregate(agg_10, features[12], 0.202179, 0.5, 0.5)  # Layer 11
+    agg_12 = lsp_half_weight_aggregate(agg_11, features[13], -0.734053, 0.5, 0.5)  # Layer 12
+    agg_13 = lsp_half_weight_aggregate(agg_12, features[14], 1.716753, 0.5, 0.5)  # Layer 13
+    agg_14 = lsp_half_weight_aggregate(agg_13, features[15], -0.226167, 0.5, 0.5)  # Layer 14
+    agg_15 = lsp_half_weight_aggregate(agg_14, features[16], 1.743444, 0.5, 0.5)  # Layer 15
+    agg_16 = lsp_half_weight_aggregate(agg_15, features[17], 1.622845, 0.5, 0.5)  # Layer 16
+    agg_17 = lsp_half_weight_aggregate(agg_16, features[18], 1.468585, 0.5, 0.5)  # Layer 17
+    agg_18 = lsp_half_weight_aggregate(agg_17, features[19], 0.750886, 0.5, 0.5)  # Layer 18
+    agg_19 = lsp_half_weight_aggregate(agg_18, features[20], 0.536983, 0.5, 0.5)  # Layer 19
+    agg_20 = lsp_half_weight_aggregate(agg_19, features[21], 1.254692, 0.5, 0.5)  # Layer 20
 
     return agg_20
 

@@ -172,28 +172,28 @@ def predict(input_array):
     # Apply permutation and transformations (vectorized)
     features = []
 
-    features.append(apply_negation_vec(input_array[:, 10]))  # NOT cp_2
+    features.append(apply_identity_vec(input_array[:, 11]))  # cp_3
+    features.append(apply_identity_vec(input_array[:, 9]))  # cp_1
+    features.append(apply_identity_vec(input_array[:, 19]))  # thal_3.0
+    features.append(apply_identity_vec(input_array[:, 15]))  # restecg_2
+    features.append(apply_identity_vec(input_array[:, 4]))  # fbs
+    features.append(apply_identity_vec(input_array[:, 20]))  # thal_6.0
+    features.append(apply_identity_vec(input_array[:, 5]))  # thalach
     features.append(apply_identity_vec(input_array[:, 3]))  # chol
-    features.append(apply_negation_vec(input_array[:, 19]))  # NOT thal_3.0
-    features.append(apply_negation_vec(input_array[:, 4]))  # NOT fbs
-    features.append(apply_negation_vec(input_array[:, 11]))  # NOT cp_3
-    features.append(apply_negation_vec(input_array[:, 5]))  # NOT thalach
-    features.append(apply_negation_vec(input_array[:, 0]))  # NOT age
-    features.append(apply_negation_vec(input_array[:, 9]))  # NOT cp_1
-    features.append(apply_negation_vec(input_array[:, 20]))  # NOT thal_6.0
-    features.append(apply_negation_vec(input_array[:, 2]))  # NOT trestbps
-    features.append(apply_negation_vec(input_array[:, 14]))  # NOT restecg_1
-    features.append(apply_negation_vec(input_array[:, 13]))  # NOT restecg_0
-    features.append(apply_negation_vec(input_array[:, 15]))  # NOT restecg_2
-    features.append(apply_negation_vec(input_array[:, 16]))  # NOT slope_1
-    features.append(apply_negation_vec(input_array[:, 18]))  # NOT slope_3
-    features.append(apply_identity_vec(input_array[:, 6]))  # exang
+    features.append(apply_identity_vec(input_array[:, 13]))  # restecg_0
+    features.append(apply_identity_vec(input_array[:, 16]))  # slope_1
+    features.append(apply_identity_vec(input_array[:, 14]))  # restecg_1
+    features.append(apply_identity_vec(input_array[:, 10]))  # cp_2
+    features.append(apply_identity_vec(input_array[:, 2]))  # trestbps
+    features.append(apply_identity_vec(input_array[:, 18]))  # slope_3
     features.append(apply_identity_vec(input_array[:, 1]))  # sex
-    features.append(apply_identity_vec(input_array[:, 17]))  # slope_2
-    features.append(apply_identity_vec(input_array[:, 12]))  # cp_4
+    features.append(apply_identity_vec(input_array[:, 0]))  # age
     features.append(apply_identity_vec(input_array[:, 8]))  # ca
-    features.append(apply_identity_vec(input_array[:, 21]))  # thal_7.0
     features.append(apply_identity_vec(input_array[:, 7]))  # oldpeak
+    features.append(apply_identity_vec(input_array[:, 17]))  # slope_2
+    features.append(apply_identity_vec(input_array[:, 6]))  # exang
+    features.append(apply_identity_vec(input_array[:, 21]))  # thal_7.0
+    features.append(apply_identity_vec(input_array[:, 12]))  # cp_4
 
     # Convert to array for easier indexing
 
@@ -202,27 +202,27 @@ def predict(input_array):
 
     # Aggregate through the tree (vectorized)
 
-    agg_0 = np.array([lsp_half_weight_aggregate(features[0, i], features[1, i], 1.394565, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 0
-    agg_1 = np.array([lsp_half_weight_aggregate(agg_0[i], features[2, i], 0.759179, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 1
-    agg_2 = np.array([lsp_half_weight_aggregate(agg_1[i], features[3, i], 0.759023, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 2
-    agg_3 = np.array([lsp_half_weight_aggregate(agg_2[i], features[4, i], 1.474444, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 3
-    agg_4 = np.array([lsp_half_weight_aggregate(agg_3[i], features[5, i], 1.594871, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 4
-    agg_5 = np.array([lsp_half_weight_aggregate(agg_4[i], features[6, i], 1.759846, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 5
-    agg_6 = np.array([lsp_half_weight_aggregate(agg_5[i], features[7, i], 1.120825, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 6
-    agg_7 = np.array([lsp_half_weight_aggregate(agg_6[i], features[8, i], 1.790639, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 7
-    agg_8 = np.array([lsp_half_weight_aggregate(agg_7[i], features[9, i], 1.335201, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 8
-    agg_9 = np.array([lsp_half_weight_aggregate(agg_8[i], features[10, i], 1.389699, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 9
-    agg_10 = np.array([lsp_half_weight_aggregate(agg_9[i], features[11, i], 1.478436, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 10
-    agg_11 = np.array([lsp_half_weight_aggregate(agg_10[i], features[12, i], 0.803273, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 11
-    agg_12 = np.array([lsp_half_weight_aggregate(agg_11[i], features[13, i], 0.291596, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 12
-    agg_13 = np.array([lsp_half_weight_aggregate(agg_12[i], features[14, i], 1.636478, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 13
-    agg_14 = np.array([lsp_half_weight_aggregate(agg_13[i], features[15, i], 1.671562, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 14
-    agg_15 = np.array([lsp_half_weight_aggregate(agg_14[i], features[16, i], -0.767567, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 15
-    agg_16 = np.array([lsp_half_weight_aggregate(agg_15[i], features[17, i], 1.555183, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 16
-    agg_17 = np.array([lsp_half_weight_aggregate(agg_16[i], features[18, i], 0.103279, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 17
-    agg_18 = np.array([lsp_half_weight_aggregate(agg_17[i], features[19, i], 1.937871, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 18
-    agg_19 = np.array([lsp_half_weight_aggregate(agg_18[i], features[20, i], 0.854496, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 19
-    agg_20 = np.array([lsp_half_weight_aggregate(agg_19[i], features[21, i], 0.753907, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 20
+    agg_0 = np.array([lsp_half_weight_aggregate(features[0, i], features[1, i], 0.827083, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 0
+    agg_1 = np.array([lsp_half_weight_aggregate(agg_0[i], features[2, i], -0.513749, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 1
+    agg_2 = np.array([lsp_half_weight_aggregate(agg_1[i], features[3, i], -0.625657, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 2
+    agg_3 = np.array([lsp_half_weight_aggregate(agg_2[i], features[4, i], -0.254279, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 3
+    agg_4 = np.array([lsp_half_weight_aggregate(agg_3[i], features[5, i], -0.083511, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 4
+    agg_5 = np.array([lsp_half_weight_aggregate(agg_4[i], features[6, i], 0.520075, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 5
+    agg_6 = np.array([lsp_half_weight_aggregate(agg_5[i], features[7, i], -0.565187, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 6
+    agg_7 = np.array([lsp_half_weight_aggregate(agg_6[i], features[8, i], 0.654859, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 7
+    agg_8 = np.array([lsp_half_weight_aggregate(agg_7[i], features[9, i], 0.581074, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 8
+    agg_9 = np.array([lsp_half_weight_aggregate(agg_8[i], features[10, i], -0.084794, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 9
+    agg_10 = np.array([lsp_half_weight_aggregate(agg_9[i], features[11, i], -0.122285, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 10
+    agg_11 = np.array([lsp_half_weight_aggregate(agg_10[i], features[12, i], 0.202179, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 11
+    agg_12 = np.array([lsp_half_weight_aggregate(agg_11[i], features[13, i], -0.734053, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 12
+    agg_13 = np.array([lsp_half_weight_aggregate(agg_12[i], features[14, i], 1.716753, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 13
+    agg_14 = np.array([lsp_half_weight_aggregate(agg_13[i], features[15, i], -0.226167, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 14
+    agg_15 = np.array([lsp_half_weight_aggregate(agg_14[i], features[16, i], 1.743444, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 15
+    agg_16 = np.array([lsp_half_weight_aggregate(agg_15[i], features[17, i], 1.622845, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 16
+    agg_17 = np.array([lsp_half_weight_aggregate(agg_16[i], features[18, i], 1.468585, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 17
+    agg_18 = np.array([lsp_half_weight_aggregate(agg_17[i], features[19, i], 0.750886, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 18
+    agg_19 = np.array([lsp_half_weight_aggregate(agg_18[i], features[20, i], 0.536983, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 19
+    agg_20 = np.array([lsp_half_weight_aggregate(agg_19[i], features[21, i], 1.254692, 0.5, 0.5) for i in range(features.shape[1])])  # Layer 20
 
     return agg_20 if input_array.ndim > 1 else agg_20[0]
 

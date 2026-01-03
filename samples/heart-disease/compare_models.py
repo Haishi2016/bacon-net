@@ -1,8 +1,8 @@
 """
-Compare Original BACON Model vs Distilled Model
+Compare Original BACON Model vs Distilled Models (Instance and Batch Modes)
 
-This script validates that the distilled model produces identical predictions
-to the original BACON model, and measures the performance improvement.
+This script validates that both distilled models produce identical predictions
+to the original BACON model, and measures the performance of each mode.
 """
 
 import sys
@@ -13,20 +13,33 @@ import time
 import numpy as np
 from dataset import prepare_data
 
-# Import distilled model
+# Import both distilled models
 try:
-    from heart_disease_distilled import predict as distilled_predict
+    from heart_disease_model_instance import predict as instance_predict
+    has_instance = True
 except ImportError:
-    print("❌ Error: heart_disease_distilled.py not found!")
+    print("⚠️  Warning: heart_disease_model_instance.py not found!")
+    has_instance = False
+
+try:
+    from heart_disease_model_batch import predict as batch_predict
+    has_batch = True
+except ImportError:
+    print("⚠️  Warning: heart_disease_model_batch.py not found!")
+    has_batch = False
+
+if not has_instance and not has_batch:
+    print("\n❌ Error: No distilled models found!")
     print("Please run distillation first:")
-    print("  python -m bacon.distill heart_disease_tree_structure.json heart_disease_distilled.py")
+    print("  Instance mode: python -m bacon.tools.distill heart_disease_tree_structure.json heart_disease_model_instance.py --mode instance")
+    print("  Batch mode:    python -m bacon.tools.distill heart_disease_tree_structure.json heart_disease_model_batch.py --mode batch")
     sys.exit(1)
 
 # Import original model
 from bacon.baconNet import baconNet
 
 print("="*80)
-print("BACON MODEL COMPARISON: Original vs Distilled")
+print("BACON MODEL COMPARISON: Original vs Distilled (Instance & Batch)")
 print("="*80)
 
 # Prepare data
@@ -74,12 +87,11 @@ try:
         
         if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
             # New format: checkpoint with metadata
-            # Restore metadata FIRST
             bacon.assembler.is_frozen = checkpoint.get('is_frozen', False)
             bacon.assembler.locked_perm = checkpoint.get('locked_perm', None)
             bacon.assembler.tree_layout = checkpoint.get('tree_layout', 'left')
             
-            # If model was frozen, recreate frozen input layer BEFORE loading state_dict
+            # If model was frozen, recreate frozen input layer
             if bacon.assembler.is_frozen and bacon.assembler.locked_perm is not None:
                 from bacon.frozonInputToLeaf import frozenInputToLeaf
                 bacon.assembler.input_to_leaf = frozenInputToLeaf(
@@ -87,103 +99,79 @@ try:
                     bacon.assembler.original_input_size
                 ).to(device)
             
-            # Now load model state
             bacon.assembler.load_state_dict(checkpoint['model_state_dict'])
         else:
-            # Old format: direct state dict
             bacon.assembler.load_state_dict(checkpoint)
         
         bacon.eval()
         print("   ✅ Model loaded successfully")
     else:
-        print("   ⚠️  No saved model found. You may need to train first.")
-        print("   Continuing with untrained model for comparison...")
+        print("   ⚠️  No saved model found.")
+        sys.exit(1)
+        
 except Exception as e:
     print(f"   ❌ Error loading model: {e}")
-    print("   Please ensure you have a trained model saved.")
     sys.exit(1)
 
 print("\n" + "="*80)
 print("PREDICTION ACCURACY TEST")
 print("="*80)
 
-# Test predictions match
-print("\n🔬 Testing prediction equivalence...")
-
-# Convert data to numpy for distilled model
+# Convert data to numpy for distilled models
 X_all_np = X_all.cpu().numpy()
 Y_all_np = Y_all.cpu().numpy().flatten()
 
-# DEBUG: Check if model has permutation
-if bacon.assembler.locked_perm is not None:
-    print(f"\n🔍 Model has locked permutation: {bacon.assembler.locked_perm.tolist()}")
-    print(f"   This means the model expects features in ORIGINAL order")
-    print(f"   The model will internally permute them using locked_perm")
-else:
-    print("\n🔍 Model has no permutation (features in original order)")
-
-# Get predictions from both models
-print("\n   Running original model...")
+# Get predictions from original model
+print("\n   Running original model (batch)...")
 with torch.no_grad():
     original_predictions = bacon(X_all).cpu().numpy().flatten()
 
-print("   Running distilled model...")
-
-# Test with first sample to debug
-print("\n🔍 Debugging first sample:")
-test_sample = X_all_np[0]
-print(f"   Input shape: {test_sample.shape}")
-print(f"   First 5 features: {test_sample[:5]}")
-distilled_test = distilled_predict(test_sample)
-print(f"   Distilled output: {distilled_test:.8f}")
-print(f"   Original output:  {original_predictions[0]:.8f}")
-print(f"   Difference: {abs(distilled_test - original_predictions[0]):.8f}")
-
-distilled_predictions = np.array([distilled_predict(X_all_np[i]) for i in range(num_samples)])
-
-# Compare predictions
-diff = np.abs(original_predictions - distilled_predictions)
-max_diff = np.max(diff)
-mean_diff = np.mean(diff)
-median_diff = np.median(diff)
-
-print(f"\n📈 Prediction Differences:")
-print(f"   Maximum difference: {max_diff:.10f}")
-print(f"   Mean difference:    {mean_diff:.10f}")
-print(f"   Median difference:  {median_diff:.10f}")
-
-# Check if predictions are essentially identical (within floating point tolerance)
 tolerance = 1e-6
-if max_diff < tolerance:
-    print(f"\n✅ PASSED: Predictions are identical (within tolerance {tolerance})")
-else:
-    print(f"\n⚠️  WARNING: Predictions differ by more than {tolerance}")
-    print(f"   This may indicate an issue with distillation or floating point precision")
+
+# Test instance mode if available
+if has_instance:
+    print("   Running instance mode distilled model...")
+    instance_predictions = np.array([instance_predict(X_all_np[i]) for i in range(num_samples)])
     
-    # Show some examples of differences
-    print("\n   Top 5 largest differences:")
-    top_diff_indices = np.argsort(diff)[-5:][::-1]
-    for idx in top_diff_indices:
-        print(f"   Sample {idx}: Original={original_predictions[idx]:.8f}, "
-              f"Distilled={distilled_predictions[idx]:.8f}, "
-              f"Diff={diff[idx]:.8f}")
+    diff_instance = np.abs(original_predictions - instance_predictions)
+    max_diff_instance = np.max(diff_instance)
+    mean_diff_instance = np.mean(diff_instance)
+    
+    print(f"\n📈 Instance Mode - Prediction Differences:")
+    print(f"   Maximum difference: {max_diff_instance:.10f}")
+    print(f"   Mean difference:    {mean_diff_instance:.10f}")
+    
+    if max_diff_instance < tolerance:
+        print(f"   ✅ PASSED: Instance predictions identical (within {tolerance})")
+    else:
+        print(f"   ⚠️  WARNING: Predictions differ by more than {tolerance}")
 
-# Classification accuracy comparison (using 0.5 threshold)
-threshold = 0.5
-original_classes = (original_predictions > threshold).astype(int)
-distilled_classes = (distilled_predictions > threshold).astype(int)
+# Test batch mode if available
+if has_batch:
+    print("\n   Running batch mode distilled model...")
+    batch_predictions = batch_predict(X_all_np).flatten()
+    
+    diff_batch = np.abs(original_predictions - batch_predictions)
+    max_diff_batch = np.max(diff_batch)
+    mean_diff_batch = np.mean(diff_batch)
+    
+    print(f"\n📈 Batch Mode - Prediction Differences:")
+    print(f"   Maximum difference: {max_diff_batch:.10f}")
+    print(f"   Mean difference:    {mean_diff_batch:.10f}")
+    
+    if max_diff_batch < tolerance:
+        print(f"   ✅ PASSED: Batch predictions identical (within {tolerance})")
+    else:
+        print(f"   ⚠️  WARNING: Predictions differ by more than {tolerance}")
 
-original_accuracy = np.mean(original_classes == Y_all_np)
-distilled_accuracy = np.mean(distilled_classes == Y_all_np)
-
-print(f"\n📊 Classification Accuracy (threshold={threshold}):")
-print(f"   Original model:  {original_accuracy*100:.2f}%")
-print(f"   Distilled model: {distilled_accuracy*100:.2f}%")
-
-if original_accuracy == distilled_accuracy:
-    print("   ✅ Accuracies match exactly")
-else:
-    print(f"   ⚠️  Accuracy difference: {abs(original_accuracy - distilled_accuracy)*100:.4f}%")
+# Compare instance and batch modes
+if has_instance and has_batch:
+    diff_modes = np.abs(instance_predictions - batch_predictions)
+    max_diff_modes = np.max(diff_modes)
+    print(f"\n📈 Instance vs Batch Mode:")
+    print(f"   Maximum difference: {max_diff_modes:.10f}")
+    if max_diff_modes < tolerance:
+        print(f"   ✅ Both modes produce identical results")
 
 print("\n" + "="*80)
 print("PERFORMANCE BENCHMARK")
@@ -191,124 +179,151 @@ print("="*80)
 
 # Benchmark parameters
 num_warmup = 10
-num_iterations = 100
+num_iterations = 10
 
 print(f"\n⏱️  Benchmark settings:")
 print(f"   Warmup iterations: {num_warmup}")
 print(f"   Test iterations:   {num_iterations}")
 print(f"   Samples per run:   {num_samples}")
 
-# Warmup original model
-print("\n🔥 Warming up original model...")
+# Warmup and benchmark original model (BATCH)
+print("\n🔥 Warming up original BACON model (batch mode)...")
 for _ in range(num_warmup):
     with torch.no_grad():
         _ = bacon(X_all)
 
-# Benchmark original model
-print("⏱️  Benchmarking original model...")
-original_times = []
+print("⏱️  Benchmarking original BACON (batch)...")
+original_batch_times = []
 for _ in range(num_iterations):
     start = time.perf_counter()
     with torch.no_grad():
         _ = bacon(X_all)
     end = time.perf_counter()
-    original_times.append(end - start)
+    original_batch_times.append(end - start)
 
-original_mean = np.mean(original_times)
-original_std = np.std(original_times)
-original_per_sample = original_mean / num_samples
+original_batch_mean = np.mean(original_batch_times)
+original_batch_std = np.std(original_batch_times)
 
-# Warmup distilled model
-print("🔥 Warming up distilled model...")
+print(f"\n📊 Original BACON - Batch Mode (PyTorch):")
+print(f"   Total time:    {original_batch_mean*1000:.2f} ± {original_batch_std*1000:.2f} ms")
+print(f"   Per sample:    {original_batch_mean*1000/num_samples:.4f} ms")
+print(f"   Throughput:    {num_samples/original_batch_mean:.0f} samples/sec")
+
+# Benchmark original model (INSTANCE - one at a time)
+print("\n🔥 Warming up original BACON model (instance mode)...")
 for _ in range(num_warmup):
     for i in range(num_samples):
-        _ = distilled_predict(X_all_np[i])
+        with torch.no_grad():
+            _ = bacon(X_all[i:i+1])
 
-# Benchmark distilled model
-print("⏱️  Benchmarking distilled model...")
-distilled_times = []
+print("⏱️  Benchmarking original BACON (instance)...")
+original_instance_times = []
 for _ in range(num_iterations):
     start = time.perf_counter()
     for i in range(num_samples):
-        _ = distilled_predict(X_all_np[i])
+        with torch.no_grad():
+            _ = bacon(X_all[i:i+1])
     end = time.perf_counter()
-    distilled_times.append(end - start)
+    original_instance_times.append(end - start)
 
-distilled_mean = np.mean(distilled_times)
-distilled_std = np.std(distilled_times)
-distilled_per_sample = distilled_mean / num_samples
+original_instance_mean = np.mean(original_instance_times)
+original_instance_std = np.std(original_instance_times)
 
-# Calculate speedup
-speedup = original_mean / distilled_mean
+print(f"\n📊 Original BACON - Instance Mode (PyTorch, per-sample):")
+print(f"   Total time:    {original_instance_mean*1000:.2f} ± {original_instance_std*1000:.2f} ms")
+print(f"   Per sample:    {original_instance_mean*1000/num_samples:.4f} ms")
+print(f"   Throughput:    {num_samples/original_instance_mean:.0f} samples/sec")
 
-print(f"\n📊 Performance Results:")
-print(f"\n   Original Model:")
-print(f"      Total time:    {original_mean*1000:.2f} ± {original_std*1000:.2f} ms")
-print(f"      Per sample:    {original_per_sample*1000:.4f} ms")
-print(f"      Throughput:    {num_samples/original_mean:.0f} samples/sec")
+# Benchmark distilled instance mode
+if has_instance:
+    print("\n🔥 Warming up distilled instance mode...")
+    for _ in range(num_warmup):
+        for i in range(num_samples):
+            _ = instance_predict(X_all_np[i])
+    
+    print("⏱️  Benchmarking distilled instance mode...")
+    instance_times = []
+    for _ in range(num_iterations):
+        start = time.perf_counter()
+        for i in range(num_samples):
+            _ = instance_predict(X_all_np[i])
+        end = time.perf_counter()
+        instance_times.append(end - start)
+    
+    instance_mean = np.mean(instance_times)
+    instance_std = np.std(instance_times)
+    instance_speedup = original_instance_mean / instance_mean
+    
+    print(f"\n📊 Distilled - Instance Mode (Pure Python, zero deps):")
+    print(f"   Total time:    {instance_mean*1000:.2f} ± {instance_std*1000:.2f} ms")
+    print(f"   Per sample:    {instance_mean*1000/num_samples:.4f} ms")
+    print(f"   Throughput:    {num_samples/instance_mean:.0f} samples/sec")
+    print(f"   🚀 Speedup:     {instance_speedup:.2f}x vs original BACON (instance)")
+    print(f"   📦 Dependencies: None")
+    print(f"   🚀 Speedup:     {instance_speedup:.2f}x vs original")
+    print(f"   📦 Dependencies: None (zero deps)")
 
-print(f"\n   Distilled Model:")
-print(f"      Total time:    {distilled_mean*1000:.2f} ± {distilled_std*1000:.2f} ms")
-print(f"      Per sample:    {distilled_per_sample*1000:.4f} ms")
-print(f"      Throughput:    {num_samples/distilled_mean:.0f} samples/sec")
+# Benchmark distilled batch mode
+if has_batch:
+    print("\n🔥 Warming up distilled batch mode...")
+    for _ in range(num_warmup):
+        _ = batch_predict(X_all_np)
+    
+    print("⏱️  Benchmarking distilled batch mode...")
+    batch_times = []
+    for _ in range(num_iterations):
+        start = time.perf_counter()
+        _ = batch_predict(X_all_np)
+        end = time.perf_counter()
+        batch_times.append(end - start)
+    
+    batch_mean = np.mean(batch_times)
+    batch_std = np.std(batch_times)
+    batch_speedup = original_batch_mean / batch_mean
+    
+    print(f"\n📊 Distilled - Batch Mode (NumPy vectorized):")
+    print(f"   Total time:    {batch_mean*1000:.2f} ± {batch_std*1000:.2f} ms")
+    print(f"   Per sample:    {batch_mean*1000/num_samples:.4f} ms")
+    print(f"   Throughput:    {num_samples/batch_mean:.0f} samples/sec")
+    print(f"   🚀 Speedup:     {batch_speedup:.2f}x vs original BACON (batch)")
+    print(f"   📦 Dependencies: NumPy")
 
-print(f"\n   🚀 Speedup: {speedup:.2f}x faster")
-
-if speedup > 1:
-    print(f"   ✅ Distilled model is {speedup:.2f}x faster!")
-    time_saved = (original_mean - distilled_mean) * 1000
-    print(f"   💰 Time saved per batch: {time_saved:.2f} ms")
-else:
-    print(f"   ⚠️  Distilled model is slower (may need optimization)")
-
-print("\n" + "="*80)
-print("MEMORY FOOTPRINT")
-print("="*80)
-
-# Estimate memory usage
-import os
-
-# Original model size (approximate)
-original_model_params = sum(p.numel() for p in bacon.parameters())
-original_model_size = original_model_params * 4  # 4 bytes per float32
-print(f"\n📦 Original Model:")
-print(f"   Parameters: {original_model_params:,}")
-print(f"   Estimated size: {original_model_size / 1024:.2f} KB")
-
-# Distilled model size (file size)
-distilled_file = 'heart_disease_distilled.py'
-if os.path.exists(distilled_file):
-    distilled_size = os.path.getsize(distilled_file)
-    print(f"\n📦 Distilled Model:")
-    print(f"   File size: {distilled_size / 1024:.2f} KB")
-    print(f"   💾 Size reduction: {original_model_size / distilled_size:.2f}x smaller file")
-
-# Framework dependencies
-print(f"\n📚 Dependencies:")
-print(f"   Original:  PyTorch, NumPy, bacon-net framework")
-print(f"   Distilled: None (pure Python + math module)")
+# Compare modes
+if has_instance and has_batch:
+    mode_ratio = instance_mean / batch_mean
+    print(f"\n📊 Distilled Mode Comparison:")
+    print(f"   Batch is {mode_ratio:.2f}x faster than instance mode")
+    print(f"   💡 Use instance mode for: edge devices, zero-dependency deploys")
+    print(f"   💡 Use batch mode for: servers, high-throughput applications")
 
 print("\n" + "="*80)
 print("SUMMARY")
 print("="*80)
 
 print(f"\n✅ Validation Results:")
-print(f"   • Predictions match: {'YES' if max_diff < tolerance else 'NO (check tolerance)'}")
-print(f"   • Accuracy preserved: {'YES' if original_accuracy == distilled_accuracy else 'NO'}")
-print(f"   • Speedup achieved: {speedup:.2f}x")
-print(f"   • Zero dependencies: YES")
+if has_instance:
+    print(f"   • Instance predictions match: {'YES' if max_diff_instance < tolerance else 'NO'}")
+if has_batch:
+    print(f"   • Batch predictions match: {'YES' if max_diff_batch < tolerance else 'NO'}")
+if has_instance and has_batch:
+    print(f"   • Modes agree with each other: {'YES' if max_diff_modes < tolerance else 'NO'}")
 
-print(f"\n💡 Conclusion:")
-if max_diff < tolerance and speedup > 1:
-    print(f"   The distilled model is PRODUCTION READY! 🎉")
-    print(f"   • Identical predictions to original")
-    print(f"   • {speedup:.2f}x faster inference")
-    print(f"   • No external dependencies")
-    print(f"   • Ready for deployment to edge devices, serverless, etc.")
+print(f"\n⚡ Performance Summary:")
+print(f"   • Original BACON (batch):      {num_samples/original_batch_mean:.0f} samples/sec")
+print(f"   • Original BACON (instance):   {num_samples/original_instance_mean:.0f} samples/sec")
+if has_instance:
+    print(f"   • Distilled (instance):        {num_samples/instance_mean:.0f} samples/sec ({instance_speedup:.2f}x vs BACON instance)")
+if has_batch:
+    print(f"   • Distilled (batch):           {num_samples/batch_mean:.0f} samples/sec ({batch_speedup:.2f}x vs BACON batch)")
+
+print(f"\n💡 Deployment Recommendations:")
+if has_batch and batch_speedup > 1.5:
+    print(f"   🏆 BEST: Distilled batch mode for production (fastest, {batch_speedup:.1f}x speedup)")
+elif has_instance and instance_speedup > 1.5:
+    print(f"   🏆 BEST: Distilled instance mode (zero deps, {instance_speedup:.1f}x speedup)")
+elif has_instance:
+    print(f"   🏆 BEST: Distilled instance mode for edge/embedded (zero dependencies)")
 else:
-    if max_diff >= tolerance:
-        print(f"   ⚠️  Predictions differ - review distillation process")
-    if speedup <= 1:
-        print(f"   ⚠️  Performance not improved - may need optimization")
+    print(f"   💡 Use distilled models for deployment (smaller, no PyTorch dependency)")
 
 print("\n" + "="*80)
