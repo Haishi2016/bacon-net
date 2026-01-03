@@ -9,7 +9,7 @@ from bacon.utils import generate_classic_boolean_data
 import logging
 
 
-logging.basicConfig(level=logging.ERROR, format='%(message)s')
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 input_size = 3
