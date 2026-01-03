@@ -2,9 +2,9 @@
 
 ⚠️ Visit HTML-based documentation [here](https://haishi2016.github.io/bacon-net/), or clone this repository and open `docs/index.html` ⚠️
 
-BACON is an end-to-end explainable AI framework designed to produce transparent, logically grounded decision models. Unlike black-box systems, BACON explicitly constructs interpretable aggregation trees using [Graded Logic]((https://link.springer.com/book/9783031885570)), a formalism that captures nuanced reasoning with degrees of truth. These trees reveal how individual inputs contribute to the final output, offering step-by-step insight into the decision-making process. BACON has been applied to diverse, high-stakes domains such as housing decisions, vendor evaluation, clinical diagnosis, and robotic control, where clarity, trust, and human-alignment are critical.
+BACON is a neural-symbolic network designed to produce transparent, logically grounded decision models. Unlike black-box systems, BACON explicitly constructs interpretable aggregation trees using [Graded Logic]((https://link.springer.com/book/9783031885570)), a formalism that captures nuanced reasoning with degrees of truth. These trees reveal how individual inputs contribute to the final output, offering step-by-step insight into the decision-making process. BACON has been applied to diverse, high-stakes domains such as housing decisions, vendor evaluation, clinical diagnosis, and robotic control, where clarity, trust, and human-alignment are critical.
 
-The goal of BACON is to uncover how AI models and autonomous agents—such as humanoid robots—make decisions, particularly in mission-critical, life-threatening contexts. Gaining this understanding is essential for the safe and responsible deployment of AI, and forms the foundation for building trust in AI systems as they become integrated into everyday life.
+The goal of BACON is to provide a machine decision model that is aligned with human reasoning process, particularly in mission-critical, life-threatening contexts. Gaining the understanding of how machines (like autonomous agents and robotics) reason is essential for the safe and responsible deployment of AI, and forms the foundation for building trust in AI systems as they become integrated into everyday life.
 
 BACON takes as input the degrees of truth associated with various feature-based statements, and uses graded logic to systematically aggregate them into a single global truth value, which then guides the final decision. The BACON architecture is built from the ground up to support explainability. It includes a permutation layer that explores possible input orderings (since commutativity is not assumed), and an aggregation layer that merges inputs based on a logical model such as the [Logic Scoring of Preference (LSP) method](https://books.google.com/books/about/Soft_Computing_Evaluation_Logic.html?id=PgtuDwAAQBAJ). The resulting model is fully explainable, highly precise, and efficient for inference.
 
@@ -27,7 +27,7 @@ BACON is designed for decision-making problems where multiple factors must be lo
   BACON can be trimmed and distilled into compact, interpretable functions that require no deep learning frameworks. This makes it ideal for resource-constrained applications, including edge devices, real-time systems, drones, and robotics, where speed, cost, and reliability are paramount.
 
 ## Getting Started
-To begin, try the [Hello, World sample](./samples/hello-world/README.md), which uses BACON to discover a randomly generated classic Boolean expression (e.g., A and B or C) from synthetic data.
+To begin, try the [Hello, World sample](./samples/hello-world/README.md), which uses BACON to approximate a randomly generated classic Boolean expression (e.g., A and B or C) from synthetic data.
 
 To use BACON in your own program, note that it is implemented as a Python module built on top of PyTorch. Before the package is officially published, you can clone this repository and reference the module via a local path:
 
@@ -44,12 +44,4 @@ from bacon.utils import generate_classic_boolean_data
 
 * [**Hello, World!**](./samples/hello-world/README.md)
 
-  Discover classic Boolean expression from synthetic data. 
-
-* [**Iris flower classification**](./samples/iris-flowers/README.md)
-
-  Classify Iris flower types by training one-vs-rest models to distinguish each species—Setosa, Versicolor, and Virginica—from the others based on measured petal and sepal features.
-
-* [**House purchasing decisions**](./samples/house-purchase/README.md)
-
-  Making house purchasing decisions based on different conditions. 
+  Discover classic Boolean expression from synthetic data.
