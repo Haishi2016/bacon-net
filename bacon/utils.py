@@ -329,11 +329,15 @@ def analyze_feature_importance_with_pruning(
     Returns:
         dict: {
             'accuracies': List of accuracies after pruning 0, 1, 2, ... features,
+            'f1_scores': List of F1 scores after pruning 0, 1, 2, ... features,
+            'auprc_scores': List of AUPRC scores after pruning 0, 1, 2, ... features,
             'baseline_features': List of feature indices that form the baseline (empty if baseline_enabled=False),
             'baseline_feature_names': List of feature names in baseline,
             'num_features_pruned': Number of features actually pruned (excluding baseline)
         }
     """
+    from sklearn.metrics import precision_score, recall_score, f1_score, average_precision_score
+    
     if device is None:
         device = X.device
     
@@ -343,12 +347,23 @@ def analyze_feature_importance_with_pruning(
     # CRITICAL: Clear any existing pruning state from previous runs
     assembler.pruned_aggregators.clear()
     
-    # Calculate baseline accuracy
+    # Calculate baseline metrics
     with torch.no_grad():
         baseline_output = assembler(X)
-        baseline_accuracy = ((baseline_output > threshold).float() == Y).float().mean().item()
+        baseline_pred = (baseline_output > threshold).float()
+        baseline_accuracy = (baseline_pred == Y).float().mean().item()
+        
+        # Compute F1 and AUPRC for baseline
+        baseline_pred_np = baseline_pred.cpu().numpy().flatten()
+        Y_np = Y.cpu().numpy().flatten()
+        baseline_output_np = baseline_output.cpu().numpy().flatten()
+        
+        baseline_f1 = f1_score(Y_np, baseline_pred_np, zero_division=0)
+        baseline_auprc = average_precision_score(Y_np, baseline_output_np)
     
     accuracies = [baseline_accuracy]
+    f1_scores = [baseline_f1]
+    auprc_scores = [baseline_auprc]
     baseline_features = []
     
     # Save original weights
@@ -409,13 +424,24 @@ def analyze_feature_importance_with_pruning(
         
         with torch.no_grad():
             pruned_output = assembler(X)
-            pruned_accuracy = ((pruned_output > threshold).float() == Y).float().mean().item()
+            pruned_pred = (pruned_output > threshold).float()
+            pruned_accuracy = (pruned_pred == Y).float().mean().item()
+            
+            # Compute F1 and AUPRC
+            pruned_pred_np = pruned_pred.cpu().numpy().flatten()
+            pruned_output_np = pruned_output.cpu().numpy().flatten()
+            
+            pruned_f1 = f1_score(Y_np, pruned_pred_np, zero_division=0)
+            pruned_auprc = average_precision_score(Y_np, pruned_output_np)
+            
             accuracies.append(pruned_accuracy)
+            f1_scores.append(pruned_f1)
+            auprc_scores.append(pruned_auprc)
             
             # Calculate actual number of pruned features (excluding baseline)
             num_pruned = i - start_feature + 1
             baseline_note = f" (baseline protected: {len(baseline_features)} features)" if baseline_enabled and len(baseline_features) > 0 else ""
-            print(f"   Pruning feature {i} ({feature_names[assembler.locked_perm[i].item()]}): accuracy = {pruned_accuracy * 100:.2f}% (total pruned: {num_pruned}){baseline_note}")
+            print(f"   Pruning feature {i} ({feature_names[assembler.locked_perm[i].item()]}): acc={pruned_accuracy * 100:.2f}%, F1={pruned_f1*100:.2f}%, AUPRC={pruned_auprc:.4f} (total pruned: {num_pruned}){baseline_note}")
     
     # Restore original weights
     for j, w in enumerate(assembler.weights):
@@ -426,6 +452,8 @@ def analyze_feature_importance_with_pruning(
     
     return {
         'accuracies': accuracies,
+        'f1_scores': f1_scores,
+        'auprc_scores': auprc_scores,
         'baseline_features': baseline_features,
         'baseline_feature_names': baseline_feature_names,
         'num_features_pruned': num_features - len(baseline_features) - 1  # -1 for the last feature
@@ -476,6 +504,7 @@ def analyze_feature_importance_with_growing(
     num_aggregators = len(assembler.weights)
     accuracies = []
     f1_scores = []
+    auprc_scores = []
     feature_order = list(range(num_features))
     
     print("\n🌱 Incremental growing analysis:")
@@ -526,6 +555,7 @@ def analyze_feature_importance_with_growing(
         
         accuracies.append(baseline_accuracy)
         f1_scores.append(baseline_f1)
+        auprc_scores.append(baseline_auprc)
         print(f"   Baseline (features 0-1): acc={baseline_accuracy*100:.2f}%, prec={baseline_precision*100:.2f}%, rec={baseline_recall*100:.2f}%, F1={baseline_f1*100:.2f}%, AUPRC={baseline_auprc:.4f}")
     
     # Step 2: Incrementally grow by adding features 2 onwards
@@ -567,6 +597,7 @@ def analyze_feature_importance_with_growing(
             
             accuracies.append(grown_accuracy)
             f1_scores.append(grown_f1)
+            auprc_scores.append(grown_auprc)
             
             feature_name = feature_names[assembler.locked_perm[i].item()]
             print(f"   Growing to feature {i} ({feature_name}): acc={grown_accuracy*100:.2f}%, prec={grown_precision*100:.2f}%, rec={grown_recall*100:.2f}%, F1={grown_f1*100:.2f}%, AUPRC={grown_auprc:.4f} (total: {i+1})")
@@ -584,6 +615,7 @@ def analyze_feature_importance_with_growing(
     return {
         'accuracies': accuracies,
         'f1_scores': f1_scores,
+        'auprc_scores': auprc_scores,
         'feature_order': feature_order
     }
 
