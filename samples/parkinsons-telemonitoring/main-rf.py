@@ -1,7 +1,7 @@
 """Random Forest baseline for Parkinson's Telemonitoring Dataset"""
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report, average_precision_score
 from dataset import prepare_data_sklearn
 
 def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
@@ -17,11 +17,18 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
     test_recall = recall_score(y_test, y_test_pred)
     test_f1 = f1_score(y_test, y_test_pred)
     
+    # Get probability scores for AUPRC
+    y_train_prob = model.predict_proba(X_train)[:, 1]
+    y_test_prob = model.predict_proba(X_test)[:, 1]
+    train_auprc = average_precision_score(y_train, y_train_prob)
+    test_auprc = average_precision_score(y_test, y_test_prob)
+    
     print(f"\nTraining Accuracy: {train_acc:.4f}")
     print(f"Test Accuracy:     {test_acc:.4f}")
     print(f"Test Precision:    {test_precision:.4f}")
     print(f"Test Recall:       {test_recall:.4f}")
     print(f"Test F1 Score:     {test_f1:.4f}")
+    print(f"Test AUPRC:        {test_auprc:.4f}")
     
     # Confusion matrix
     cm = confusion_matrix(y_test, y_test_pred)
@@ -39,7 +46,7 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
     for i, (feature, importance) in enumerate(feature_importance[:10], 1):
         print(f"  {i:2d}. {feature:20s}: {importance:.4f}")
     
-    return test_acc, test_f1
+    return test_acc, test_f1, test_auprc
 
 def main():
     """Test Random Forest with multiple configurations"""
@@ -81,21 +88,21 @@ def main():
         
         model.fit(X_train, y_train)
         
-        test_acc, test_f1 = evaluate_model(model, X_train, X_test, y_train, y_test, feature_names)
-        results.append((config['name'], test_acc, test_f1))
+        test_acc, test_f1, test_auprc = evaluate_model(model, X_train, X_test, y_train, y_test, feature_names)
+        results.append((config['name'], test_acc, test_f1, test_auprc))
     
     # Summary
     print("\n" + "="*80)
     print("RESULTS SUMMARY")
     print("="*80)
-    print(f"{'Configuration':<20} {'Test Accuracy':<15} {'Test F1':<15}")
+    print(f"{'Configuration':<20} {'Test Accuracy':<15} {'Test F1':<15} {'Test AUPRC':<15}")
     print("-" * 80)
-    for name, acc, f1 in results:
-        print(f"{name:<20} {acc:<15.4f} {f1:<15.4f}")
+    for name, acc, f1, auprc in results:
+        print(f"{name:<20} {acc:<15.4f} {f1:<15.4f} {auprc:<15.4f}")
     
     # Best model
-    best_name, best_acc, best_f1 = max(results, key=lambda x: x[2])
-    print(f"\nBest Model: {best_name} (F1: {best_f1:.4f})")
+    best_name, best_acc, best_f1, best_auprc = max(results, key=lambda x: x[2])
+    print(f"\nBest Model: {best_name} (F1: {best_f1:.4f}, AUPRC: {best_auprc:.4f})")
 
 if __name__ == '__main__':
     main()

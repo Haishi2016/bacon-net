@@ -51,10 +51,11 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=0.75,
+    acceptance_threshold=1.0,
     hierarchical_epochs_per_attempt=4000,
-    hierarchical_group_size=10,
-    frozen_training_epochs=2000
+    hierarchical_group_size=15,
+    frozen_training_epochs=2000,
+    binary_threshold=0.9
 )
 
 # Run standard analysis pipeline

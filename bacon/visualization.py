@@ -1000,18 +1000,32 @@ def overlay_sorted_predictions_and_feature(model, X_test, Y_test, feature_name, 
     plt.show()
 
 
-def plot_feature_pruning_analysis(accuracies, baseline_features=None, title="Accuracy vs. Number of Features Pruned", filename=None):
+def plot_feature_pruning_analysis(accuracies, f1_scores=None, auprc_scores=None, baseline_features=None, title="Accuracy vs. Number of Features Pruned", filename=None):
     """Plot accuracy vs number of features pruned.
     
     Args:
         accuracies: List of accuracies [baseline, after_pruning_1, after_pruning_2, ...]
+        f1_scores: List of F1 scores (optional)
+        auprc_scores: List of AUPRC scores (optional)
         baseline_features: List of baseline feature indices (optional, for annotation)
         title: Plot title
         filename: If provided, save plot to this file
     """
     plt.figure(figsize=(10, 5))
     x_values = list(range(len(accuracies)))
-    plt.plot(x_values, [a * 100 for a in accuracies], marker='o', linewidth=2)
+    plt.plot(x_values, [a * 100 for a in accuracies], marker='o', linewidth=2, color='green', label='Accuracy')
+    
+    # Plot F1 scores if provided
+    if f1_scores is not None and len(f1_scores) == len(accuracies):
+        plt.plot(x_values, [f * 100 for f in f1_scores], marker='s', linewidth=2, linestyle='--', color='blue', label='F1 Score')
+    
+    # Plot AUPRC scores if provided
+    if auprc_scores is not None and len(auprc_scores) == len(accuracies):
+        plt.plot(x_values, [a * 100 for a in auprc_scores], marker='^', linewidth=2, linestyle='-.', color='red', label='AUPRC')
+    
+    # Show legend if F1 or AUPRC scores are plotted
+    if (f1_scores is not None and len(f1_scores) == len(accuracies)) or (auprc_scores is not None and len(auprc_scores) == len(accuracies)):
+        plt.legend()
     
     # Annotate baseline if present
     if baseline_features and len(baseline_features) > 0:
@@ -1021,7 +1035,7 @@ def plot_feature_pruning_analysis(accuracies, baseline_features=None, title="Acc
         plt.title(title)
     
     plt.xlabel("Number of Features Pruned from Left (0 = No Pruning)")
-    plt.ylabel("Accuracy (%)")
+    plt.ylabel("Score (%)")
     plt.grid(True, alpha=0.3)
     plt.xticks(x_values)  # Show all tick marks
     plt.tight_layout()
@@ -1032,12 +1046,13 @@ def plot_feature_pruning_analysis(accuracies, baseline_features=None, title="Acc
     plt.show()
 
 
-def plot_feature_growing_analysis(accuracies, f1_scores=None, title="Accuracy vs. Number of Features (Growing)", filename=None):
+def plot_feature_growing_analysis(accuracies, f1_scores=None, auprc_scores=None, title="Accuracy vs. Number of Features (Growing)", filename=None):
     """Plot accuracy vs number of features as tree grows from baseline.
     
     Args:
         accuracies: List of accuracies [baseline_2_features, after_adding_feature_2, after_adding_feature_3, ...]
         f1_scores: List of F1 scores (optional)
+        auprc_scores: List of AUPRC scores (optional)
         title: Plot title
         filename: If provided, save plot to this file
     """
@@ -1049,6 +1064,13 @@ def plot_feature_growing_analysis(accuracies, f1_scores=None, title="Accuracy vs
     # Plot F1 scores as dotted line if provided
     if f1_scores is not None and len(f1_scores) == len(accuracies):
         plt.plot(num_features, [f * 100 for f in f1_scores], marker='s', linewidth=2, linestyle='--', color='blue', label='F1 Score')
+    
+    # Plot AUPRC scores as dash-dot line if provided
+    if auprc_scores is not None and len(auprc_scores) == len(accuracies):
+        plt.plot(num_features, [a * 100 for a in auprc_scores], marker='^', linewidth=2, linestyle='-.', color='red', label='AUPRC')
+    
+    # Show legend if F1 or AUPRC scores are plotted
+    if (f1_scores is not None and len(f1_scores) == len(accuracies)) or (auprc_scores is not None and len(auprc_scores) == len(accuracies)):
         plt.legend()
     
     plt.title(title)

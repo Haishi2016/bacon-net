@@ -5,7 +5,7 @@ sys.path.insert(0, '../../')
 from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report, average_precision_score
 from bacon.utils import SigmoidScaler
 import pandas as pd
 import numpy as np
@@ -72,12 +72,18 @@ lr.fit(X_train, y_train)
 y_pred_train = lr.predict(X_train)
 y_pred_test = lr.predict(X_test)
 
+# Get probability scores for AUPRC
+y_prob_train = lr.predict_proba(X_train)[:, 1]
+y_prob_test = lr.predict_proba(X_test)[:, 1]
+
 # Evaluation
 train_accuracy = accuracy_score(y_train, y_pred_train)
 test_accuracy = accuracy_score(y_test, y_pred_test)
 test_precision = precision_score(y_test, y_pred_test)
 test_recall = recall_score(y_test, y_pred_test)
 test_f1 = f1_score(y_test, y_pred_test)
+train_auprc = average_precision_score(y_train, y_prob_train)
+test_auprc = average_precision_score(y_test, y_prob_test)
 
 print(f"\n{'='*60}")
 print(f"RESULTS")
@@ -87,6 +93,7 @@ print(f"Test Accuracy:  {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
 print(f"Precision:      {test_precision:.4f}")
 print(f"Recall:         {test_recall:.4f}")
 print(f"F1-Score:       {test_f1:.4f}")
+print(f"Test AUPRC:     {test_auprc:.4f}")
 
 print(f"\nClassification Report:")
 print(classification_report(y_test, y_pred_test, target_names=['No Disease', 'Liver Disease']))

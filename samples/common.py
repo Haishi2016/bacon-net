@@ -101,6 +101,7 @@ def train_bacon_model(
     freeze_min_confidence=0.85,
     frozen_training_epochs=200,
     max_epochs=5000,
+    binary_threshold = 0.5,
     **kwargs
 ):
     """Train a baconNet model with standard configuration.
@@ -141,6 +142,7 @@ def train_bacon_model(
         freeze_min_confidence=freeze_min_confidence,
         max_epochs=max_epochs,
         frozen_training_epochs=frozen_training_epochs,
+        binary_threshold=binary_threshold,
         **kwargs
     )
     
@@ -260,6 +262,8 @@ def analyze_feature_importance(
     )
     
     accuracies = pruning_results['accuracies']
+    f1_scores = pruning_results.get('f1_scores')
+    auprc_scores = pruning_results.get('auprc_scores')
     baseline_features = pruning_results['baseline_features']
     baseline_feature_names = pruning_results['baseline_feature_names']
     
@@ -272,6 +276,8 @@ def analyze_feature_importance(
     
     plot_feature_pruning_analysis(
         accuracies,
+        f1_scores=f1_scores,
+        auprc_scores=auprc_scores,
         baseline_features=baseline_features,
         title=plot_title,
         filename=filename
@@ -398,6 +404,7 @@ def run_standard_analysis(
         plot_feature_growing_analysis(
             growing_results['accuracies'],
             f1_scores=growing_results.get('f1_scores'),
+            auprc_scores=growing_results.get('auprc_scores'),
             title=plot_title,
             filename=filename
         )
