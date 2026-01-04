@@ -51,11 +51,11 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=1.0,
+    acceptance_threshold=0.70,
     hierarchical_epochs_per_attempt=4000,
     hierarchical_group_size=15,
     frozen_training_epochs=2000,
-    binary_threshold=0.9
+    binary_threshold=0.4
 )
 
 # Run standard analysis pipeline
@@ -64,5 +64,6 @@ run_standard_analysis(
     X_train, Y_train, X_test, Y_test,
     feature_names,
     title_prefix="Gallstone",
-    device=device
+    device=device,
+    pruning_threshold=0.4
 )

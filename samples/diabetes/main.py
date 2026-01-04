@@ -50,7 +50,7 @@ train_bacon_model(
     acceptance_threshold=1.0,
     hierarchical_epochs_per_attempt=2000,
     hierarchical_group_size=10,
-    binary_threshold=0.15
+    binary_threshold=0.8
 )
 
 # Run standard analysis pipeline
@@ -60,5 +60,5 @@ run_standard_analysis(
     feature_names,
     title_prefix="Diabetes",
     device=device,
-    pruning_threshold=0.5
+    pruning_threshold=0.8
 )
