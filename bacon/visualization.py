@@ -2,7 +2,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, average_precision_score
 import pandas as pd
 import seaborn as sns
 import torch.nn.functional as F
@@ -545,12 +545,14 @@ def print_metrics(model, X, Y_true, threshold=0.5):
     prec = precision_score(true_labels, preds, zero_division=0)
     rec = recall_score(true_labels, preds, zero_division=0)
     f1 = f1_score(true_labels, preds, zero_division=0)
+    auprc = average_precision_score(true_labels, probs)
 
     print(f"Metrics at threshold {threshold:.2f}:")
     print(f"  Accuracy : {acc:.4f}")
     print(f"  Precision: {prec:.4f}")
     print(f"  Recall   : {rec:.4f}")
     print(f"  F1-score : {f1:.4f}")
+    print(f"  AUPRC    : {auprc:.4f}")
 
 def plot_precision_vs_threshold(model, X_val, Y_val, steps=1000):
     model.eval()
