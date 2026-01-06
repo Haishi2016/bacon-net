@@ -53,78 +53,8 @@ cd samples/gallstone
 python main.py
 ```
 
-## Model Configuration
-
-The sample uses the following BACON configuration:
-
-- **Aggregator:** `lsp.half_weight` (Logic Scoring of Preference)
-- **Weight Mode:** `trainable`
-- **Weight Normalization:** `softmax`
-- **Loss Amplifier:** 1000
-- **Sinkhorn Iterations:** 200
-- **Class Weighting:** Enabled
-- **Acceptance Threshold:** 90%
-
-## Data Preprocessing
-
-**Important:**
-- All features are continuous numeric values (no categorical encoding needed)
-- SigmoidScaler used with alpha=3, beta=-1 for feature normalization
-- Balanced dataset (no resampling needed)
-- Train/test split: 80/20 with random_state=42
-
-## Expected Results
-
-The model typically achieves:
-- **Test Accuracy:** 85-95%
-- **Interpretability:** Clear decision tree showing which biomarkers and lab values predict gallstone risk
-- **Feature Importance:** Ranking of clinical measures by contribution
-
-## Analysis Features
-
-The script provides:
-
-1. **Tree Visualization:** Visual representation of the learned clinical risk assessment structure
-2. **Threshold Optimization:** Finds optimal classification thresholds for different metrics
-3. **Feature Importance:** Analyzes each clinical measure's contribution through pruning
-4. **Overfitting Check:** Compares train vs test performance to detect data leakage
-5. **Performance Metrics:** Comprehensive evaluation including precision, recall, F1-score
-6. **Prediction Analysis:** Visualizations of model predictions and errors
-
-## Key Findings
-
-The analysis can reveal:
-- Which bioimpedance measures are most predictive of gallstone disease
-- How laboratory values (liver enzymes, cholesterol, etc.) combine in risk assessment
-- The logical structure behind gallstone prediction
-- Which modifiable factors (BMI, hepatic fat, cholesterol) have greatest impact
-
-## Clinical Relevance
-
-This interpretable model can help:
-- Identify high-risk individuals for gallstone screening using non-imaging features
-- Understand which bioimpedance and lab markers are most important
-- Develop targeted intervention strategies for modifiable risk factors
-- Provide explainable predictions for individual risk assessments
-- Reduce unnecessary imaging procedures through accurate pre-screening
-
-## Comparison with Baselines
-
-To compare with traditional ML methods, you can create baseline scripts:
-- `main-lr.py` - Logistic Regression baseline
-- `main-rf.py` - Random Forest baseline
-- `main-xgb.py` - XGBoost baseline
-
-All should use identical data preprocessing and splits for fair comparison.
-
-## Notes
-
-- Dataset collected from Ankara VM Medical Park Hospital (June 2022–June 2023)
-- Ethically approved by Ankara City Hospital Ethics Committee (E2-23-4632)
-- Complete dataset with no missing values simplifies preprocessing
-- Balanced classes eliminate need for special handling of class imbalance
-- Features combine demographic, body composition, and laboratory data
-
-## References
-
-Esen, I., Arslan, H., Aktürk Esen, S., Gülşen, M., Kültekin, N., & Özdemir, O. (2024). Early prediction of gallstone disease with a machine learning-based method from bioimpedance and laboratory data. *Medicine*, 103(5), e37258.
+## Measurements
+|Run | Binary threshold | Aggregator | Weights| Weights penalty| Optimum threshold | Accuracy | AUPRC|
+|----|-----------|------------|--------|----------------|-------------------|----------|------|
+| 1 | 0.8 | half_weight | trainable | 1e-3 | 0.465 | 75.00% | 0.8438 |
+| 2 | 0.3 | half_weight | trainable | 1e-3 | 0.676 | 75.00% | 0.8176 |

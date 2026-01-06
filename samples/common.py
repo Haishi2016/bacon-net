@@ -368,6 +368,37 @@ def run_standard_analysis(
     else:
         print(f"\n🎯 Using custom threshold for pruning: {pruning_threshold:.3f}")
     
+    # Plot Precision-Recall Curve before pruning/growing analysis
+    print("\n" + "="*60)
+    print("PRECISION-RECALL CURVE")
+    print("="*60)
+    from bacon.visualization import plot_precision_recall_curve, plot_roc_curve
+    pr_title = f"{title_prefix}: Precision-Recall Curve" if title_prefix else "Precision-Recall Curve"
+    pr_filename = f"{title_prefix.lower().replace(' ', '_')}_pr_curve.png" if title_prefix else "pr_curve.png"
+    plot_precision_recall_curve(
+        model, 
+        X_test, 
+        Y_test, 
+        threshold=pruning_threshold,
+        title=pr_title,
+        filename=pr_filename
+    )
+    
+    # Plot ROC Curve
+    print("\n" + "="*60)
+    print("ROC CURVE")
+    print("="*60)
+    roc_title = f"{title_prefix}: ROC Curve" if title_prefix else "ROC Curve"
+    roc_filename = f"{title_prefix.lower().replace(' ', '_')}_roc_curve.png" if title_prefix else "roc_curve.png"
+    plot_roc_curve(
+        model, 
+        X_test, 
+        Y_test, 
+        threshold=pruning_threshold,
+        title=roc_title,
+        filename=roc_filename
+    )
+    
     # Analyze feature importance (use TEST data for consistency with reported accuracy)
     print("\n" + "="*60)
     print("FEATURE IMPORTANCE ANALYSIS")

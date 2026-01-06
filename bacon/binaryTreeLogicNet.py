@@ -93,6 +93,7 @@ class binaryTreeLogicNet(nn.Module):
         self.sinkhorn_iters = sinkhorn_iters  # Sinkhorn iteration count for convergence
         self.layer_outputs = None  # For storing layer outputs during forward pass
         self.pruned_aggregators = set()  # Track which aggregators have been pruned
+        self.evaluation_limit = None  # For growing analysis: stop evaluation after N aggregators (None = full tree)
         
         # Transformation layer (optional)
         self.use_transformation_layer = use_transformation_layer
@@ -491,6 +492,12 @@ class binaryTreeLogicNet(nn.Module):
                     node_outputs.append(nres)
                     # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
                     self.layer_outputs.append(nres.detach().clone())
+                    
+                    # Check if we should stop early for growing analysis
+                    if self.evaluation_limit is not None and i == self.evaluation_limit - 1:
+                        final = node_outputs[-1]
+                        break
+                    
                     final = node_outputs[-1]
 
             out = final.unsqueeze(1)

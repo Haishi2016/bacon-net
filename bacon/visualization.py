@@ -1089,3 +1089,103 @@ def plot_feature_growing_analysis(accuracies, f1_scores=None, auprc_scores=None,
     
     plt.show()
 
+
+def plot_precision_recall_curve(model, X, Y, threshold=0.5, title="Precision-Recall Curve", filename=None):
+    """Plot precision-recall curve and display AUPRC.
+    
+    Args:
+        model: Trained model
+        X: Input features
+        Y: True labels
+        threshold: Current classification threshold (for marking on plot)
+        title: Plot title
+        filename: If provided, save plot to this file
+    """
+    from sklearn.metrics import precision_recall_curve, average_precision_score
+    
+    model.eval()
+    with torch.no_grad():
+        probs = model.inference_raw(X).cpu().numpy().flatten()
+    true_labels = Y.cpu().numpy().flatten()
+    
+    # Calculate precision-recall curve
+    precision, recall, thresholds = precision_recall_curve(true_labels, probs)
+    auprc = average_precision_score(true_labels, probs)
+    
+    # Calculate precision/recall at current threshold
+    preds_at_threshold = (probs >= threshold).astype(int)
+    from sklearn.metrics import precision_score, recall_score
+    prec_at_threshold = precision_score(true_labels, preds_at_threshold, zero_division=0)
+    rec_at_threshold = recall_score(true_labels, preds_at_threshold, zero_division=0)
+    
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall, precision, linewidth=2, label=f'PR Curve (AUPRC = {auprc:.4f})')
+    plt.plot([rec_at_threshold], [prec_at_threshold], 'ro', markersize=10, 
+             label=f'Current threshold={threshold:.2f}\n(Precision={prec_at_threshold:.3f}, Recall={rec_at_threshold:.3f})')
+    
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title(title)
+    plt.legend(loc='best')
+    plt.grid(True, alpha=0.3)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.tight_layout()
+    
+    if filename:
+        plt.savefig(filename, dpi=150)
+    
+    plt.show()
+    
+    return auprc
+
+
+def plot_roc_curve(model, X, Y, threshold=0.5, title="ROC Curve", filename=None):
+    """Plot ROC curve and display AUC.
+    
+    Args:
+        model: Trained model
+        X: Input features
+        Y: True labels
+        threshold: Current classification threshold (for marking on plot)
+        title: Plot title
+        filename: If provided, save plot to this file
+    """
+    from sklearn.metrics import roc_curve, auc
+    
+    model.eval()
+    with torch.no_grad():
+        probs = model.inference_raw(X).cpu().numpy().flatten()
+    true_labels = Y.cpu().numpy().flatten()
+    
+    # Calculate ROC curve
+    fpr, tpr, thresholds = roc_curve(true_labels, probs)
+    roc_auc = auc(fpr, tpr)
+    
+    # Find point closest to current threshold
+    threshold_idx = np.argmin(np.abs(thresholds - threshold))
+    fpr_at_threshold = fpr[threshold_idx]
+    tpr_at_threshold = tpr[threshold_idx]
+    
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, linewidth=2, label=f'ROC Curve (AUC = {roc_auc:.4f})')
+    plt.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random Classifier')
+    plt.plot([fpr_at_threshold], [tpr_at_threshold], 'ro', markersize=10, 
+             label=f'Current threshold={threshold:.2f}\n(FPR={fpr_at_threshold:.3f}, TPR={tpr_at_threshold:.3f})')
+    
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(title)
+    plt.legend(loc='lower right')
+    plt.grid(True, alpha=0.3)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.tight_layout()
+    
+    if filename:
+        plt.savefig(filename, dpi=150)
+    
+    plt.show()
+    
+    return roc_auc
+

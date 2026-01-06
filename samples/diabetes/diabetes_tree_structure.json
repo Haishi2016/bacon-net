@@ -27,81 +27,81 @@
     "Income"
   ],
   "locked_perm": [
-    11,
-    18,
-    5,
+    20,
+    7,
+    2,
+    17,
     19,
-    1,
-    13,
-    10,
-    14,
+    4,
     15,
-    6,
-    3,
     8,
+    11,
+    6,
+    14,
     9,
     12,
-    7,
-    17,
-    20,
+    10,
+    5,
+    1,
+    13,
+    18,
+    3,
     16,
-    4,
-    2,
     0
   ],
   "features": [
     {
       "index": 0,
-      "original_name": "AnyHealthcare",
-      "display_name": "AnyHealthcare",
+      "original_name": "Income",
+      "display_name": "Income",
       "transformation": "identity"
     },
     {
       "index": 1,
-      "original_name": "Age",
-      "display_name": "Age",
+      "original_name": "PhysActivity",
+      "display_name": "PhysActivity",
       "transformation": "identity"
     },
     {
       "index": 2,
-      "original_name": "Stroke",
-      "display_name": "Stroke",
+      "original_name": "CholCheck",
+      "display_name": "CholCheck",
       "transformation": "identity"
     },
     {
       "index": 3,
+      "original_name": "Sex",
+      "display_name": "Sex",
+      "transformation": "identity"
+    },
+    {
+      "index": 4,
       "original_name": "Education",
       "display_name": "Education",
       "transformation": "identity"
     },
     {
-      "index": 4,
-      "original_name": "HighChol",
-      "display_name": "HighChol",
-      "transformation": "identity"
-    },
-    {
       "index": 5,
-      "original_name": "GenHlth",
-      "display_name": "GenHlth",
+      "original_name": "Smoker",
+      "display_name": "Smoker",
       "transformation": "identity"
     },
     {
       "index": 6,
-      "original_name": "HvyAlcoholConsump",
-      "display_name": "HvyAlcoholConsump",
+      "original_name": "PhysHlth",
+      "display_name": "PhysHlth",
       "transformation": "identity"
     },
     {
       "index": 7,
-      "original_name": "MentHlth",
-      "display_name": "MentHlth",
+      "original_name": "Fruits",
+      "display_name": "Fruits",
       "transformation": "identity"
     },
     {
       "index": 8,
-      "original_name": "PhysHlth",
-      "display_name": "PhysHlth",
+      "original_name": "AnyHealthcare",
+      "display_name": "AnyHealthcare",
       "transformation": "identity"
     },
     {
@@ -112,62 +112,62 @@
     },
     {
       "index": 10,
-      "original_name": "BMI",
-      "display_name": "BMI",
+      "original_name": "MentHlth",
+      "display_name": "MentHlth",
       "transformation": "identity"
     },
     {
       "index": 11,
-      "original_name": "Fruits",
-      "display_name": "Fruits",
-      "transformation": "identity"
-    },
-    {
-      "index": 12,
       "original_name": "Veggies",
       "display_name": "Veggies",
       "transformation": "identity"
     },
     {
-      "index": 13,
+      "index": 12,
       "original_name": "NoDocbcCost",
       "display_name": "NoDocbcCost",
       "transformation": "identity"
     },
     {
+      "index": 13,
+      "original_name": "HvyAlcoholConsump",
+      "display_name": "HvyAlcoholConsump",
+      "transformation": "identity"
+    },
+    {
       "index": 14,
-      "original_name": "PhysActivity",
-      "display_name": "NOT PhysActivity",
-      "transformation": "negation"
+      "original_name": "Stroke",
+      "display_name": "Stroke",
+      "transformation": "identity"
     },
     {
       "index": 15,
-      "original_name": "Sex",
-      "display_name": "NOT Sex",
-      "transformation": "negation"
+      "original_name": "HighChol",
+      "display_name": "HighChol",
+      "transformation": "identity"
     },
     {
       "index": 16,
-      "original_name": "Income",
-      "display_name": "NOT Income",
-      "transformation": "negation"
+      "original_name": "GenHlth",
+      "display_name": "GenHlth",
+      "transformation": "identity"
     },
     {
       "index": 17,
-      "original_name": "DiffWalk",
-      "display_name": "NOT DiffWalk",
-      "transformation": "negation"
+      "original_name": "Age",
+      "display_name": "Age",
+      "transformation": "identity"
     },
     {
       "index": 18,
-      "original_name": "Smoker",
-      "display_name": "NOT Smoker",
-      "transformation": "negation"
+      "original_name": "BMI",
+      "display_name": "BMI",
+      "transformation": "identity"
     },
     {
       "index": 19,
-      "original_name": "CholCheck",
-      "display_name": "CholCheck",
+      "original_name": "DiffWalk",
+      "display_name": "DiffWalk",
       "transformation": "identity"
     },
     {
@@ -181,7 +181,7 @@
     {
       "layer": 0,
       "aggregator_index": 0,
-      "andness": -0.163924,
+      "andness": -0.344183,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -189,18 +189,18 @@
       "left_input": {
         "type": "feature",
         "index": 0,
-        "name": "AnyHealthcare"
+        "name": "Income"
       },
       "right_input": {
         "type": "feature",
         "index": 1,
-        "name": "Age"
+        "name": "PhysActivity"
       }
     },
     {
       "layer": 1,
       "aggregator_index": 1,
-      "andness": 0.652092,
+      "andness": 0.848306,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -212,13 +212,13 @@
       "right_input": {
         "type": "feature",
         "index": 2,
-        "name": "Stroke"
+        "name": "CholCheck"
       }
     },
     {
       "layer": 2,
       "aggregator_index": 2,
-      "andness": -0.055259,
+      "andness": 0.572012,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -230,13 +230,13 @@
       "right_input": {
         "type": "feature",
         "index": 3,
-        "name": "Education"
+        "name": "Sex"
       }
     },
     {
       "layer": 3,
       "aggregator_index": 3,
-      "andness": 0.951128,
+      "andness": -0.44491,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -248,13 +248,13 @@
       "right_input": {
         "type": "feature",
         "index": 4,
-        "name": "HighChol"
+        "name": "Education"
       }
     },
     {
       "layer": 4,
       "aggregator_index": 4,
-      "andness": 0.557825,
+      "andness": 0.04813,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -266,13 +266,13 @@
       "right_input": {
         "type": "feature",
         "index": 5,
-        "name": "GenHlth"
+        "name": "Smoker"
       }
     },
     {
       "layer": 5,
       "aggregator_index": 5,
-      "andness": 0.220039,
+      "andness": 1.039112,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -284,13 +284,13 @@
       "right_input": {
         "type": "feature",
         "index": 6,
-        "name": "HvyAlcoholConsump"
+        "name": "PhysHlth"
       }
     },
     {
       "layer": 6,
       "aggregator_index": 6,
-      "andness": -0.056274,
+      "andness": -0.257692,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -302,13 +302,13 @@
       "right_input": {
         "type": "feature",
         "index": 7,
-        "name": "MentHlth"
+        "name": "Fruits"
       }
     },
     {
       "layer": 7,
       "aggregator_index": 7,
-      "andness": -0.250522,
+      "andness": 0.58884,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -320,13 +320,13 @@
       "right_input": {
         "type": "feature",
         "index": 8,
-        "name": "PhysHlth"
+        "name": "AnyHealthcare"
       }
     },
     {
       "layer": 8,
       "aggregator_index": 8,
-      "andness": 0.59882,
+      "andness": 0.241485,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -344,7 +344,7 @@
     {
       "layer": 9,
       "aggregator_index": 9,
-      "andness": 1.227153,
+      "andness": 0.936918,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -356,13 +356,13 @@
       "right_input": {
         "type": "feature",
         "index": 10,
-        "name": "BMI"
+        "name": "MentHlth"
       }
     },
     {
       "layer": 10,
       "aggregator_index": 10,
-      "andness": 1.239174,
+      "andness": 0.293268,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -374,13 +374,13 @@
       "right_input": {
         "type": "feature",
         "index": 11,
-        "name": "Fruits"
+        "name": "Veggies"
       }
     },
     {
       "layer": 11,
       "aggregator_index": 11,
-      "andness": 1.760165,
+      "andness": 0.481986,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -392,13 +392,13 @@
       "right_input": {
         "type": "feature",
         "index": 12,
-        "name": "Veggies"
+        "name": "NoDocbcCost"
       }
     },
     {
       "layer": 12,
       "aggregator_index": 12,
-      "andness": 1.291819,
+      "andness": -0.372884,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -410,13 +410,13 @@
       "right_input": {
         "type": "feature",
         "index": 13,
-        "name": "NoDocbcCost"
+        "name": "HvyAlcoholConsump"
       }
     },
     {
       "layer": 13,
       "aggregator_index": 13,
-      "andness": 1.483091,
+      "andness": -0.428068,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -428,13 +428,13 @@
       "right_input": {
         "type": "feature",
         "index": 14,
-        "name": "NOT PhysActivity"
+        "name": "Stroke"
       }
     },
     {
       "layer": 14,
       "aggregator_index": 14,
-      "andness": 1.782228,
+      "andness": 0.560871,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -446,13 +446,13 @@
       "right_input": {
         "type": "feature",
         "index": 15,
-        "name": "NOT Sex"
+        "name": "HighChol"
       }
     },
     {
       "layer": 15,
       "aggregator_index": 15,
-      "andness": 1.703157,
+      "andness": 1.806166,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -464,13 +464,13 @@
       "right_input": {
         "type": "feature",
         "index": 16,
-        "name": "NOT Income"
+        "name": "GenHlth"
       }
     },
     {
       "layer": 16,
       "aggregator_index": 16,
-      "andness": 1.39589,
+      "andness": 0.331709,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -482,13 +482,13 @@
       "right_input": {
         "type": "feature",
         "index": 17,
-        "name": "NOT DiffWalk"
+        "name": "Age"
       }
     },
     {
       "layer": 17,
       "aggregator_index": 17,
-      "andness": 1.507643,
+      "andness": 1.629565,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -500,13 +500,13 @@
       "right_input": {
         "type": "feature",
         "index": 18,
-        "name": "NOT Smoker"
+        "name": "BMI"
       }
     },
     {
       "layer": 18,
       "aggregator_index": 18,
-      "andness": 0.234906,
+      "andness": 1.49958,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -518,13 +518,13 @@
       "right_input": {
         "type": "feature",
         "index": 19,
-        "name": "CholCheck"
+        "name": "DiffWalk"
       }
     },
     {
       "layer": 19,
       "aggregator_index": 19,
-      "andness": 1.68773,
+      "andness": 1.24501,
       "weights": {
         "left": 0.5,
         "right": 0.5
