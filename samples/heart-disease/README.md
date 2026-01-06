@@ -58,37 +58,7 @@ cd samples/heart-disease
 python main.py
 ```
 
-## Model Configuration
-
-The sample uses the following BACON configuration:
-
-- **Aggregator:** `lsp.half_weight` (Logic Scoring of Preference - Half Weight)
-- **Weight Mode:** `fixed` 
-- **Loss Amplifier:** 1000
-- **Sinkhorn Iterations:** 200 (for permutation convergence)
-- **Class Weighting:** Enabled (handles potential class imbalance)
-- **Acceptance Threshold:** 90% (model must achieve 90% test accuracy)
-- **Transformation:** Enabled (Identity, Negation)
-
-## Key Findings
-
-In the heart disease task, BACON identifies **asymptomatic chest pain**(`cp`=4) as the most decisive feature, followed by sex (`sex`) as a conditional modifier. Notably, the model does not induce a global baseline condition. This reflects the heterogeneity of cardiac risk presentation in the dataset, where diagnosis is driven by high-signal symptom patterns rather than a shared background state. The absence of an artificial baseline highlights BACON’s ability to adapt its symbolic structure to the intrinsic causal geometry of the domain.
-
-## Clinical Relevance
-
-Heart disease exists primarily through decisive symptom manifestation, rather than gradual accumulation from a shared baseline. This matches how cardiology often works:
-* Symptoms trump demographics
-* Risk factors modulate, but don’t replace, symptoms
-
-## Saved Models
-
-| Model file | Threshold | Accuracy | Precision | Recall |
-|--------|--------|--------|--------|--------|
-| assembler.pth | 0.513 | 86.53% | 92.17% | 77.37% |
-
-## Notes
-
-- The dataset contains missing values (marked as '?'), which are handled by dropping incomplete records
-- The original dataset has 76 attributes, but clinical ML research typically uses only these 14 attributes
-- This is a well-studied benchmark dataset for interpretable medical diagnosis
-- Results may vary between runs due to random initialization and data splitting
+## Measurements
+|Run | Binary threshold | Aggregator | Weights| Weights penalty| Optimum threshold | Accuracy | AUPRC|
+|----|-----------|------------|--------|----------------|-------------------|----------|------|
+| 1 | 0.5 | half_weight | trainable | 1e-3 | 0.5 | 86.67% | 0.9380 |

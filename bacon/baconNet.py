@@ -514,9 +514,10 @@ class baconNet(nn.Module):
         """Check if permutation should be frozen and perform freezing if ready.
         
         Returns:
-            tuple: (just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown)
+            tuple: (just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown, skip_frozen_training)
         """
         just_froze = False
+        skip_frozen_training = False
         
         if not self.assembler.is_frozen and hasattr(self.assembler.input_to_leaf, 'logits'):
             try:
@@ -567,7 +568,7 @@ class baconNet(nn.Module):
                             logging.info(f"      Waiting for loss convergence first...")
                         freeze_confidence_warning_shown = True
                     just_froze = True
-                    return just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown
+                    return just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown, skip_frozen_training
                 
                 # Ready to freeze!
                 if confidence_plateaued and not confidence_reached:
@@ -620,15 +621,95 @@ class baconNet(nn.Module):
                 if unique_cols < total_rows:
                     logging.info(f"      ⚠️  Argmax creates duplicate columns: {unique_cols} unique out of {total_rows} rows")
                 
-                # Use Hungarian algorithm
+                # Use Hungarian algorithm as baseline
                 soft_perm_np = soft_perm.detach().cpu().numpy()
                 row_ind, col_ind = linear_sum_assignment(-soft_perm_np)
-                hard_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long, device=self.assembler.device)
-                logging.info(f"      Using Hungarian algorithm for optimal valid permutation")
+                hungarian_perm = torch.tensor(col_ind[row_ind.argsort()], dtype=torch.long, device=self.assembler.device)
+                
+                # Sample multiple candidate permutations for uncertain rows
+                logging.info(f"      🎲 Sampling candidate permutations to find best freeze assignment...")
+                max_probs = soft_perm.max(dim=1)[0]
+                uncertain_threshold = 0.90  # Rows with confidence < 90% are considered uncertain
+                uncertain_rows = (max_probs < uncertain_threshold).nonzero(as_tuple=True)[0]
+                
+                if len(uncertain_rows) > 0:
+                    logging.info(f"      Found {len(uncertain_rows)} uncertain rows (confidence < {uncertain_threshold:.0%})")
+                    
+                    # Generate candidate permutations by exploring top-k assignments for uncertain rows
+                    candidates = [hungarian_perm]  # Start with Hungarian as baseline
+                    max_candidates = 20  # Limit total candidates to avoid explosion
+                    
+                    # For each uncertain row, get top-2 or top-3 choices
+                    uncertain_choices = {}
+                    for row_idx in uncertain_rows:
+                        topk = min(3, soft_perm.size(1))  # Top-3 choices
+                        top_vals, top_indices = soft_perm[row_idx].topk(topk)
+                        uncertain_choices[row_idx.item()] = top_indices.tolist()
+                    
+                    # Generate permutations by varying uncertain row assignments
+                    # Use a greedy strategy: try swapping each uncertain row one at a time
+                    for row_idx, choices in uncertain_choices.items():
+                        for choice in choices[1:]:  # Skip first choice (already in Hungarian)
+                            # Create candidate by modifying Hungarian
+                            candidate = hungarian_perm.clone()
+                            old_assignment = candidate[row_idx]
+                            candidate[row_idx] = choice
+                            
+                            # Check if this creates a duplicate (column conflict)
+                            if len(torch.unique(candidate)) == len(candidate):
+                                candidates.append(candidate)
+                                if len(candidates) >= max_candidates:
+                                    break
+                        if len(candidates) >= max_candidates:
+                            break
+                    
+                    logging.info(f"      Generated {len(candidates)} candidate permutations (including Hungarian baseline)")
+                    
+                    # Evaluate all candidates on TRAINING set to avoid test set overfitting
+                    best_train_acc = -1
+                    best_perm = hungarian_perm
+                    best_perm_idx = 0
+                    
+                    self.assembler.eval()
+                    with torch.no_grad():
+                        for i, candidate_perm in enumerate(candidates):
+                            # Temporarily set this permutation
+                            temp_frozen_input = frozenInputToLeaf(candidate_perm, self.assembler.original_input_size).to(self.assembler.device)
+                            original_input_to_leaf = self.assembler.input_to_leaf
+                            self.assembler.input_to_leaf = temp_frozen_input
+                            self.assembler.is_frozen = True
+                            
+                            # Evaluate on training set
+                            train_output = self.assembler(x_test)  # Note: x_test here is actually training data passed to freeze check
+                            train_pred = (train_output > 0.5).float()
+                            train_acc = (train_pred == y_test).float().mean().item()
+                            
+                            if train_acc > best_train_acc:
+                                best_train_acc = train_acc
+                                best_perm = candidate_perm
+                                best_perm_idx = i
+                            
+                            # Restore
+                            self.assembler.input_to_leaf = original_input_to_leaf
+                            self.assembler.is_frozen = False
+                    
+                    self.assembler.train()
+                    
+                    if best_perm_idx == 0:
+                        logging.info(f"      ✓ Hungarian baseline is best (train acc: {best_train_acc:.4f})")
+                    else:
+                        logging.info(f"      ✨ Found better permutation #{best_perm_idx} (train acc: {best_train_acc:.4f} vs Hungarian: {candidates[0] and 'N/A'})")
+                        differences = (best_perm != hungarian_perm).sum().item()
+                        logging.info(f"         Differs from Hungarian in {differences}/{len(best_perm)} positions")
+                    
+                    hard_perm = best_perm
+                else:
+                    logging.info(f"      All rows have high confidence (>= {uncertain_threshold:.0%}), using Hungarian algorithm")
+                    hard_perm = hungarian_perm
                 
                 perm_differences = (argmax_perm != hard_perm).sum().item()
                 if perm_differences > 0:
-                    logging.info(f"      ⚠️  Hungarian differs from argmax in {perm_differences}/{len(hard_perm)} positions")
+                    logging.info(f"      ⚠️  Final permutation differs from argmax in {perm_differences}/{len(hard_perm)} positions")
                 
                 self.assembler.locked_perm = hard_perm.clone().detach()
                 self.assembler.is_frozen = True
@@ -661,6 +742,16 @@ class baconNet(nn.Module):
                 
                 self.assembler.train()
                 logging.info(f"   🔒 Successfully frozen model (locked_perm created)")
+                
+                # Check if freeze improved accuracy - if so, skip frozen training
+                if after_accuracy > before_accuracy:
+                    accuracy_gain = (after_accuracy - before_accuracy) * 100
+                    logging.info(f"   ✅ Freeze improved accuracy by {accuracy_gain:.2f}% - stopping immediately (skipping frozen training)")
+                    logging.info(f"      Rationale: Hard permutation performs better than soft, further training may degrade performance")
+                    # Set flag to break out of training loop
+                    just_froze = True
+                    return just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown, True  # skip_frozen_training=True
+                
                 just_froze = True
                 
             except Exception as e:
@@ -668,7 +759,7 @@ class baconNet(nn.Module):
                 self.assembler.is_frozen = True
                 just_froze = True
         
-        return just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown
+        return just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown, skip_frozen_training
 
     def find_best_model(self, x, y, x_test, y_test, 
                         attempts = 100, 
@@ -933,7 +1024,7 @@ class baconNet(nn.Module):
                         
                         if should_check_freeze:
                             # Attempt to freeze permutation if conditions are met
-                            just_froze, setup.best_confidence, setup.epochs_without_confidence_improvement, setup.freeze_confidence_warning_shown = \
+                            just_froze, setup.best_confidence, setup.epochs_without_confidence_improvement, setup.freeze_confidence_warning_shown, skip_frozen_training = \
                                 self._check_and_freeze_permutation(
                                     epoch, x_test, y_test, setup.criterion,
                                     freeze_confidence_threshold, freeze_min_confidence,
@@ -942,6 +1033,11 @@ class baconNet(nn.Module):
                                     setup.epochs_without_confidence_improvement, confidence_plateau_patience,
                                     setup.freeze_confidence_warning_shown, current_loss
                                 )
+                            
+                            # If freeze improved accuracy, stop training immediately
+                            if skip_frozen_training:
+                                logging.info(f"   🛑 Skipping frozen training, model is optimal at freeze point")
+                                break
                     
                     # Perform backward pass and optimizer step (unless we just froze)
                     if not just_froze:

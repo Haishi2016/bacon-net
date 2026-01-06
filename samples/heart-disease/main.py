@@ -21,8 +21,8 @@ print(f"\n📊 Model will use {num_features} input features (after one-hot encod
 # Create model with standard configuration
 bacon = create_bacon_model(
     input_size=num_features,
-    aggregator='lsp.full_weight',
-    weight_mode='fixed',
+    aggregator='lsp.half_weight',
+    weight_mode='trainable',
     use_transformation_layer=True,
     weight_normalization='softmax',
     use_class_weighting=True,
@@ -36,9 +36,10 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=0.75,
+    acceptance_threshold=0.85,
     hierarchical_epochs_per_attempt=3000,
-    hierarchical_group_size=8
+    hierarchical_group_size=8,
+     binary_threshold=0.5
 )
 
 # Run standard analysis pipeline
@@ -47,5 +48,6 @@ run_standard_analysis(
     X_train, Y_train, X_test, Y_test,
     feature_names,
     title_prefix="Heart Disease",
-    device=device
+    device=device,
+    pruning_threshold=0.5
 )

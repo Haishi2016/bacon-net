@@ -405,6 +405,7 @@ def analyze_feature_importance_with_pruning(
     
     # Cumulative pruning analysis (skip baseline features)
     print("\n🔬 Cumulative pruning analysis:")
+    print(f"   Full tree (no pruning): acc={baseline_accuracy*100:.2f}%, F1={baseline_f1*100:.2f}%, AUPRC={baseline_auprc:.4f}")
     
     # Determine where to start pruning
     start_feature = max(baseline_features) + 1 if baseline_features else 0
@@ -471,7 +472,7 @@ def analyze_feature_importance_with_growing(
     """Analyze feature importance through incremental growth from baseline.
     
     Start with baseline (node0, node1, aggregator0) and incrementally grow the tree
-    towards the root by restoring one feature/aggregator at a time.
+    by evaluating progressively more aggregators.
     
     Args:
         model: Trained baconNet model with frozen structure
@@ -497,53 +498,24 @@ def analyze_feature_importance_with_growing(
         print("⚠️ Growing analysis requires at least 2 features")
         return {'accuracies': [], 'feature_order': []}
     
-    # Save original weights and biases
-    original_weights = [w.data.clone() for w in assembler.weights]
-    original_biases = [b.data.clone() for b in assembler.biases]
-    
-    num_aggregators = len(assembler.weights)
     accuracies = []
     f1_scores = []
     auprc_scores = []
     feature_order = list(range(num_features))
     
+    from sklearn.metrics import precision_score, recall_score, f1_score, average_precision_score
+    
     print("\n🌱 Incremental growing analysis:")
     print(f"   Starting with baseline: Features 0 and 1 ({feature_names[assembler.locked_perm[0].item()]} + {feature_names[assembler.locked_perm[1].item()]})")
     
-    # Step 1: Evaluate baseline (node0, node1, aggregator0 only)
-    # Set all aggregators except agg0 to neutrality: bias=0.5, left=1, right=0
+    # Step 1: Evaluate baseline (only aggregator 0, using features 0 and 1)
+    assembler.evaluation_limit = 1
     with torch.no_grad():
-        # Restore all to original first
-        for j, w in enumerate(assembler.weights):
-            w.data.copy_(original_weights[j])
-        for j in range(len(assembler.biases)):
-            if assembler.biases[j].shape == original_biases[j].shape:
-                assembler.biases[j].data.copy_(original_biases[j])
-            else:
-                assembler.biases[j].data = original_biases[j].clone()
-        
-        # Set aggregators 1 onwards to neutrality (pass left input through)
-        for j in range(1, num_aggregators):
-            assembler.weights[j].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=device)
-            # Set bias to 0.5 (logical neutrality)
-            if assembler.normalize_andness:
-                # If normalize_andness, bias is logit-transformed: logit(0.5) = 0
-                if assembler.biases[j].numel() == 1:
-                    assembler.biases[j].data.fill_(0.0)
-                else:
-                    assembler.biases[j].data = torch.tensor(0.0, dtype=torch.float32, device=device)
-            else:
-                if assembler.biases[j].numel() == 1:
-                    assembler.biases[j].data.fill_(0.5)
-                else:
-                    assembler.biases[j].data = torch.tensor(0.5, dtype=torch.float32, device=device)
-        
         baseline_output = assembler(X)
         baseline_pred = (baseline_output > threshold).float()
         baseline_accuracy = (baseline_pred == Y).float().mean().item()
         
         # Compute additional metrics
-        from sklearn.metrics import precision_score, recall_score, f1_score, average_precision_score
         baseline_pred_np = baseline_pred.cpu().numpy().flatten()
         Y_np = Y.cpu().numpy().flatten()
         baseline_output_np = baseline_output.cpu().numpy().flatten()
@@ -559,29 +531,15 @@ def analyze_feature_importance_with_growing(
         print(f"   Baseline (features 0-1): acc={baseline_accuracy*100:.2f}%, prec={baseline_precision*100:.2f}%, rec={baseline_recall*100:.2f}%, F1={baseline_f1*100:.2f}%, AUPRC={baseline_auprc:.4f}")
     
     # Step 2: Incrementally grow by adding features 2 onwards
+    # In left-balanced tree:
+    #   - Aggregator 0 combines features 0 and 1
+    #   - Aggregator 1 combines (agg0 result) with feature 2
+    #   - Aggregator i-1 combines (agg[i-2] result) with feature i
+    # To include features 0 through i, evaluate aggregators 0 through i-1 (total: i aggregators)
     for i in range(2, num_features):
+        assembler.evaluation_limit = i  # Evaluate aggregators 0 through i-1
+        
         with torch.no_grad():
-            # Restore all to original
-            for j, w in enumerate(assembler.weights):
-                w.data.copy_(original_weights[j])
-            for j in range(len(assembler.biases)):
-                if assembler.biases[j].shape == original_biases[j].shape:
-                    assembler.biases[j].data.copy_(original_biases[j])
-                else:
-                    assembler.biases[j].data = original_biases[j].clone()
-            
-            # In left-balanced tree:
-            #   - Aggregator 0 combines features 0 and 1
-            #   - Aggregator 1 combines (agg0 result) with feature 2
-            #   - Aggregator 2 combines (agg1 result) with feature 3, etc.
-            # To include features 0 through i:
-            #   - Keep aggregators 0 through i-1 (which processes features up to i)
-            #   - Neutralize aggregators i onwards (just pass through left input)
-            for j in range(i, num_aggregators):
-                assembler.weights[j].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=device)                
-                # Set bias to 0.5 (logical neutrality)
-                assembler.biases[j].data.fill_(0.5)
-            
             grown_output = assembler(X)
             grown_pred = (grown_output > threshold).float()
             grown_accuracy = (grown_pred == Y).float().mean().item()
@@ -602,15 +560,8 @@ def analyze_feature_importance_with_growing(
             feature_name = feature_names[assembler.locked_perm[i].item()]
             print(f"   Growing to feature {i} ({feature_name}): acc={grown_accuracy*100:.2f}%, prec={grown_precision*100:.2f}%, rec={grown_recall*100:.2f}%, F1={grown_f1*100:.2f}%, AUPRC={grown_auprc:.4f} (total: {i+1})")
     
-    # Restore original weights and biases
-    with torch.no_grad():
-        for j, w in enumerate(assembler.weights):
-            w.data.copy_(original_weights[j])
-        for j in range(len(assembler.biases)):
-            if assembler.biases[j].shape == original_biases[j].shape:
-                assembler.biases[j].data.copy_(original_biases[j])
-            else:
-                assembler.biases[j].data = original_biases[j].clone()
+    # Restore full tree evaluation
+    assembler.evaluation_limit = None
     
     return {
         'accuracies': accuracies,
