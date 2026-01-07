@@ -32,196 +32,196 @@
     "trt_3"
   ],
   "locked_perm": [
-    25,
+    9,
+    23,
     14,
-    17,
-    13,
+    10,
+    6,
+    25,
     5,
+    1,
+    13,
+    11,
     3,
     21,
-    18,
+    22,
+    19,
+    20,
+    24,
+    2,
     12,
+    4,
+    7,
     15,
     16,
-    22,
-    20,
-    23,
-    24,
-    9,
-    11,
-    7,
-    6,
-    19,
+    18,
     0,
     8,
-    2,
-    4,
-    1,
-    10
+    17
   ],
   "features": [
     {
       "index": 0,
-      "original_name": "trt_3",
-      "display_name": "NOT trt_3",
-      "transformation": "negation"
-    },
-    {
-      "index": 1,
-      "original_name": "strat",
-      "display_name": "NOT strat",
-      "transformation": "negation"
-    },
-    {
-      "index": 2,
-      "original_name": "offtrt",
-      "display_name": "NOT offtrt",
-      "transformation": "negation"
-    },
-    {
-      "index": 3,
-      "original_name": "str2",
-      "display_name": "NOT str2",
-      "transformation": "negation"
-    },
-    {
-      "index": 4,
-      "original_name": "drugs",
-      "display_name": "NOT drugs",
-      "transformation": "negation"
-    },
-    {
-      "index": 5,
-      "original_name": "hemo",
-      "display_name": "NOT hemo",
-      "transformation": "negation"
-    },
-    {
-      "index": 6,
-      "original_name": "cd820",
-      "display_name": "NOT cd820",
-      "transformation": "negation"
-    },
-    {
-      "index": 7,
-      "original_name": "cd40",
-      "display_name": "NOT cd40",
-      "transformation": "negation"
-    },
-    {
-      "index": 8,
-      "original_name": "gender",
-      "display_name": "NOT gender",
-      "transformation": "negation"
-    },
-    {
-      "index": 9,
-      "original_name": "symptom",
-      "display_name": "NOT symptom",
-      "transformation": "negation"
-    },
-    {
-      "index": 10,
-      "original_name": "treat",
-      "display_name": "NOT treat",
-      "transformation": "negation"
-    },
-    {
-      "index": 11,
-      "original_name": "trt_0",
-      "display_name": "NOT trt_0",
-      "transformation": "negation"
-    },
-    {
-      "index": 12,
-      "original_name": "cd80",
-      "display_name": "NOT cd80",
-      "transformation": "negation"
-    },
-    {
-      "index": 13,
-      "original_name": "trt_1",
-      "display_name": "NOT trt_1",
-      "transformation": "negation"
-    },
-    {
-      "index": 14,
-      "original_name": "trt_2",
-      "display_name": "NOT trt_2",
-      "transformation": "negation"
-    },
-    {
-      "index": 15,
       "original_name": "zprior",
       "display_name": "NOT zprior",
       "transformation": "negation"
     },
     {
-      "index": 16,
-      "original_name": "race",
-      "display_name": "NOT race",
+      "index": 1,
+      "original_name": "trt_1",
+      "display_name": "NOT trt_1",
       "transformation": "negation"
     },
     {
-      "index": 17,
-      "original_name": "oprior",
-      "display_name": "NOT oprior",
+      "index": 2,
+      "original_name": "strat",
+      "display_name": "NOT strat",
       "transformation": "negation"
     },
     {
-      "index": 18,
+      "index": 3,
+      "original_name": "preanti",
+      "display_name": "NOT preanti",
+      "transformation": "negation"
+    },
+    {
+      "index": 4,
       "original_name": "karnof",
       "display_name": "NOT karnof",
       "transformation": "negation"
     },
     {
-      "index": 19,
+      "index": 5,
+      "original_name": "trt_3",
+      "display_name": "NOT trt_3",
+      "transformation": "negation"
+    },
+    {
+      "index": 6,
+      "original_name": "drugs",
+      "display_name": "NOT drugs",
+      "transformation": "negation"
+    },
+    {
+      "index": 7,
+      "original_name": "age",
+      "display_name": "NOT age",
+      "transformation": "negation"
+    },
+    {
+      "index": 8,
+      "original_name": "str2",
+      "display_name": "NOT str2",
+      "transformation": "negation"
+    },
+    {
+      "index": 9,
+      "original_name": "race",
+      "display_name": "NOT race",
+      "transformation": "negation"
+    },
+    {
+      "index": 10,
+      "original_name": "hemo",
+      "display_name": "NOT hemo",
+      "transformation": "negation"
+    },
+    {
+      "index": 11,
+      "original_name": "cd820",
+      "display_name": "NOT cd820",
+      "transformation": "negation"
+    },
+    {
+      "index": 12,
+      "original_name": "trt_0",
+      "display_name": "NOT trt_0",
+      "transformation": "negation"
+    },
+    {
+      "index": 13,
       "original_name": "cd420",
       "display_name": "NOT cd420",
       "transformation": "negation"
     },
     {
-      "index": 20,
-      "original_name": "time",
-      "display_name": "NOT time",
+      "index": 14,
+      "original_name": "cd80",
+      "display_name": "NOT cd80",
       "transformation": "negation"
     },
     {
-      "index": 21,
-      "original_name": "z30",
-      "display_name": "z30",
-      "transformation": "identity"
+      "index": 15,
+      "original_name": "trt_2",
+      "display_name": "NOT trt_2",
+      "transformation": "negation"
     },
     {
-      "index": 22,
+      "index": 16,
       "original_name": "wtkg",
       "display_name": "NOT wtkg",
       "transformation": "negation"
     },
     {
-      "index": 23,
+      "index": 17,
+      "original_name": "gender",
+      "display_name": "NOT gender",
+      "transformation": "negation"
+    },
+    {
+      "index": 18,
       "original_name": "homo",
-      "display_name": "homo",
+      "display_name": "NOT homo",
+      "transformation": "negation"
+    },
+    {
+      "index": 19,
+      "original_name": "oprior",
+      "display_name": "NOT oprior",
+      "transformation": "negation"
+    },
+    {
+      "index": 20,
+      "original_name": "symptom",
+      "display_name": "NOT symptom",
+      "transformation": "negation"
+    },
+    {
+      "index": 21,
+      "original_name": "treat",
+      "display_name": "treat",
       "transformation": "identity"
     },
     {
+      "index": 22,
+      "original_name": "cd40",
+      "display_name": "cd40",
+      "transformation": "identity"
+    },
+    {
+      "index": 23,
+      "original_name": "time",
+      "display_name": "NOT time",
+      "transformation": "negation"
+    },
+    {
       "index": 24,
-      "original_name": "age",
-      "display_name": "age",
+      "original_name": "z30",
+      "display_name": "z30",
       "transformation": "identity"
     },
     {
       "index": 25,
-      "original_name": "preanti",
-      "display_name": "preanti",
-      "transformation": "identity"
+      "original_name": "offtrt",
+      "display_name": "NOT offtrt",
+      "transformation": "negation"
     }
   ],
   "nodes": [
     {
       "layer": 0,
       "aggregator_index": 0,
-      "andness": 1.731322,
+      "andness": 1.158763,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -229,18 +229,18 @@
       "left_input": {
         "type": "feature",
         "index": 0,
-        "name": "NOT trt_3"
+        "name": "NOT zprior"
       },
       "right_input": {
         "type": "feature",
         "index": 1,
-        "name": "NOT strat"
+        "name": "NOT trt_1"
       }
     },
     {
       "layer": 1,
       "aggregator_index": 1,
-      "andness": 1.601113,
+      "andness": 0.771567,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -252,13 +252,13 @@
       "right_input": {
         "type": "feature",
         "index": 2,
-        "name": "NOT offtrt"
+        "name": "NOT strat"
       }
     },
     {
       "layer": 2,
       "aggregator_index": 2,
-      "andness": 0.378038,
+      "andness": 0.246956,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -270,13 +270,13 @@
       "right_input": {
         "type": "feature",
         "index": 3,
-        "name": "NOT str2"
+        "name": "NOT preanti"
       }
     },
     {
       "layer": 3,
       "aggregator_index": 3,
-      "andness": 0.98293,
+      "andness": 0.846982,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -288,16 +288,16 @@
       "right_input": {
         "type": "feature",
         "index": 4,
-        "name": "NOT drugs"
+        "name": "NOT karnof"
       }
     },
     {
       "layer": 4,
       "aggregator_index": 4,
-      "andness": 1.07867,
+      "andness": 1.628719,
       "weights": {
-        "left": 0.500001,
-        "right": 0.499999
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -306,16 +306,16 @@
       "right_input": {
         "type": "feature",
         "index": 5,
-        "name": "NOT hemo"
+        "name": "NOT trt_3"
       }
     },
     {
       "layer": 5,
       "aggregator_index": 5,
-      "andness": 1.1262,
+      "andness": 0.487727,
       "weights": {
-        "left": 0.500001,
-        "right": 0.499999
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -324,16 +324,16 @@
       "right_input": {
         "type": "feature",
         "index": 6,
-        "name": "NOT cd820"
+        "name": "NOT drugs"
       }
     },
     {
       "layer": 6,
       "aggregator_index": 6,
-      "andness": 0.112613,
+      "andness": 1.166929,
       "weights": {
-        "left": 0.50005,
-        "right": 0.49995
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -342,16 +342,16 @@
       "right_input": {
         "type": "feature",
         "index": 7,
-        "name": "NOT cd40"
+        "name": "NOT age"
       }
     },
     {
       "layer": 7,
       "aggregator_index": 7,
-      "andness": 0.227671,
+      "andness": 1.235569,
       "weights": {
-        "left": 0.499963,
-        "right": 0.500037
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -360,16 +360,16 @@
       "right_input": {
         "type": "feature",
         "index": 8,
-        "name": "NOT gender"
+        "name": "NOT str2"
       }
     },
     {
       "layer": 8,
       "aggregator_index": 8,
-      "andness": 0.390043,
+      "andness": -0.0234,
       "weights": {
-        "left": 0.499973,
-        "right": 0.500027
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -378,16 +378,16 @@
       "right_input": {
         "type": "feature",
         "index": 9,
-        "name": "NOT symptom"
+        "name": "NOT race"
       }
     },
     {
       "layer": 9,
       "aggregator_index": 9,
-      "andness": 1.478944,
+      "andness": 1.571129,
       "weights": {
-        "left": 0.500012,
-        "right": 0.499988
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -396,16 +396,16 @@
       "right_input": {
         "type": "feature",
         "index": 10,
-        "name": "NOT treat"
+        "name": "NOT hemo"
       }
     },
     {
       "layer": 10,
       "aggregator_index": 10,
-      "andness": 0.433807,
+      "andness": 1.556625,
       "weights": {
-        "left": 0.500149,
-        "right": 0.499851
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -414,16 +414,16 @@
       "right_input": {
         "type": "feature",
         "index": 11,
-        "name": "NOT trt_0"
+        "name": "NOT cd820"
       }
     },
     {
       "layer": 11,
       "aggregator_index": 11,
-      "andness": 0.673957,
+      "andness": 1.398728,
       "weights": {
-        "left": 0.499998,
-        "right": 0.500002
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -432,16 +432,16 @@
       "right_input": {
         "type": "feature",
         "index": 12,
-        "name": "NOT cd80"
+        "name": "NOT trt_0"
       }
     },
     {
       "layer": 12,
       "aggregator_index": 12,
-      "andness": 1.043661,
+      "andness": 1.651172,
       "weights": {
-        "left": 0.499563,
-        "right": 0.500436
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -450,16 +450,16 @@
       "right_input": {
         "type": "feature",
         "index": 13,
-        "name": "NOT trt_1"
+        "name": "NOT cd420"
       }
     },
     {
       "layer": 13,
       "aggregator_index": 13,
-      "andness": 1.628147,
+      "andness": 1.735268,
       "weights": {
-        "left": 0.500109,
-        "right": 0.499891
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -468,16 +468,16 @@
       "right_input": {
         "type": "feature",
         "index": 14,
-        "name": "NOT trt_2"
+        "name": "NOT cd80"
       }
     },
     {
       "layer": 14,
       "aggregator_index": 14,
-      "andness": 0.400319,
+      "andness": 0.015907,
       "weights": {
-        "left": 0.51425,
-        "right": 0.48575
+        "left": 0.518283,
+        "right": 0.481717
       },
       "left_input": {
         "type": "aggregator",
@@ -486,16 +486,16 @@
       "right_input": {
         "type": "feature",
         "index": 15,
-        "name": "NOT zprior"
+        "name": "NOT trt_2"
       }
     },
     {
       "layer": 15,
       "aggregator_index": 15,
-      "andness": 1.696534,
+      "andness": 0.005995,
       "weights": {
-        "left": 0.542517,
-        "right": 0.457483
+        "left": 0.486709,
+        "right": 0.513291
       },
       "left_input": {
         "type": "aggregator",
@@ -504,16 +504,16 @@
       "right_input": {
         "type": "feature",
         "index": 16,
-        "name": "NOT race"
+        "name": "NOT wtkg"
       }
     },
     {
       "layer": 16,
       "aggregator_index": 16,
-      "andness": -0.999929,
+      "andness": -0.011718,
       "weights": {
-        "left": 0.007412,
-        "right": 0.992588
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -522,16 +522,16 @@
       "right_input": {
         "type": "feature",
         "index": 17,
-        "name": "NOT oprior"
+        "name": "NOT gender"
       }
     },
     {
       "layer": 17,
       "aggregator_index": 17,
-      "andness": 1.860098,
+      "andness": 0.598791,
       "weights": {
-        "left": 0.97221,
-        "right": 0.02779
+        "left": 0.292487,
+        "right": 0.707513
       },
       "left_input": {
         "type": "aggregator",
@@ -540,16 +540,16 @@
       "right_input": {
         "type": "feature",
         "index": 18,
-        "name": "NOT karnof"
+        "name": "NOT homo"
       }
     },
     {
       "layer": 18,
       "aggregator_index": 18,
-      "andness": 1.986492,
+      "andness": 1.593892,
       "weights": {
-        "left": 0.079936,
-        "right": 0.920064
+        "left": 0.372544,
+        "right": 0.627456
       },
       "left_input": {
         "type": "aggregator",
@@ -558,16 +558,16 @@
       "right_input": {
         "type": "feature",
         "index": 19,
-        "name": "NOT cd420"
+        "name": "NOT oprior"
       }
     },
     {
       "layer": 19,
       "aggregator_index": 19,
-      "andness": -0.99727,
+      "andness": 1.451392,
       "weights": {
-        "left": 0.185116,
-        "right": 0.814884
+        "left": 0.514356,
+        "right": 0.485644
       },
       "left_input": {
         "type": "aggregator",
@@ -576,16 +576,16 @@
       "right_input": {
         "type": "feature",
         "index": 20,
-        "name": "NOT time"
+        "name": "NOT symptom"
       }
     },
     {
       "layer": 20,
       "aggregator_index": 20,
-      "andness": 1.722502,
+      "andness": -0.991995,
       "weights": {
-        "left": 0.534705,
-        "right": 0.465295
+        "left": 0.020184,
+        "right": 0.979816
       },
       "left_input": {
         "type": "aggregator",
@@ -594,16 +594,16 @@
       "right_input": {
         "type": "feature",
         "index": 21,
-        "name": "z30"
+        "name": "treat"
       }
     },
     {
       "layer": 21,
       "aggregator_index": 21,
-      "andness": -0.951797,
+      "andness": -0.834025,
       "weights": {
-        "left": 1.0,
-        "right": 0.0
+        "left": 0.965098,
+        "right": 0.034902
       },
       "left_input": {
         "type": "aggregator",
@@ -612,16 +612,16 @@
       "right_input": {
         "type": "feature",
         "index": 22,
-        "name": "NOT wtkg"
+        "name": "cd40"
       }
     },
     {
       "layer": 22,
       "aggregator_index": 22,
-      "andness": 0.918657,
+      "andness": 0.872877,
       "weights": {
-        "left": 0.628107,
-        "right": 0.371893
+        "left": 0.656554,
+        "right": 0.343446
       },
       "left_input": {
         "type": "aggregator",
@@ -630,16 +630,16 @@
       "right_input": {
         "type": "feature",
         "index": 23,
-        "name": "homo"
+        "name": "NOT time"
       }
     },
     {
       "layer": 23,
       "aggregator_index": 23,
-      "andness": 0.858426,
+      "andness": -0.978781,
       "weights": {
-        "left": 0.767834,
-        "right": 0.232166
+        "left": 0.994747,
+        "right": 0.005253
       },
       "left_input": {
         "type": "aggregator",
@@ -648,16 +648,16 @@
       "right_input": {
         "type": "feature",
         "index": 24,
-        "name": "age"
+        "name": "z30"
       }
     },
     {
       "layer": 24,
       "aggregator_index": 24,
-      "andness": 0.936267,
+      "andness": 1.972095,
       "weights": {
-        "left": 0.786979,
-        "right": 0.213021
+        "left": 0.998356,
+        "right": 0.001644
       },
       "left_input": {
         "type": "aggregator",
@@ -666,7 +666,7 @@
       "right_input": {
         "type": "feature",
         "index": 25,
-        "name": "preanti"
+        "name": "NOT offtrt"
       }
     }
   ]
