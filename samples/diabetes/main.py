@@ -31,15 +31,15 @@ trans = [
 # Create model with custom configuration
 bacon = create_bacon_model(
     input_size=num_features,
-    aggregator='lsp.full_weight',
-    weight_mode='fixed',
+    aggregator='lsp.half_weight',
+    weight_mode='trainable',
     weight_penalty_strength=1e-3,
     transformations=trans,
     use_transformation_layer=True,
     weight_normalization='softmax',
     use_class_weighting=True,
     permutation_initial_temperature=5.0,
-    permutation_final_temperature=0.4
+    permutation_final_temperature=0.4    
 )
 
 # Train model
@@ -50,7 +50,7 @@ train_bacon_model(
     acceptance_threshold=0.7,
     hierarchical_epochs_per_attempt=2000,
     hierarchical_group_size=10,
-    binary_threshold=0.6
+    binary_threshold=0.5
 )
 
 # Run standard analysis pipeline
@@ -60,5 +60,5 @@ run_standard_analysis(
     feature_names,
     title_prefix="Diabetes",
     device=device,
-    pruning_threshold=0.347
+    pruning_threshold=0.478
 )

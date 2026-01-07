@@ -196,14 +196,14 @@ def optimize_thresholds(model, X_all, Y_all):
     
     Args:
         model: Trained baconNet model
-        X_all: Combined features (train + test)
-        Y_all: Combined labels (train + test)
+        X_all: Features for threshold optimization
+        Y_all: Labels for threshold optimization
         
     Returns:
         dict: Dictionary with best thresholds and scores for each metric
     """
     print("\n" + "="*60)
-    print("THRESHOLD OPTIMIZATION (on combined data)")
+    print("THRESHOLD OPTIMIZATION")
     print("="*60)
     
     results = {}
@@ -339,7 +339,7 @@ def run_standard_analysis(
     if device is None:
         device = X_train.device
     
-    # Combine train and test for comprehensive analysis
+    # Combine train and test for comprehensive post-training analysis
     X_all = torch.cat([X_train, X_test], dim=0)
     Y_all = torch.cat([Y_train, Y_test], dim=0)
     
@@ -357,7 +357,8 @@ def run_standard_analysis(
     # Check for overfitting
     analyze_overfitting(model, X_train, Y_train, X_test, Y_test)
     
-    # Optimize thresholds
+    # Optimize thresholds on full dataset (post-training analysis)
+    print(f"\n📊 Post-training analysis on full dataset ({len(Y_all)} samples)")
     threshold_results = optimize_thresholds(model, X_all, Y_all)
     
     # Determine threshold for pruning
@@ -377,8 +378,8 @@ def run_standard_analysis(
     pr_filename = f"{title_prefix.lower().replace(' ', '_')}_pr_curve.png" if title_prefix else "pr_curve.png"
     plot_precision_recall_curve(
         model, 
-        X_test, 
-        Y_test, 
+        X_all, 
+        Y_all, 
         threshold=pruning_threshold,
         title=pr_title,
         filename=pr_filename
@@ -392,20 +393,20 @@ def run_standard_analysis(
     roc_filename = f"{title_prefix.lower().replace(' ', '_')}_roc_curve.png" if title_prefix else "roc_curve.png"
     plot_roc_curve(
         model, 
-        X_test, 
-        Y_test, 
+        X_all, 
+        Y_all, 
         threshold=pruning_threshold,
         title=roc_title,
         filename=roc_filename
     )
     
-    # Analyze feature importance (use TEST data for consistency with reported accuracy)
+    # Analyze feature importance (use full dataset for post-training analysis)
     print("\n" + "="*60)
     print("FEATURE IMPORTANCE ANALYSIS")
     print("="*60)
-    print("📊 Using TEST data for pruning analysis (consistent with reported accuracy)")
+    print("📊 Using full dataset for pruning analysis (post-training)")
     pruning_results = analyze_feature_importance(
-        model, X_test, Y_test, feature_names,
+        model, X_all, Y_all, feature_names,
         title_prefix=title_prefix,
         threshold=pruning_threshold,
         device=device
@@ -415,12 +416,12 @@ def run_standard_analysis(
     print("\n" + "="*60)
     print("FEATURE GROWING ANALYSIS")
     print("="*60)
-    print("📊 Using TEST data for growing analysis")
+    print("📊 Using full dataset for growing analysis (post-training)")
     from bacon.utils import analyze_feature_importance_with_growing
     growing_results = analyze_feature_importance_with_growing(
         model,
-        X_test,
-        Y_test,
+        X_all,
+        Y_all,
         feature_names,
         threshold=pruning_threshold,
         device=device

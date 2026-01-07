@@ -2,51 +2,27 @@
 import sys
 sys.path.insert(0, '../../')
 
-from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report, average_precision_score
-from bacon.utils import SigmoidScaler
-import pandas as pd
+import torch
 import numpy as np
+from dataset import prepare_data
 
 print("="*60)
 print("LOGISTIC REGRESSION - GALLSTONE CLASSIFICATION")
 print("="*60)
 
-# Load Gallstone dataset from local CSV
-df = pd.read_csv('c:/School/lsp/dataset-uci.csv')
+# Use the same data preparation as BACON (includes one-hot encoding)
+device = torch.device('cpu')
+X_train_torch, Y_train_torch, X_test_torch, Y_test_torch, feature_names = prepare_data(device)
 
-# Target is first column 'Gallstone Status': 0 = no gallstone, 1 = gallstone disease
-y_binary = df['Gallstone Status'].values
+# Convert from PyTorch tensors to numpy arrays for sklearn
+X_train = X_train_torch.cpu().numpy()
+y_train = Y_train_torch.cpu().numpy().ravel()
+X_test = X_test_torch.cpu().numpy()
+y_test = Y_test_torch.cpu().numpy().ravel()
 
-# Features are all other columns
-X = df.drop(columns=['Gallstone Status'])
-
-print(f"\nDataset shape: {X.shape}")
-print(f"Class distribution: {np.bincount(y_binary)}")
-
-df = pd.DataFrame(X)
-df['target'] = y_binary
-
-# Separate features and target
-X = df.drop(columns=['target'])
-y = df['target']
-
-feature_names = X.columns.tolist()
-
-# Train/test split (SAME RANDOM SEED AS BACON)
-X_train_df, X_test_df, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
-
-# Convert DataFrames to numpy arrays for scaling
-X_train = X_train_df.values.astype(np.float64)
-X_test = X_test_df.values.astype(np.float64)
-
-# Normalize features using SigmoidScaler (SAME AS BACON)
-scaler = SigmoidScaler(alpha=4, beta=-1)
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+print(f"\nFeatures after one-hot encoding: {X_train.shape[1]}")
 
 print("\n" + "="*60)
 print("TRAINING LOGISTIC REGRESSION")

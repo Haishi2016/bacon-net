@@ -25,127 +25,127 @@
     "sex"
   ],
   "locked_perm": [
-    1,
-    15,
     11,
+    15,
+    5,
+    1,
     9,
-    7,
-    4,
-    10,
+    14,
     13,
-    16,
     12,
-    6,
-    8,
+    7,
     3,
     17,
+    4,
+    6,
+    16,
+    8,
+    10,
     0,
-    5,
-    2,
     18,
-    14
+    2
   ],
   "features": [
     {
       "index": 0,
-      "original_name": "test_time",
-      "display_name": "NOT test_time",
-      "transformation": "negation"
+      "original_name": "Shimmer:APQ11",
+      "display_name": "Shimmer:APQ11",
+      "transformation": "identity"
     },
     {
       "index": 1,
       "original_name": "RPDE",
-      "display_name": "NOT RPDE",
-      "transformation": "negation"
+      "display_name": "RPDE",
+      "transformation": "identity"
     },
     {
       "index": 2,
-      "original_name": "Shimmer:APQ11",
-      "display_name": "NOT Shimmer:APQ11",
-      "transformation": "negation"
-    },
-    {
-      "index": 3,
-      "original_name": "Shimmer:APQ3",
-      "display_name": "NOT Shimmer:APQ3",
-      "transformation": "negation"
-    },
-    {
-      "index": 4,
-      "original_name": "Shimmer",
-      "display_name": "NOT Shimmer",
-      "transformation": "negation"
-    },
-    {
-      "index": 5,
-      "original_name": "Jitter:RAP",
-      "display_name": "NOT Jitter:RAP",
-      "transformation": "negation"
-    },
-    {
-      "index": 6,
-      "original_name": "Shimmer:APQ5",
-      "display_name": "NOT Shimmer:APQ5",
-      "transformation": "negation"
-    },
-    {
-      "index": 7,
-      "original_name": "NHR",
-      "display_name": "NOT NHR",
-      "transformation": "negation"
-    },
-    {
-      "index": 8,
-      "original_name": "DFA",
-      "display_name": "NOT DFA",
-      "transformation": "negation"
-    },
-    {
-      "index": 9,
-      "original_name": "Shimmer:DDA",
-      "display_name": "NOT Shimmer:DDA",
-      "transformation": "negation"
-    },
-    {
-      "index": 10,
-      "original_name": "Jitter:DDP",
-      "display_name": "Jitter:DDP",
-      "transformation": "identity"
-    },
-    {
-      "index": 11,
-      "original_name": "Shimmer(dB)",
-      "display_name": "NOT Shimmer(dB)",
-      "transformation": "negation"
-    },
-    {
-      "index": 12,
-      "original_name": "Jitter(Abs)",
-      "display_name": "Jitter(Abs)",
-      "transformation": "identity"
-    },
-    {
-      "index": 13,
-      "original_name": "PPE",
-      "display_name": "NOT PPE",
-      "transformation": "negation"
-    },
-    {
-      "index": 14,
-      "original_name": "age",
-      "display_name": "age",
-      "transformation": "identity"
-    },
-    {
-      "index": 15,
       "original_name": "Jitter:PPQ5",
       "display_name": "Jitter:PPQ5",
       "transformation": "identity"
     },
     {
+      "index": 3,
+      "original_name": "test_time",
+      "display_name": "test_time",
+      "transformation": "identity"
+    },
+    {
+      "index": 4,
+      "original_name": "Shimmer:APQ3",
+      "display_name": "Shimmer:APQ3",
+      "transformation": "identity"
+    },
+    {
+      "index": 5,
+      "original_name": "HNR",
+      "display_name": "HNR",
+      "transformation": "identity"
+    },
+    {
+      "index": 6,
+      "original_name": "NHR",
+      "display_name": "NHR",
+      "transformation": "identity"
+    },
+    {
+      "index": 7,
+      "original_name": "Shimmer:DDA",
+      "display_name": "Shimmer:DDA",
+      "transformation": "identity"
+    },
+    {
+      "index": 8,
+      "original_name": "Shimmer",
+      "display_name": "Shimmer",
+      "transformation": "identity"
+    },
+    {
+      "index": 9,
+      "original_name": "Jitter(Abs)",
+      "display_name": "Jitter(Abs)",
+      "transformation": "identity"
+    },
+    {
+      "index": 10,
+      "original_name": "PPE",
+      "display_name": "PPE",
+      "transformation": "identity"
+    },
+    {
+      "index": 11,
+      "original_name": "Jitter:RAP",
+      "display_name": "Jitter:RAP",
+      "transformation": "identity"
+    },
+    {
+      "index": 12,
+      "original_name": "Jitter:DDP",
+      "display_name": "Jitter:DDP",
+      "transformation": "identity"
+    },
+    {
+      "index": 13,
+      "original_name": "DFA",
+      "display_name": "DFA",
+      "transformation": "identity"
+    },
+    {
+      "index": 14,
+      "original_name": "Shimmer(dB)",
+      "display_name": "Shimmer(dB)",
+      "transformation": "identity"
+    },
+    {
+      "index": 15,
+      "original_name": "Shimmer:APQ5",
+      "display_name": "Shimmer:APQ5",
+      "transformation": "identity"
+    },
+    {
       "index": 16,
-      "original_name": "Jitter(%)",
-      "display_name": "Jitter(%)",
+      "original_name": "age",
+      "display_name": "age",
       "transformation": "identity"
     },
     {
@@ -156,8 +156,8 @@
     },
     {
       "index": 18,
-      "original_name": "HNR",
-      "display_name": "HNR",
+      "original_name": "Jitter(%)",
+      "display_name": "Jitter(%)",
       "transformation": "identity"
     }
   ],
@@ -165,29 +165,29 @@
     {
       "layer": 0,
       "aggregator_index": 0,
-      "andness": 1.235252,
+      "andness": 0.959518,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.500002,
+        "right": 0.499998
       },
       "left_input": {
         "type": "feature",
         "index": 0,
-        "name": "NOT test_time"
+        "name": "Shimmer:APQ11"
       },
       "right_input": {
         "type": "feature",
         "index": 1,
-        "name": "NOT RPDE"
+        "name": "RPDE"
       }
     },
     {
       "layer": 1,
       "aggregator_index": 1,
-      "andness": 0.666688,
+      "andness": 0.401675,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.499977,
+        "right": 0.500023
       },
       "left_input": {
         "type": "aggregator",
@@ -196,16 +196,16 @@
       "right_input": {
         "type": "feature",
         "index": 2,
-        "name": "NOT Shimmer:APQ11"
+        "name": "Jitter:PPQ5"
       }
     },
     {
       "layer": 2,
       "aggregator_index": 2,
-      "andness": 0.768674,
+      "andness": 0.384431,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.499995,
+        "right": 0.500005
       },
       "left_input": {
         "type": "aggregator",
@@ -214,16 +214,16 @@
       "right_input": {
         "type": "feature",
         "index": 3,
-        "name": "NOT Shimmer:APQ3"
+        "name": "test_time"
       }
     },
     {
       "layer": 3,
       "aggregator_index": 3,
-      "andness": 1.658114,
+      "andness": -0.273287,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.498389,
+        "right": 0.501611
       },
       "left_input": {
         "type": "aggregator",
@@ -232,16 +232,16 @@
       "right_input": {
         "type": "feature",
         "index": 4,
-        "name": "NOT Shimmer"
+        "name": "Shimmer:APQ3"
       }
     },
     {
       "layer": 4,
       "aggregator_index": 4,
-      "andness": -0.200028,
+      "andness": 0.17447,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.499937,
+        "right": 0.500063
       },
       "left_input": {
         "type": "aggregator",
@@ -250,16 +250,16 @@
       "right_input": {
         "type": "feature",
         "index": 5,
-        "name": "NOT Jitter:RAP"
+        "name": "HNR"
       }
     },
     {
       "layer": 5,
       "aggregator_index": 5,
-      "andness": 1.367197,
+      "andness": 1.117215,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.499955,
+        "right": 0.500045
       },
       "left_input": {
         "type": "aggregator",
@@ -268,16 +268,16 @@
       "right_input": {
         "type": "feature",
         "index": 6,
-        "name": "NOT Shimmer:APQ5"
+        "name": "NHR"
       }
     },
     {
       "layer": 6,
       "aggregator_index": 6,
-      "andness": 0.612127,
+      "andness": 0.703678,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.28256,
+        "right": 0.71744
       },
       "left_input": {
         "type": "aggregator",
@@ -286,16 +286,16 @@
       "right_input": {
         "type": "feature",
         "index": 7,
-        "name": "NOT NHR"
+        "name": "Shimmer:DDA"
       }
     },
     {
       "layer": 7,
       "aggregator_index": 7,
-      "andness": 1.374678,
+      "andness": 1.235135,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.253035,
+        "right": 0.746965
       },
       "left_input": {
         "type": "aggregator",
@@ -304,16 +304,16 @@
       "right_input": {
         "type": "feature",
         "index": 8,
-        "name": "NOT DFA"
+        "name": "Shimmer"
       }
     },
     {
       "layer": 8,
       "aggregator_index": 8,
-      "andness": 0.34155,
+      "andness": -0.220289,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.315952,
+        "right": 0.684048
       },
       "left_input": {
         "type": "aggregator",
@@ -322,16 +322,16 @@
       "right_input": {
         "type": "feature",
         "index": 9,
-        "name": "NOT Shimmer:DDA"
+        "name": "Jitter(Abs)"
       }
     },
     {
       "layer": 9,
       "aggregator_index": 9,
-      "andness": 0.508775,
+      "andness": 0.866978,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.250197,
+        "right": 0.749803
       },
       "left_input": {
         "type": "aggregator",
@@ -340,16 +340,16 @@
       "right_input": {
         "type": "feature",
         "index": 10,
-        "name": "Jitter:DDP"
+        "name": "PPE"
       }
     },
     {
       "layer": 10,
       "aggregator_index": 10,
-      "andness": 0.818221,
+      "andness": -0.473987,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.100882,
+        "right": 0.899118
       },
       "left_input": {
         "type": "aggregator",
@@ -358,16 +358,16 @@
       "right_input": {
         "type": "feature",
         "index": 11,
-        "name": "NOT Shimmer(dB)"
+        "name": "Jitter:RAP"
       }
     },
     {
       "layer": 11,
       "aggregator_index": 11,
-      "andness": -0.97759,
+      "andness": 0.743043,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.668719,
+        "right": 0.331281
       },
       "left_input": {
         "type": "aggregator",
@@ -376,16 +376,16 @@
       "right_input": {
         "type": "feature",
         "index": 12,
-        "name": "Jitter(Abs)"
+        "name": "Jitter:DDP"
       }
     },
     {
       "layer": 12,
       "aggregator_index": 12,
-      "andness": 1.230527,
+      "andness": -0.516955,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.516977,
+        "right": 0.483023
       },
       "left_input": {
         "type": "aggregator",
@@ -394,16 +394,16 @@
       "right_input": {
         "type": "feature",
         "index": 13,
-        "name": "NOT PPE"
+        "name": "DFA"
       }
     },
     {
       "layer": 13,
       "aggregator_index": 13,
-      "andness": 0.23104,
+      "andness": -0.655488,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.42249,
+        "right": 0.57751
       },
       "left_input": {
         "type": "aggregator",
@@ -412,16 +412,16 @@
       "right_input": {
         "type": "feature",
         "index": 14,
-        "name": "age"
+        "name": "Shimmer(dB)"
       }
     },
     {
       "layer": 14,
       "aggregator_index": 14,
-      "andness": 1.99739,
+      "andness": -0.005884,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.868292,
+        "right": 0.131708
       },
       "left_input": {
         "type": "aggregator",
@@ -430,16 +430,16 @@
       "right_input": {
         "type": "feature",
         "index": 15,
-        "name": "Jitter:PPQ5"
+        "name": "Shimmer:APQ5"
       }
     },
     {
       "layer": 15,
       "aggregator_index": 15,
-      "andness": 0.849409,
+      "andness": 1.94648,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.000138,
+        "right": 0.999862
       },
       "left_input": {
         "type": "aggregator",
@@ -448,16 +448,16 @@
       "right_input": {
         "type": "feature",
         "index": 16,
-        "name": "Jitter(%)"
+        "name": "age"
       }
     },
     {
       "layer": 16,
       "aggregator_index": 16,
-      "andness": 0.824641,
+      "andness": 0.245432,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.171634,
+        "right": 0.828366
       },
       "left_input": {
         "type": "aggregator",
@@ -472,10 +472,10 @@
     {
       "layer": 17,
       "aggregator_index": 17,
-      "andness": 0.44793,
+      "andness": 1.693337,
       "weights": {
-        "left": 0.5,
-        "right": 0.5
+        "left": 0.773673,
+        "right": 0.226327
       },
       "left_input": {
         "type": "aggregator",
@@ -484,7 +484,7 @@
       "right_input": {
         "type": "feature",
         "index": 18,
-        "name": "HNR"
+        "name": "Jitter(%)"
       }
     }
   ]

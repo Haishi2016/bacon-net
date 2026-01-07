@@ -18,7 +18,7 @@ X = diabetes.data.features
 y = diabetes.data.targets
 
 # Create dataframe with features of interest
-features_of_interest = ['Income', 'HvyAlcoholConsump', 'CholCheck', 'HighBP', 'HighChol']
+features_of_interest = ['Income', 'HvyAlcoholConsump', 'CholCheck', 'HighBP', 'HighChol', 'GenHlth', 'Age','BMI']
 df = X[features_of_interest].copy()
 
 print("\n" + "="*70)

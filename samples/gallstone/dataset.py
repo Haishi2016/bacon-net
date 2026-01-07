@@ -93,10 +93,30 @@ def prepare_data(device):
     # Features are all other columns
     X = df.drop(columns=['Gallstone Status'])
 
-    print(f"Dataset shape: {X.shape}")
+    print(f"Dataset shape before encoding: {X.shape}")
     print(f"Class distribution: {np.bincount(y_binary)}")
 
-    df = pd.DataFrame(X)
+    # Identify multi-class categorical columns that need one-hot encoding
+    # Binary columns (CAD, Hypothyroidism, etc.) are already 0/1 and don't need encoding
+    categorical_columns = [
+        'Comorbidity',  # 0,1,2,3 - multiple comorbidity levels
+        'Hepatic Fat Accumulation (HFA)'  # 0,1,2,3,4 - fat accumulation scale
+    ]
+    
+    # Verify which categorical columns exist
+    categorical_columns = [col for col in categorical_columns if col in X.columns]
+    
+    print(f"\nMulti-class categorical columns to one-hot encode: {len(categorical_columns)}")
+    for col in categorical_columns:
+        print(f"  {col}: {X[col].nunique()} unique values")
+    
+    # One-hot encode only multi-class categorical columns
+    X_encoded = pd.get_dummies(X, columns=categorical_columns, prefix=categorical_columns, drop_first=False)
+    
+    print(f"\nDataset shape after encoding: {X_encoded.shape}")
+    print(f"Added {X_encoded.shape[1] - X.shape[1]} new binary features from one-hot encoding")
+
+    df = pd.DataFrame(X_encoded)
     df['target'] = y_binary
 
     # Dataset Preview
@@ -110,39 +130,61 @@ def prepare_data(device):
         'Gender': 'Gender (0=female, 1=male)',
         'Height': 'Height in cm',
         'Weight': 'Weight in kg',
-        'BMI': 'Body Mass Index',
-        'TBW': 'Total body water (L)',
-        'ECW': 'Extracellular water (L)',
-        'ICW': 'Intracellular water (L)',
-        'Muscle_mass': 'Muscle mass (kg)',
-        'Fat_mass': 'Fat mass (kg)',
-        'Protein': 'Protein (kg)',
-        'VFA': 'Visceral fat area (cm²)',
-        'Hepatic_fat': 'Hepatic fat (%)',
+        'Body Mass Index (BMI)': 'Body Mass Index',
+        'Total Body Water (TBW)': 'Total body water (L)',
+        'Extracellular Water (ECW)': 'Extracellular water (L)',
+        'Intracellular Water (ICW)': 'Intracellular water (L)',
+        'Extracellular Fluid/Total Body Water (ECF/TBW)': 'ECF/TBW ratio',
+        'Total Body Fat Ratio (TBFR) (%)': 'Total body fat ratio (%)',
+        'Lean Mass (LM) (%)': 'Lean mass (%)',
+        'Body Protein Content (Protein) (%)': 'Body protein content (%)',
+        'Visceral Fat Rating (VFR)': 'Visceral fat rating',
+        'Bone Mass (BM)': 'Bone mass',
+        'Muscle Mass (MM)': 'Muscle mass (kg)',
+        'Obesity (%)': 'Obesity percentage',
+        'Total Fat Content (TFC)': 'Total fat content',
+        'Visceral Fat Area (VFA)': 'Visceral fat area (cm²)',
+        'Visceral Muscle Area (VMA) (Kg)': 'Visceral muscle area (kg)',
         'Glucose': 'Blood glucose (mg/dL)',
-        'Total_cholesterol': 'Total cholesterol (mg/dL)',
-        'HDL': 'High-density lipoprotein (mg/dL)',
-        'LDL': 'Low-density lipoprotein (mg/dL)',
-        'Triglycerides': 'Triglycerides (mg/dL)',
-        'AST': 'Aspartate aminotransferase (U/L)',
-        'ALT': 'Alanine aminotransferase (U/L)',
-        'ALP': 'Alkaline phosphatase (U/L)',
+        'Total Cholesterol (TC)': 'Total cholesterol (mg/dL)',
+        'High Density Lipoprotein (HDL)': 'HDL cholesterol (mg/dL)',
+        'Low Density Lipoprotein (LDL)': 'LDL cholesterol (mg/dL)',
+        'Triglyceride': 'Triglycerides (mg/dL)',
+        'Aspartat Aminotransferaz (AST)': 'AST enzyme (U/L)',
+        'Alanin Aminotransferaz (ALT)': 'ALT enzyme (U/L)',
+        'Alkaline Phosphatase (ALP)': 'ALP enzyme (U/L)',
         'Creatinine': 'Creatinine (mg/dL)',
-        'GFR': 'Glomerular filtration rate',
-        'CRP': 'C-reactive protein (mg/L)',
-        'Hemoglobin': 'Hemoglobin (g/dL)',
-        'Vitamin_D': 'Vitamin D (ng/mL)'
+        'Glomerular Filtration Rate (GFR)': 'GFR',
+        'C-Reactive Protein (CRP)': 'CRP (mg/L)',
+        'Hemoglobin (HGB)': 'Hemoglobin (g/dL)',
+        'Vitamin D': 'Vitamin D (ng/mL)',
+        'Comorbidity': 'Number of comorbidities',
+        'Coronary Artery Disease (CAD)': 'CAD status (0=no, 1=yes)',
+        'Hypothyroidism': 'Hypothyroidism status (0=no, 1=yes)',
+        'Hyperlipidemia': 'Hyperlipidemia status (0=no, 1=yes)',
+        'Diabetes Mellitus (DM)': 'Diabetes status (0=no, 1=yes)',
+        'Hepatic Fat Accumulation (HFA)': 'HFA level (0-4 scale)'
     }
 
     for col in df.columns[:-1]:  # Exclude target
-        desc = feature_descriptions.get(col, 'Bioimpedance/Laboratory measure')
-        print(f"  {col:20s} - {desc}")
+        # For one-hot encoded columns, show the original column description
+        base_col = col
+        for cat_col in categorical_columns:
+            if col.startswith(cat_col + '_'):
+                base_col = cat_col
+                break
+        desc = feature_descriptions.get(base_col, 'Bioimpedance/Laboratory measure')
+        if col.startswith(tuple([c + '_' for c in categorical_columns])):
+            # This is a one-hot encoded column
+            print(f"  {col:50s} - Binary indicator")
+        else:
+            print(f"  {col:50s} - {desc}")
 
-    print("\nFeature Statistics:")
-    print(df.describe().round(2))
+    print("\nFeature Statistics (first 10 columns):")
+    print(df.iloc[:, :10].describe().round(2))
 
-    print("\nSample Records (first 5):")
-    print(df.head())
+    print("\nSample Records (first 5 rows, first 10 columns):")
+    print(df.iloc[:5, :10])
 
     print("\nClass Distribution:")
     print(f"  No Gallstone (0): {(df['target'] == 0).sum()} people ({(df['target'] == 0).sum() / len(df) * 100:.1f}%)")
@@ -154,12 +196,14 @@ def prepare_data(device):
 
     feature_names = X.columns.tolist()
 
-    # Note: All features are already numeric, no one-hot encoding needed
+    # Feature type summary
     print("\n" + "="*60)
     print("FEATURE TYPES")
     print("="*60)
-    print("All features are already numeric (continuous)")
-    print("No one-hot encoding required")
+    print(f"Total features: {len(feature_names)}")
+    print(f"  Continuous features: {X_encoded.shape[1] - sum([col.startswith(tuple([c + '_' for c in categorical_columns])) for col in X.columns])}")
+    print(f"  One-hot encoded binary features: {sum([col.startswith(tuple([c + '_' for c in categorical_columns])) for col in X.columns])}")
+    print(f"    (from {len(categorical_columns)} categorical columns)")
 
     # Train/test split
     X_train_df, X_test_df, y_train_np, y_test_np = train_test_split(

@@ -47,7 +47,7 @@ bacon = create_bacon_model(
     use_class_weighting=True,
     permutation_initial_temperature=5.0,
     permutation_final_temperature=4.0,
-    weight_penalty_strength=1e-3
+    weight_penalty_strength=1e-4
 )
 
 # Train model
@@ -55,11 +55,11 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=1.0,
+    acceptance_threshold=0.7,
     hierarchical_epochs_per_attempt=4000,
     hierarchical_group_size=15,
     frozen_training_epochs=2000,
-    binary_threshold=0.5
+    binary_threshold=0.8
 )
 
 # Run standard analysis pipeline
@@ -69,5 +69,5 @@ run_standard_analysis(
     feature_names,
     title_prefix="Gallstone",
     device=device,
-    pruning_threshold=0.5
+    pruning_threshold=0.385
 )
