@@ -6,6 +6,74 @@ from sklearn.model_selection import train_test_split
 from ucimlrepo import fetch_ucirepo
 from bacon.utils import SigmoidScaler
 
+def balance_data(X_train, Y_train, device):
+    """Balance dataset by upsampling the minority class.
+    
+    Args:
+        X_train: Training features tensor
+        Y_train: Training labels tensor
+        device: PyTorch device
+    
+    Returns:
+        tuple: (X_train_balanced, Y_train_balanced)
+    """
+    print("\n" + "="*60)
+    print("BALANCING DATASET")
+    print("="*60)
+    
+    # Get class counts
+    Y_np = Y_train.cpu().numpy().flatten()
+    unique, counts = np.unique(Y_np, return_counts=True)
+    
+    print(f"\nOriginal class distribution:")
+    for label, count in zip(unique, counts):
+        print(f"  Class {int(label)}: {count} samples ({count/len(Y_np)*100:.1f}%)")
+    
+    # Find minority and majority classes
+    minority_class = unique[np.argmin(counts)]
+    majority_class = unique[np.argmax(counts)]
+    minority_count = counts.min()
+    majority_count = counts.max()
+    
+    print(f"\nMinority class: {int(minority_class)} ({minority_count} samples)")
+    print(f"Majority class: {int(majority_class)} ({majority_count} samples)")
+    
+    # Separate classes
+    minority_mask = Y_np == minority_class
+    majority_mask = Y_np == majority_class
+    
+    X_minority = X_train[minority_mask]
+    Y_minority = Y_train[minority_mask]
+    X_majority = X_train[majority_mask]
+    Y_majority = Y_train[majority_mask]
+    
+    # Upsample minority class
+    n_samples_needed = majority_count - minority_count
+    indices = torch.randint(0, len(X_minority), (n_samples_needed,))
+    
+    X_minority_upsampled = X_minority[indices]
+    Y_minority_upsampled = Y_minority[indices]
+    
+    # Combine
+    X_balanced = torch.cat([X_majority, X_minority, X_minority_upsampled], dim=0)
+    Y_balanced = torch.cat([Y_majority, Y_minority, Y_minority_upsampled], dim=0)
+    
+    # Shuffle
+    shuffle_idx = torch.randperm(len(X_balanced))
+    X_balanced = X_balanced[shuffle_idx]
+    Y_balanced = Y_balanced[shuffle_idx]
+    
+    print(f"\nBalanced dataset:")
+    Y_balanced_np = Y_balanced.cpu().numpy().flatten()
+    unique_balanced, counts_balanced = np.unique(Y_balanced_np, return_counts=True)
+    for label, count in zip(unique_balanced, counts_balanced):
+        print(f"  Class {int(label)}: {count} samples ({count/len(Y_balanced_np)*100:.1f}%)")
+    
+    print(f"\nTotal samples: {len(Y_np)} → {len(Y_balanced_np)}")
+    print("="*60)
+    
+    return X_balanced, Y_balanced
+
 def _prepare_data_common():
     """Common data preparation logic for both sklearn and PyTorch models.
     
@@ -31,6 +99,31 @@ def _prepare_data_common():
     df = pd.DataFrame(X)
     df['target'] = y_binary
     
+    # Convert binary features from (1,2) to (0,1)
+    # These features use 1=no, 2=yes encoding, we want 0=no, 1=yes
+    binary_features = [
+        'Sex',           # 1=male, 2=female → 0=male, 1=female
+        'Steroid',       # 1=no, 2=yes → 0=no, 1=yes
+        'Antivirals',    # 1=no, 2=yes → 0=no, 1=yes
+        'Fatigue',       # 1=no, 2=yes → 0=no, 1=yes
+        'Malaise',       # 1=no, 2=yes → 0=no, 1=yes
+        'Anorexia',      # 1=no, 2=yes → 0=no, 1=yes
+        'Liver Big',     # 1=no, 2=yes → 0=no, 1=yes
+        'Liver Firm',    # 1=no, 2=yes → 0=no, 1=yes
+        'Spleen Palpable', # 1=no, 2=yes → 0=no, 1=yes
+        'Spiders',       # 1=no, 2=yes → 0=no, 1=yes
+        'Ascites',       # 1=no, 2=yes → 0=no, 1=yes
+        'Varices',       # 1=no, 2=yes → 0=no, 1=yes
+        'Histology'      # 1=no, 2=yes → 0=no, 1=yes
+    ]
+    
+    print(f"\nConverting binary features from (1,2) to (0,1) encoding...")
+    for col in binary_features:
+        if col in df.columns:
+            # Subtract 1 to convert: 1→0, 2→1
+            df[col] = df[col] - 1
+            print(f"  {col}: converted")
+    
     # Dataset Preview
     print("\n" + "="*60)
     print("DATASET PREVIEW - Hepatitis")
@@ -38,25 +131,25 @@ def _prepare_data_common():
     
     print("\nFeature Names and Descriptions:")
     feature_descriptions = {
-        'AGE': 'Age of patient (years)',
-        'SEX': 'Sex (1=male, 2=female)',
-        'STEROID': 'Steroid treatment (1=no, 2=yes)',
-        'ANTIVIRALS': 'Antiviral treatment (1=no, 2=yes)',
-        'FATIGUE': 'Fatigue symptom (1=no, 2=yes)',
-        'MALAISE': 'Malaise symptom (1=no, 2=yes)',
-        'ANOREXIA': 'Anorexia symptom (1=no, 2=yes)',
-        'LIVER BIG': 'Liver big (1=no, 2=yes)',
-        'LIVER FIRM': 'Liver firm (1=no, 2=yes)',
-        'SPLEEN PALPABLE': 'Spleen palpable (1=no, 2=yes)',
-        'SPIDERS': 'Spider angiomas (1=no, 2=yes)',
-        'ASCITES': 'Ascites (1=no, 2=yes)',
-        'VARICES': 'Esophageal varices (1=no, 2=yes)',
-        'BILIRUBIN': 'Serum bilirubin (mg/dL)',
-        'ALK PHOSPHATE': 'Alkaline phosphatase (U/L)',
-        'SGOT': 'Serum glutamic-oxaloacetic transaminase (U/L)',
-        'ALBUMIN': 'Serum albumin (g/dL)',
-        'PROTIME': 'Prothrombin time (seconds)',
-        'HISTOLOGY': 'Liver histology (1=no, 2=yes)'
+        'Age': 'Age of patient (years)',
+        'Sex': 'Sex (0=male, 1=female)',
+        'Steroid': 'Steroid treatment (0=no, 1=yes)',
+        'Antivirals': 'Antiviral treatment (0=no, 1=yes)',
+        'Fatigue': 'Fatigue symptom (0=no, 1=yes)',
+        'Malaise': 'Malaise symptom (0=no, 1=yes)',
+        'Anorexia': 'Anorexia symptom (0=no, 1=yes)',
+        'Liver Big': 'Liver big (0=no, 1=yes)',
+        'Liver Firm': 'Liver firm (0=no, 1=yes)',
+        'Spleen Palpable': 'Spleen palpable (0=no, 1=yes)',
+        'Spiders': 'Spider angiomas (0=no, 1=yes)',
+        'Ascites': 'Ascites (0=no, 1=yes)',
+        'Varices': 'Esophageal varices (0=no, 1=yes)',
+        'Bilirubin': 'Serum bilirubin (mg/dL)',
+        'Alk Phosphate': 'Alkaline phosphatase (U/L)',
+        'Sgot': 'Serum glutamic-oxaloacetic transaminase (U/L)',
+        'Albumin': 'Serum albumin (g/dL)',
+        'Protime': 'Prothrombin time (seconds)',
+        'Histology': 'Liver histology (0=no, 1=yes)'
     }
     
     for col in df.columns[:-1]:  # Exclude target
@@ -72,7 +165,7 @@ def _prepare_data_common():
     # Fill missing values with median for numerical columns
     for col in df.columns[:-1]:
         if df[col].isnull().any():
-            df[col].fillna(df[col].median(), inplace=True)
+            df[col].fillna(0, inplace=True)
     
     print("\nFeature Statistics (after filling missing values):")
     print(df.drop(columns=['target']).describe().round(2))

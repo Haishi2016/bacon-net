@@ -5,7 +5,7 @@ sys.path.insert(0, '../')
 
 import torch
 import logging
-from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation
+from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation, ValleyTransformation, StepUpTransformation, StepDownTransformation
 from dataset import prepare_data, balance_data
 from common import create_bacon_model, train_bacon_model, run_standard_analysis
 
@@ -25,7 +25,11 @@ print(f"\n📊 Model will use {num_features} input features")
 # Configure transformations
 trans = [
     IdentityTransformation(1), 
-    NegationTransformation(1)
+    NegationTransformation(1),
+    PeakTransformation(1),
+    ValleyTransformation(1),
+    StepUpTransformation(1),
+    StepDownTransformation(1)
 ]
 
 # Create model with custom configuration
@@ -39,7 +43,7 @@ bacon = create_bacon_model(
     use_class_weighting=True,
     loss_amplifier=1000,
     permutation_initial_temperature=5.0,
-    permutation_final_temperature=4.0,
+    permutation_final_temperature=0.5,
     weight_penalty_strength=1e-4
 )
 
@@ -50,7 +54,7 @@ train_bacon_model(
     attempts=15,
     acceptance_threshold=1.0,
     use_hierarchical_permutation=True,
-    hierarchical_bleed_ratio=0.5,
+    hierarchical_bleed_ratio=0.3,
     hierarchical_epochs_per_attempt=3000,
     hierarchical_group_size=6,
     loss_weight_perm_sparsity=5.0,
@@ -58,12 +62,14 @@ train_bacon_model(
     freeze_confidence_threshold=0.92,
     freeze_min_confidence=0.85,
     frozen_training_epochs=1000,
-    max_epochs=5000
+    max_epochs=5000,
+    binary_threshold=0.3
 )
 
 # Run standard analysis
 run_standard_analysis(
     bacon,
     X_train, Y_train, X_test, Y_test,
-    feature_names
+    feature_names,
+    pruning_threshold=0.3
 )
