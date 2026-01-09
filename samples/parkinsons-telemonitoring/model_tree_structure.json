@@ -25,128 +25,152 @@
     "sex"
   ],
   "locked_perm": [
-    6,
-    12,
-    14,
-    11,
-    9,
-    7,
-    2,
-    10,
-    15,
     13,
-    3,
     5,
-    18,
+    12,
     4,
-    16,
-    1,
+    10,
     8,
+    6,
+    2,
+    16,
+    3,
+    1,
+    7,
+    11,
+    14,
+    15,
+    9,
+    17,
     0,
-    17
+    18
   ],
   "features": [
     {
       "index": 0,
-      "original_name": "Jitter:DDP",
-      "display_name": "NOT Jitter:DDP",
-      "transformation": "negation"
+      "original_name": "NHR",
+      "display_name": "NHR",
+      "transformation": "stepdown",
+      "transformation_params": {
+        "threshold": "0.040"
+      }
     },
     {
       "index": 1,
+      "original_name": "Jitter:PPQ5",
+      "display_name": "Jitter:PPQ5",
+      "transformation": "stepdown",
+      "transformation_params": {
+        "threshold": "0.040"
+      }
+    },
+    {
+      "index": 2,
       "original_name": "Shimmer:DDA",
       "display_name": "NOT Shimmer:DDA",
       "transformation": "negation"
     },
     {
-      "index": 2,
-      "original_name": "HNR",
-      "display_name": "NOT HNR",
-      "transformation": "negation"
-    },
-    {
       "index": 3,
-      "original_name": "Shimmer:APQ11",
-      "display_name": "NOT Shimmer:APQ11",
-      "transformation": "negation"
-    },
-    {
-      "index": 4,
-      "original_name": "Shimmer:APQ3",
-      "display_name": "NOT Shimmer:APQ3",
-      "transformation": "negation"
-    },
-    {
-      "index": 5,
-      "original_name": "Shimmer",
-      "display_name": "NOT Shimmer",
-      "transformation": "negation"
-    },
-    {
-      "index": 6,
-      "original_name": "Jitter(%)",
-      "display_name": "NOT Jitter(%)",
-      "transformation": "negation"
-    },
-    {
-      "index": 7,
-      "original_name": "Shimmer:APQ5",
-      "display_name": "NOT Shimmer:APQ5",
-      "transformation": "negation"
-    },
-    {
-      "index": 8,
-      "original_name": "RPDE",
-      "display_name": "NOT RPDE",
-      "transformation": "negation"
-    },
-    {
-      "index": 9,
-      "original_name": "NHR",
-      "display_name": "NOT NHR",
-      "transformation": "negation"
-    },
-    {
-      "index": 10,
-      "original_name": "Jitter(Abs)",
-      "display_name": "NOT Jitter(Abs)",
-      "transformation": "negation"
-    },
-    {
-      "index": 11,
-      "original_name": "Jitter:PPQ5",
-      "display_name": "NOT Jitter:PPQ5",
-      "transformation": "negation"
-    },
-    {
-      "index": 12,
-      "original_name": "sex",
-      "display_name": "NOT sex",
-      "transformation": "negation"
-    },
-    {
-      "index": 13,
       "original_name": "Jitter:RAP",
       "display_name": "NOT Jitter:RAP",
       "transformation": "negation"
     },
     {
-      "index": 14,
-      "original_name": "DFA",
-      "display_name": "NOT DFA",
+      "index": 4,
+      "original_name": "Shimmer:APQ5",
+      "display_name": "NOT Shimmer:APQ5",
       "transformation": "negation"
     },
     {
-      "index": 15,
+      "index": 5,
+      "original_name": "Shimmer(dB)",
+      "display_name": "NOT Shimmer(dB)",
+      "transformation": "negation"
+    },
+    {
+      "index": 6,
+      "original_name": "Jitter:DDP",
+      "display_name": "NOT Jitter:DDP",
+      "transformation": "negation"
+    },
+    {
+      "index": 7,
+      "original_name": "Jitter(%)",
+      "display_name": "VALLEY(Jitter(%), t=0.727)",
+      "transformation": "valley",
+      "transformation_params": {
+        "valley_location": "0.727"
+      }
+    },
+    {
+      "index": 8,
+      "original_name": "DFA",
+      "display_name": "VALLEY(DFA, t=0.727)",
+      "transformation": "valley",
+      "transformation_params": {
+        "valley_location": "0.727"
+      }
+    },
+    {
+      "index": 9,
+      "original_name": "Jitter(Abs)",
+      "display_name": "VALLEY(Jitter(Abs), t=0.727)",
+      "transformation": "valley",
+      "transformation_params": {
+        "valley_location": "0.727"
+      }
+    },
+    {
+      "index": 10,
       "original_name": "test_time",
-      "display_name": "test_time",
-      "transformation": "identity"
+      "display_name": "VALLEY(test_time, t=0.727)",
+      "transformation": "valley",
+      "transformation_params": {
+        "valley_location": "0.727"
+      }
+    },
+    {
+      "index": 11,
+      "original_name": "Shimmer",
+      "display_name": "NOT Shimmer",
+      "transformation": "negation"
+    },
+    {
+      "index": 12,
+      "original_name": "Shimmer:APQ11",
+      "display_name": "NOT Shimmer:APQ11",
+      "transformation": "negation"
+    },
+    {
+      "index": 13,
+      "original_name": "HNR",
+      "display_name": "NOT HNR",
+      "transformation": "negation"
+    },
+    {
+      "index": 14,
+      "original_name": "RPDE",
+      "display_name": "RPDE",
+      "transformation": "stepup",
+      "transformation_params": {
+        "threshold": "0.020"
+      }
+    },
+    {
+      "index": 15,
+      "original_name": "Shimmer:APQ3",
+      "display_name": "NOT Shimmer:APQ3",
+      "transformation": "negation"
     },
     {
       "index": 16,
-      "original_name": "Shimmer(dB)",
-      "display_name": "Shimmer(dB)",
-      "transformation": "identity"
+      "original_name": "PPE",
+      "display_name": "PEAK(PPE, t=0.000)",
+      "transformation": "peak",
+      "transformation_params": {
+        "peak_location": "0.000"
+      }
     },
     {
       "index": 17,
@@ -156,16 +180,19 @@
     },
     {
       "index": 18,
-      "original_name": "PPE",
-      "display_name": "PPE",
-      "transformation": "identity"
+      "original_name": "sex",
+      "display_name": "VALLEY(sex, t=0.727)",
+      "transformation": "valley",
+      "transformation_params": {
+        "valley_location": "0.727"
+      }
     }
   ],
   "nodes": [
     {
       "layer": 0,
       "aggregator_index": 0,
-      "andness": 0.379073,
+      "andness": 0.708861,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -173,18 +200,18 @@
       "left_input": {
         "type": "feature",
         "index": 0,
-        "name": "NOT Jitter:DDP"
+        "name": "NHR"
       },
       "right_input": {
         "type": "feature",
         "index": 1,
-        "name": "NOT Shimmer:DDA"
+        "name": "Jitter:PPQ5"
       }
     },
     {
       "layer": 1,
       "aggregator_index": 1,
-      "andness": 0.399051,
+      "andness": 0.354718,
       "weights": {
         "left": 0.5,
         "right": 0.5
@@ -196,16 +223,16 @@
       "right_input": {
         "type": "feature",
         "index": 2,
-        "name": "NOT HNR"
+        "name": "NOT Shimmer:DDA"
       }
     },
     {
       "layer": 2,
       "aggregator_index": 2,
-      "andness": 1.119901,
+      "andness": 1.35167,
       "weights": {
-        "left": 0.471323,
-        "right": 0.528677
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -214,16 +241,16 @@
       "right_input": {
         "type": "feature",
         "index": 3,
-        "name": "NOT Shimmer:APQ11"
+        "name": "NOT Jitter:RAP"
       }
     },
     {
       "layer": 3,
       "aggregator_index": 3,
-      "andness": 0.695463,
+      "andness": 1.20783,
       "weights": {
-        "left": 0.498956,
-        "right": 0.501044
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -232,16 +259,16 @@
       "right_input": {
         "type": "feature",
         "index": 4,
-        "name": "NOT Shimmer:APQ3"
+        "name": "NOT Shimmer:APQ5"
       }
     },
     {
       "layer": 4,
       "aggregator_index": 4,
-      "andness": 1.562732,
+      "andness": 1.775262,
       "weights": {
-        "left": 0.497086,
-        "right": 0.502914
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -250,16 +277,16 @@
       "right_input": {
         "type": "feature",
         "index": 5,
-        "name": "NOT Shimmer"
+        "name": "NOT Shimmer(dB)"
       }
     },
     {
       "layer": 5,
       "aggregator_index": 5,
-      "andness": 0.076222,
+      "andness": 1.427685,
       "weights": {
-        "left": 0.564184,
-        "right": 0.435816
+        "left": 0.500003,
+        "right": 0.499997
       },
       "left_input": {
         "type": "aggregator",
@@ -268,16 +295,16 @@
       "right_input": {
         "type": "feature",
         "index": 6,
-        "name": "NOT Jitter(%)"
+        "name": "NOT Jitter:DDP"
       }
     },
     {
       "layer": 6,
       "aggregator_index": 6,
-      "andness": 1.377562,
+      "andness": 0.492106,
       "weights": {
-        "left": 0.549479,
-        "right": 0.450521
+        "left": 0.531566,
+        "right": 0.468434
       },
       "left_input": {
         "type": "aggregator",
@@ -286,16 +313,16 @@
       "right_input": {
         "type": "feature",
         "index": 7,
-        "name": "NOT Shimmer:APQ5"
+        "name": "VALLEY(Jitter(%), t=0.727)"
       }
     },
     {
       "layer": 7,
       "aggregator_index": 7,
-      "andness": 1.472779,
+      "andness": 1.326293,
       "weights": {
-        "left": 0.548105,
-        "right": 0.451895
+        "left": 0.5,
+        "right": 0.5
       },
       "left_input": {
         "type": "aggregator",
@@ -304,16 +331,16 @@
       "right_input": {
         "type": "feature",
         "index": 8,
-        "name": "NOT RPDE"
+        "name": "VALLEY(DFA, t=0.727)"
       }
     },
     {
       "layer": 8,
       "aggregator_index": 8,
-      "andness": 1.718769,
+      "andness": 1.524988,
       "weights": {
-        "left": 0.768018,
-        "right": 0.231982
+        "left": 0.590138,
+        "right": 0.409862
       },
       "left_input": {
         "type": "aggregator",
@@ -322,16 +349,16 @@
       "right_input": {
         "type": "feature",
         "index": 9,
-        "name": "NOT NHR"
+        "name": "VALLEY(Jitter(Abs), t=0.727)"
       }
     },
     {
       "layer": 9,
       "aggregator_index": 9,
-      "andness": 1.480045,
+      "andness": 1.788293,
       "weights": {
-        "left": 0.847144,
-        "right": 0.152856
+        "left": 0.784582,
+        "right": 0.215418
       },
       "left_input": {
         "type": "aggregator",
@@ -340,16 +367,16 @@
       "right_input": {
         "type": "feature",
         "index": 10,
-        "name": "NOT Jitter(Abs)"
+        "name": "VALLEY(test_time, t=0.727)"
       }
     },
     {
       "layer": 10,
       "aggregator_index": 10,
-      "andness": 1.361061,
+      "andness": 0.226475,
       "weights": {
-        "left": 0.668986,
-        "right": 0.331013
+        "left": 0.827901,
+        "right": 0.172099
       },
       "left_input": {
         "type": "aggregator",
@@ -358,16 +385,16 @@
       "right_input": {
         "type": "feature",
         "index": 11,
-        "name": "NOT Jitter:PPQ5"
+        "name": "NOT Shimmer"
       }
     },
     {
       "layer": 11,
       "aggregator_index": 11,
-      "andness": 1.440343,
+      "andness": 1.948835,
       "weights": {
-        "left": 0.708195,
-        "right": 0.291805
+        "left": 0.426066,
+        "right": 0.573934
       },
       "left_input": {
         "type": "aggregator",
@@ -376,16 +403,16 @@
       "right_input": {
         "type": "feature",
         "index": 12,
-        "name": "NOT sex"
+        "name": "NOT Shimmer:APQ11"
       }
     },
     {
       "layer": 12,
       "aggregator_index": 12,
-      "andness": 1.655306,
+      "andness": -0.996636,
       "weights": {
-        "left": 0.787514,
-        "right": 0.212486
+        "left": 0.003575,
+        "right": 0.996425
       },
       "left_input": {
         "type": "aggregator",
@@ -394,16 +421,16 @@
       "right_input": {
         "type": "feature",
         "index": 13,
-        "name": "NOT Jitter:RAP"
+        "name": "NOT HNR"
       }
     },
     {
       "layer": 13,
       "aggregator_index": 13,
-      "andness": 0.442481,
+      "andness": 1.467932,
       "weights": {
-        "left": 0.561945,
-        "right": 0.438055
+        "left": 0.985631,
+        "right": 0.014369
       },
       "left_input": {
         "type": "aggregator",
@@ -412,16 +439,16 @@
       "right_input": {
         "type": "feature",
         "index": 14,
-        "name": "NOT DFA"
+        "name": "RPDE"
       }
     },
     {
       "layer": 14,
       "aggregator_index": 14,
-      "andness": 1.797403,
+      "andness": 1.361165,
       "weights": {
-        "left": 0.096465,
-        "right": 0.903535
+        "left": 0.157781,
+        "right": 0.842219
       },
       "left_input": {
         "type": "aggregator",
@@ -430,16 +457,16 @@
       "right_input": {
         "type": "feature",
         "index": 15,
-        "name": "test_time"
+        "name": "NOT Shimmer:APQ3"
       }
     },
     {
       "layer": 15,
       "aggregator_index": 15,
-      "andness": 0.512113,
+      "andness": -0.662635,
       "weights": {
-        "left": 0.872678,
-        "right": 0.127321
+        "left": 0.941468,
+        "right": 0.058532
       },
       "left_input": {
         "type": "aggregator",
@@ -448,16 +475,16 @@
       "right_input": {
         "type": "feature",
         "index": 16,
-        "name": "Shimmer(dB)"
+        "name": "PEAK(PPE, t=0.000)"
       }
     },
     {
       "layer": 16,
       "aggregator_index": 16,
-      "andness": 0.254746,
+      "andness": 0.11462,
       "weights": {
-        "left": 0.9209,
-        "right": 0.0791
+        "left": 0.908296,
+        "right": 0.091704
       },
       "left_input": {
         "type": "aggregator",
@@ -472,10 +499,10 @@
     {
       "layer": 17,
       "aggregator_index": 17,
-      "andness": 0.673345,
+      "andness": -0.201059,
       "weights": {
-        "left": 0.885053,
-        "right": 0.114947
+        "left": 0.346531,
+        "right": 0.653469
       },
       "left_input": {
         "type": "aggregator",
@@ -484,7 +511,7 @@
       "right_input": {
         "type": "feature",
         "index": 18,
-        "name": "PPE"
+        "name": "VALLEY(sex, t=0.727)"
       }
     }
   ]
