@@ -75,7 +75,7 @@ def balance_data(X_train, Y_train, device):
     return X_balanced, Y_balanced
 
 def prepare_data(device):
-    """Prepare gallstone dataset for training.
+    """Prepare gallstone dataset for training with normalized Comorbidity and HFA.
     
     Args:
         device: torch.device to place tensors on
@@ -93,31 +93,17 @@ def prepare_data(device):
     # Features are all other columns
     X = df.drop(columns=['Gallstone Status'])
 
-    print(f"Dataset shape before encoding: {X.shape}")
+    print(f"Dataset shape: {X.shape}")
     print(f"Class distribution: {np.bincount(y_binary)}")
 
-    # Identify multi-class categorical columns that need one-hot encoding
-    # Binary columns (CAD, Hypothyroidism, etc.) are already 0/1 and don't need encoding
-    categorical_columns = [
-        'Comorbidity',  # 0,1,2,3 - multiple comorbidity levels
-        'Hepatic Fat Accumulation (HFA)'  # 0,1,2,3,4 - fat accumulation scale
-    ]
-    
-    # Verify which categorical columns exist
-    categorical_columns = [col for col in categorical_columns if col in X.columns]
-    
-    print(f"\nMulti-class categorical columns to one-hot encode: {len(categorical_columns)}")
-    for col in categorical_columns:
-        print(f"  {col}: {X[col].nunique()} unique values")
-    
-    # One-hot encode only multi-class categorical columns
-    X_encoded = pd.get_dummies(X, columns=categorical_columns, prefix=categorical_columns, drop_first=False)
-    
-    print(f"\nDataset shape after encoding: {X_encoded.shape}")
-    print(f"Added {X_encoded.shape[1] - X.shape[1]} new binary features from one-hot encoding")
+    # Note: Comorbidity and HFA are kept as continuous features and will be normalized
+    # No one-hot encoding is performed
+    print("\nKeeping Comorbidity and HFA as continuous features (will be normalized)")
+    print(f"  Comorbidity: {X['Comorbidity'].nunique()} unique values - {sorted(X['Comorbidity'].unique())}")
+    print(f"  Hepatic Fat Accumulation (HFA): {X['Hepatic Fat Accumulation (HFA)'].nunique()} unique values - {sorted(X['Hepatic Fat Accumulation (HFA)'].unique())}")
 
-    df = pd.DataFrame(X_encoded)
-    df['target'] = 1-y_binary
+    df = pd.DataFrame(X)
+    df['target'] = y_binary
 
     # Dataset Preview
     print("\n" + "="*60)
@@ -158,27 +144,17 @@ def prepare_data(device):
         'C-Reactive Protein (CRP)': 'CRP (mg/L)',
         'Hemoglobin (HGB)': 'Hemoglobin (g/dL)',
         'Vitamin D': 'Vitamin D (ng/mL)',
-        'Comorbidity': 'Number of comorbidities',
+        'Comorbidity': 'Number of comorbidities (normalized)',
         'Coronary Artery Disease (CAD)': 'CAD status (0=no, 1=yes)',
         'Hypothyroidism': 'Hypothyroidism status (0=no, 1=yes)',
         'Hyperlipidemia': 'Hyperlipidemia status (0=no, 1=yes)',
         'Diabetes Mellitus (DM)': 'Diabetes status (0=no, 1=yes)',
-        'Hepatic Fat Accumulation (HFA)': 'HFA level (0-4 scale)'
+        'Hepatic Fat Accumulation (HFA)': 'HFA level (normalized from 0-4 scale)'
     }
 
     for col in df.columns[:-1]:  # Exclude target
-        # For one-hot encoded columns, show the original column description
-        base_col = col
-        for cat_col in categorical_columns:
-            if col.startswith(cat_col + '_'):
-                base_col = cat_col
-                break
-        desc = feature_descriptions.get(base_col, 'Bioimpedance/Laboratory measure')
-        if col.startswith(tuple([c + '_' for c in categorical_columns])):
-            # This is a one-hot encoded column
-            print(f"  {col:50s} - Binary indicator")
-        else:
-            print(f"  {col:50s} - {desc}")
+        desc = feature_descriptions.get(col, 'Bioimpedance/Laboratory measure')
+        print(f"  {col:50s} - {desc}")
 
     print("\nFeature Statistics (first 10 columns):")
     print(df.iloc[:, :10].describe().round(2))
@@ -201,9 +177,7 @@ def prepare_data(device):
     print("FEATURE TYPES")
     print("="*60)
     print(f"Total features: {len(feature_names)}")
-    print(f"  Continuous features: {X_encoded.shape[1] - sum([col.startswith(tuple([c + '_' for c in categorical_columns])) for col in X.columns])}")
-    print(f"  One-hot encoded binary features: {sum([col.startswith(tuple([c + '_' for c in categorical_columns])) for col in X.columns])}")
-    print(f"    (from {len(categorical_columns)} categorical columns)")
+    print(f"  All features will be normalized (including Comorbidity and HFA)")
 
     # Train/test split
     X_train_df, X_test_df, y_train_np, y_test_np = train_test_split(
@@ -218,7 +192,7 @@ def prepare_data(device):
     print(f"Test data shape: {X_test_np.shape}, dtype: {X_test_np.dtype}")
 
     # Normalize features using SigmoidScaler
-    scaler = SigmoidScaler(alpha=4, beta=0)
+    scaler = SigmoidScaler(alpha=4, beta=-1)
     X_train_np = scaler.fit_transform(X_train_np)
     X_test_np = scaler.transform(X_test_np)
 

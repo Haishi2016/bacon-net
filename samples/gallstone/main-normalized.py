@@ -1,34 +1,38 @@
 # Note: required to import baconNet from local folder
 import sys
 sys.path.insert(0, '../../')
-sys.path.insert(0, '../')
+sys.path.insert(0, '../')  # For common module
 
 import torch
 import logging
-from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation, ValleyTransformation, StepUpTransformation, StepDownTransformation
-from dataset import prepare_data, balance_data
+from dataset_normalized import prepare_data, balance_data
 from common import create_bacon_model, train_bacon_model, run_standard_analysis
+from bacon.transformationLayer import (
+    IdentityTransformation, NegationTransformation, 
+    PeakTransformation, ValleyTransformation,
+    StepUpTransformation, StepDownTransformation
+)
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Prepare data (using motor_UPDRS as target)
-X_train, Y_train, X_test, Y_test, feature_names, _ = prepare_data(device, target='motor_UPDRS')
-num_features = len(feature_names)
-
+# Prepare data
+X_train, Y_train, X_test, Y_test, feature_names = prepare_data(device)
 
 # Balance training data by upsampling minority class
 X_train, Y_train = balance_data(X_train, Y_train, device)
 
+# Model configuration
+num_features = len(feature_names)
 print(f"\n📊 Model will use {num_features} input features")
 
-# Configure transformations
+# Custom transformations for gallstone
 trans = [
     IdentityTransformation(1), 
-    NegationTransformation(1),
-    # PeakTransformation(1),
-    # ValleyTransformation(1),
-    # StepUpTransformation(1),
+    NegationTransformation(1), 
+    # PeakTransformation(1), 
+    # ValleyTransformation(1), 
+    # StepUpTransformation(1), 
     # StepDownTransformation(1)
 ]
 
@@ -41,28 +45,31 @@ bacon = create_bacon_model(
     use_transformation_layer=True,
     weight_normalization='softmax',
     use_class_weighting=True,
-    loss_amplifier=1000,
     permutation_initial_temperature=5.0,
-    permutation_final_temperature=4.0,
-    weight_penalty_strength=1e-3
+    permutation_final_temperature=0.5,
+    weight_penalty_strength=1e-3  # Increased from 1e-4 for stronger regularization
 )
 
 # Train model
 train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
-    attempts=15,
-    acceptance_threshold=1.0,
+    attempts=100,
     use_hierarchical_permutation=True,
+    acceptance_threshold=1.0,
+    hierarchical_epochs_per_attempt=4000,
     hierarchical_bleed_ratio=0.5,
-    hierarchical_group_size=8,
-    binary_threshold=0.5
+    hierarchical_group_size=15,
+    frozen_training_epochs=500,  # Reduced from 2000 to prevent overfitting
+    binary_threshold=0.625
 )
 
-# Run standard analysis
+# Run standard analysis pipeline
 run_standard_analysis(
     bacon,
     X_train, Y_train, X_test, Y_test,
     feature_names,
-    pruning_threshold=0.5
+    title_prefix="Gallstone",
+    device=device,
+    pruning_threshold=0.625
 )
