@@ -409,7 +409,8 @@ def run_standard_analysis(
         model, X_all, Y_all, feature_names,
         title_prefix=title_prefix,
         threshold=pruning_threshold,
-        device=device
+        device=device,
+        baseline_enabled=False
     )
     
     # Perform growing analysis (incremental feature addition)

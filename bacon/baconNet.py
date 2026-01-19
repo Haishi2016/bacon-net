@@ -510,7 +510,7 @@ class baconNet(nn.Module):
                                      early_stop_threshold, perm_final_temp,
                                      has_converged_before_freeze, best_confidence,
                                      epochs_without_confidence_improvement, confidence_plateau_patience,
-                                     freeze_confidence_warning_shown, current_loss):
+                                     freeze_confidence_warning_shown, current_loss, binary_threshold=0.5):
         """Check if permutation should be frozen and perform freezing if ready.
         
         Returns:
@@ -590,7 +590,7 @@ class baconNet(nn.Module):
                     before_output = self.assembler(x_test)
                     before_loss_raw = criterion(before_output, y_test)
                     before_loss = before_loss_raw.mean() if before_loss_raw.dim() > 0 else before_loss_raw
-                    before_pred = (before_output > 0.5).float()
+                    before_pred = (before_output > binary_threshold).float()
                     before_accuracy = (before_pred == y_test).float().mean().item()
                     
                     max_probs = soft_perm.max(dim=1)[0]
@@ -726,7 +726,7 @@ class baconNet(nn.Module):
                     after_output = self.assembler(x_test)
                     after_loss_raw = criterion(after_output, y_test)
                     after_loss = after_loss_raw.mean() if after_loss_raw.dim() > 0 else after_loss_raw
-                    after_pred = (after_output > 0.5).float()
+                    after_pred = (after_output > binary_threshold).float()
                     after_accuracy = (after_pred == y_test).float().mean().item()
                     
                     logging.info(f"      📊 AFTER FREEZE:")
@@ -915,6 +915,7 @@ class baconNet(nn.Module):
                         # Model is frozen - count epochs since freeze
                         if setup.epoch_when_frozen is None:
                             setup.epoch_when_frozen = epoch
+                            logging.info(f"   🐛 DEBUG: frozen_training_epochs={frozen_training_epochs}, epoch={epoch}")
                             logging.info(f"   🎯 Model frozen at epoch {epoch + 1}, will train for {frozen_training_epochs} more epochs")
                         
                         epochs_since_freeze = epoch - setup.epoch_when_frozen
@@ -1031,7 +1032,7 @@ class baconNet(nn.Module):
                                     early_stop_threshold, self.permutation_final_temperature,
                                     setup.has_converged_before_freeze, setup.best_confidence,
                                     setup.epochs_without_confidence_improvement, confidence_plateau_patience,
-                                    setup.freeze_confidence_warning_shown, current_loss
+                                    setup.freeze_confidence_warning_shown, current_loss, binary_threshold
                                 )
                             
                             # If freeze improved accuracy, stop training immediately
