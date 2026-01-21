@@ -5,6 +5,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '../../')
 from bacon.utils import SigmoidScaler
+from sklearn.preprocessing import MinMaxScaler
 
 def balance_data(X_train, Y_train, device):
     """Balance dataset by upsampling the minority class.
@@ -103,7 +104,7 @@ def prepare_data(device):
     print(f"  Hepatic Fat Accumulation (HFA): {X['Hepatic Fat Accumulation (HFA)'].nunique()} unique values - {sorted(X['Hepatic Fat Accumulation (HFA)'].unique())}")
 
     df = pd.DataFrame(X)
-    df['target'] = y_binary
+    df['target'] = 1-y_binary
 
     # Dataset Preview
     print("\n" + "="*60)
@@ -193,6 +194,7 @@ def prepare_data(device):
 
     # Normalize features using SigmoidScaler
     scaler = SigmoidScaler(alpha=4, beta=-1)
+    # scaler = MinMaxScaler()
     X_train_np = scaler.fit_transform(X_train_np)
     X_test_np = scaler.transform(X_test_np)
 

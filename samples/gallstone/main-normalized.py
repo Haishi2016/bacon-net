@@ -44,7 +44,7 @@ bacon = create_bacon_model(
     transformations=trans,
     use_transformation_layer=True,
     weight_normalization='softmax',
-    use_class_weighting=True,
+    use_class_weighting=False,
     permutation_initial_temperature=5.0,
     permutation_final_temperature=0.5,
     weight_penalty_strength=1e-3  # Increased from 1e-4 for stronger regularization
@@ -55,13 +55,13 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=100,
-    use_hierarchical_permutation=True,
+    use_hierarchical_permutation=False,
     acceptance_threshold=1.0,
-    hierarchical_epochs_per_attempt=4000,
+    hierarchical_epochs_per_attempt=2000,
     hierarchical_bleed_ratio=0.5,
-    hierarchical_group_size=15,
+    hierarchical_group_size=15,    
     frozen_training_epochs=500,  # Reduced from 2000 to prevent overfitting
-    binary_threshold=0.625
+    binary_threshold=0.3
 )
 
 # Run standard analysis pipeline
@@ -71,5 +71,5 @@ run_standard_analysis(
     feature_names,
     title_prefix="Gallstone",
     device=device,
-    pruning_threshold=0.625
+    pruning_threshold=0.3
 )
