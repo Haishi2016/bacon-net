@@ -215,6 +215,15 @@ def optimize_thresholds(model, X_all, Y_all):
         print(f"\nBest threshold for {metric}: {best_threshold:.3f}, Best score: {best_score:.4f}")
         print_metrics(model, X_all, Y_all, threshold=best_threshold)
     
+    # AUPRC threshold optimization
+    # Note: AUPRC is threshold-independent, but we find the threshold that maximizes F1
+    # and report that alongside the AUPRC score
+    best_threshold, auprc_score = find_best_threshold(model, X_all, Y_all, metric='auprc')
+    results['auprc'] = {'threshold': best_threshold, 'score': auprc_score}
+    
+    print(f"\nBest threshold for AUPRC (F1-optimized): {best_threshold:.3f}, AUPRC score: {auprc_score:.4f}")
+    print_metrics(model, X_all, Y_all, threshold=best_threshold)
+    
     return results
 
 

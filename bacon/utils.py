@@ -181,7 +181,7 @@ def balance_classes(train_df, target_col='target', random_state=42, replication_
     return df_balanced
 
 
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, average_precision_score
 import numpy as np
 
 def find_best_threshold(model, X_val, Y_val, metric='accuracy', steps=1000):
@@ -189,6 +189,23 @@ def find_best_threshold(model, X_val, Y_val, metric='accuracy', steps=1000):
     with torch.no_grad():
         probs = model.inference_raw(X_val).cpu().numpy().flatten()
     true_labels = Y_val.cpu().numpy().flatten()
+
+    # For AUPRC, we don't need threshold optimization - it's a ranking metric
+    # But we can find the threshold that maximizes F1 and report AUPRC at that point
+    if metric == 'auprc':
+        # AUPRC is threshold-independent, but find threshold that maximizes F1
+        # for a meaningful threshold to report alongside AUPRC
+        auprc_score = average_precision_score(true_labels, probs)
+        thresholds = np.linspace(0, 1, steps)
+        best_f1 = -1
+        best_threshold = 0.5
+        for threshold in thresholds:
+            preds = (probs >= threshold).astype(int)
+            f1 = f1_score(true_labels, preds, zero_division=0)
+            if f1 > best_f1:
+                best_f1 = f1
+                best_threshold = threshold
+        return best_threshold, auprc_score
 
     if metric == 'recall':
         thresholds = np.linspace(1, 0, steps)
