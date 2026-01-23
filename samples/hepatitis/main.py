@@ -25,10 +25,10 @@ print(f"\n📊 Model will use {num_features} input features")
 trans = [
     IdentityTransformation(1), 
     NegationTransformation(1),
-    PeakTransformation(1),
-    ValleyTransformation(1),
-    StepUpTransformation(1),
-    StepDownTransformation(1)
+    # PeakTransformation(1),
+    # ValleyTransformation(1),
+    # StepUpTransformation(1),
+    # StepDownTransformation(1)
 ]
 
 # Create model
@@ -50,11 +50,11 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=1.0,
+    acceptance_threshold=0.5,
     hierarchical_epochs_per_attempt=5000,  # Increased: more time for convergence with proper annealing
     hierarchical_group_size=8,
     frozen_training_epochs=500,  # Reduced: if frozen perm is bad, more training won't help
-    binary_threshold=0.5
+    binary_threshold=0.108
 )
 
 # Run standard analysis
@@ -63,5 +63,5 @@ run_standard_analysis(
     X_train, Y_train, X_test, Y_test,
     feature_names,
     title_prefix="Hepatitis",
-    pruning_threshold=0.5
+    pruning_threshold=0.108
 )
