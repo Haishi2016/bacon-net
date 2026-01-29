@@ -54,7 +54,7 @@ train_bacon_model(
     hierarchical_epochs_per_attempt=5000,  # Increased: more time for convergence with proper annealing
     hierarchical_group_size=8,
     frozen_training_epochs=500,  # Reduced: if frozen perm is bad, more training won't help
-    binary_threshold=0.108
+    binary_threshold=0.12
 )
 
 # Run standard analysis
@@ -63,5 +63,5 @@ run_standard_analysis(
     X_train, Y_train, X_test, Y_test,
     feature_names,
     title_prefix="Hepatitis",
-    pruning_threshold=0.108
+    pruning_threshold=0.12
 )

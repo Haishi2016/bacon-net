@@ -6,7 +6,7 @@ sys.path.insert(0, '../')
 import torch
 import logging
 from bacon.transformationLayer import IdentityTransformation, NegationTransformation
-from dataset import prepare_data
+from dataset import prepare_data, balance_data
 from common import create_bacon_model, train_bacon_model, run_standard_analysis
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -15,6 +15,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Prepare data
 X_train, Y_train, X_test, Y_test, feature_names = prepare_data(device)
 num_features = len(feature_names)
+
+# Balance training data by upsampling minority class
+X_train, Y_train = balance_data(X_train, Y_train, device)
 
 print(f"\n📊 Model will use {num_features} input features")
 
@@ -28,15 +31,15 @@ trans = [
 bacon = create_bacon_model(
     input_size=num_features,
     aggregator='lsp.half_weight',
-    weight_mode='fixed',
+    weight_mode='trainable',
     transformations=trans,
     use_transformation_layer=True,
     weight_normalization='softmax',
     use_class_weighting=True,
     loss_amplifier=1000,
     permutation_initial_temperature=5.0,
-    permutation_final_temperature=4.0,
-    weight_penalty_strength=1e-3
+    permutation_final_temperature=0.5,
+    weight_penalty_strength=1e-4
 )
 
 # Train model
@@ -44,16 +47,17 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=0.7,
+    acceptance_threshold=1.0,
     use_hierarchical_permutation=True,
     hierarchical_bleed_ratio=0.5,
     hierarchical_epochs_per_attempt=3000,
     hierarchical_group_size=4,
-    loss_weight_perm_sparsity=5.0,
+    # loss_weight_perm_sparsity=5.0,
     sinkhorn_iters=200,
     freeze_confidence_threshold=0.95,
     freeze_min_confidence=0.85,
     frozen_training_epochs=1000,
+    binary_threshold=0.4,
     max_epochs=5000
 )
 
@@ -61,5 +65,7 @@ train_bacon_model(
 run_standard_analysis(
     bacon,
     X_train, Y_train, X_test, Y_test,
-    feature_names
+    feature_names,
+    pruning_threshold=0.4,
+    title_prefix="Hepatitis",
 )

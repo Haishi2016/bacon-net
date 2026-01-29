@@ -5,7 +5,7 @@ sys.path.insert(0, '../')
 
 import torch
 import logging
-from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation
+from bacon.transformationLayer import IdentityTransformation, NegationTransformation, PeakTransformation, ValleyTransformation, StepUpTransformation, StepDownTransformation
 from dataset import prepare_data, balance_data
 from common import create_bacon_model, train_bacon_model, run_standard_analysis
 
@@ -25,7 +25,11 @@ print(f"\n📊 Model will use {num_features} input features")
 # Configure transformations
 trans = [
     IdentityTransformation(1), 
-    NegationTransformation(1)
+    NegationTransformation(1),
+    # PeakTransformation(1), 
+    # ValleyTransformation(1), 
+    # StepUpTransformation(1), 
+    # StepDownTransformation(1)
 ]
 
 # Create model
@@ -47,7 +51,7 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=5,
-    acceptance_threshold=1.0,
+    acceptance_threshold=0.7,
     use_hierarchical_permutation=False,
     binary_threshold=0.5
 )

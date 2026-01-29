@@ -54,3 +54,15 @@ The model learns to predict high-risk pregnancies using interpretable combinatio
 Dataset: Maternal Health Risk (UCI ML Repository #863)
 - Marzia Ahmed et al. (2020)
 - IoT-based risk level prediction model for maternal healthcare
+
+## Runs
+
+| Binary threshold | Accuracy | F1 | AUPRC | File name | Weight penalty | Transformers |
+|------------------|----------|----|-------|-----------|----------------|--------------|
+| 0.3 | 68.17% | 0.8882 | 0.8270 | assembler-0.3.pth | 1e-4 | I,N|
+| 0.4 | 78.38% | 0.7661 | 0.8450 | assembler-0.4.pth | 1e-4 |I,N|
+| 0.45 | 72.68% | 0.6893 | 0.8178 | assembler-0.45.pth | 1e-4 | I,N|
+| 0.5 | 78.64% | 0.7729 | 0.8577 | assembler-0.5.pth | 1e-4 |I,N|
+| 0.5 | 78.64% | 0.7712 | 0.8538 | assembler-0.5-d.pth | 1e-4 | Disabled |
+| 0.6 | 72.68% | 0.6922 | 0.8058 | assembler-0.6.pth | 1e-4 |I,N|
+| 0.7 | 67.15% | 0.7297 | 0.8381 | assembler-0.7.pth | 1e-4 |I,N|

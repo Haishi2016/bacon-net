@@ -45,8 +45,8 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=0.8,
-     binary_threshold=0.234
+    acceptance_threshold=0.7,
+     binary_threshold=0.337
 )
 
 # Run standard analysis
@@ -55,5 +55,5 @@ run_standard_analysis(
     X_train, Y_train, X_test, Y_test,
     feature_names,
     title_prefix="AIDS Clinical Trials",
-    pruning_threshold=0.234
+    pruning_threshold=0.337
 )

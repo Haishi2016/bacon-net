@@ -1,61 +1,39 @@
 """Random Forest baseline for Parkinson's Telemonitoring Dataset"""
+import sys
+sys.path.insert(0, '../')
+
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report, average_precision_score
 from dataset import prepare_data_sklearn
+from common import (
+    evaluate_sklearn_model,
+    evaluate_sklearn_model_cv,
+    print_sklearn_results_summary
+)
 
-def evaluate_model(model, X_train, X_test, y_train, y_test, feature_names):
-    """Evaluate model and print comprehensive metrics"""
-    # Training predictions
-    y_train_pred = model.predict(X_train)
-    train_acc = accuracy_score(y_train, y_train_pred)
-    
-    # Test predictions
-    y_test_pred = model.predict(X_test)
-    test_acc = accuracy_score(y_test, y_test_pred)
-    test_precision = precision_score(y_test, y_test_pred)
-    test_recall = recall_score(y_test, y_test_pred)
-    test_f1 = f1_score(y_test, y_test_pred)
-    
-    # Get probability scores for AUPRC
-    y_train_prob = model.predict_proba(X_train)[:, 1]
-    y_test_prob = model.predict_proba(X_test)[:, 1]
-    train_auprc = average_precision_score(y_train, y_train_prob)
-    test_auprc = average_precision_score(y_test, y_test_prob)
-    
-    print(f"\nTraining Accuracy: {train_acc:.4f}")
-    print(f"Test Accuracy:     {test_acc:.4f}")
-    print(f"Test Precision:    {test_precision:.4f}")
-    print(f"Test Recall:       {test_recall:.4f}")
-    print(f"Test F1 Score:     {test_f1:.4f}")
-    print(f"Test AUPRC:        {test_auprc:.4f}")
-    
-    # Confusion matrix
-    cm = confusion_matrix(y_test, y_test_pred)
-    print("\nConfusion Matrix:")
-    print(cm)
-    
-    # Classification report
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_test_pred, target_names=['Low severity', 'High severity']))
-    
-    # Feature importance
-    feature_importance = sorted(zip(feature_names, model.feature_importances_), key=lambda x: x[1], reverse=True)
-    
-    print("\nTop 10 Features by Importance:")
-    for i, (feature, importance) in enumerate(feature_importance[:10], 1):
-        print(f"  {i:2d}. {feature:20s}: {importance:.4f}")
-    
-    return test_acc, test_f1, test_auprc
+# Configuration: choose evaluation mode
+USE_CROSS_VALIDATION = True  # Set to False for 3-way hold-out split
+CV_FOLDS = 5
+
 
 def main():
     """Test Random Forest with multiple configurations"""
     print("="*80)
     print("RANDOM FOREST BASELINE - PARKINSON'S TELEMONITORING")
+    print(f"Evaluation: {'Cross-Validation' if USE_CROSS_VALIDATION else '3-Way Hold-out Split'}")
     print("="*80)
     
     # Load data
-    X_train, X_test, y_train, y_test, feature_names = prepare_data_sklearn()
+    (X_train, X_val, X_test, y_train, y_val, y_test, feature_names, _,
+     subject_ids, subjects_train, subjects_val, subjects_test) = prepare_data_sklearn()
+    
+    if USE_CROSS_VALIDATION:
+        # Combine all data for CV
+        X_all = np.vstack([X_train, X_val, X_test])
+        y_all = np.concatenate([y_train, y_val, y_test])
+        # Combine subject IDs for group-based CV
+        groups_all = np.concatenate([subjects_train, subjects_val, subjects_test]) if subjects_train is not None else None
+        print(f"\n📊 Using {CV_FOLDS}-fold subject-based CV on {len(y_all)} samples ({len(np.unique(groups_all))} subjects)")
     
     print("\n" + "="*80)
     print("TRAINING RANDOM FOREST MODELS")
@@ -70,14 +48,14 @@ def main():
         {'n_estimators': 50, 'max_depth': None, 'name': 'RF-50-None'},
     ]
     
-    results = []
+    results_list = []
     for config in configs:
         print(f"\n{'='*80}")
         print(f"Configuration: {config['name']}")
         print(f"n_estimators={config['n_estimators']}, max_depth={config['max_depth']}")
         print(f"{'='*80}")
         
-        # Train model with class_weight='balanced' (similar to BACON's use_class_weighting)
+        # Create model with class_weight='balanced'
         model = RandomForestClassifier(
             n_estimators=config['n_estimators'],
             max_depth=config['max_depth'],
@@ -86,23 +64,25 @@ def main():
             n_jobs=-1
         )
         
-        model.fit(X_train, y_train)
+        if USE_CROSS_VALIDATION:
+            results = evaluate_sklearn_model_cv(
+                model, X_all, y_all, feature_names,
+                n_splits=CV_FOLDS,
+                class_names=['Low severity', 'High severity'],
+                groups=groups_all
+            )
+        else:
+            model.fit(X_train, y_train)
+            results = evaluate_sklearn_model(
+                model, X_train, y_train, X_val, y_val, X_test, y_test,
+                feature_names, class_names=['Low severity', 'High severity']
+            )
         
-        test_acc, test_f1, test_auprc = evaluate_model(model, X_train, X_test, y_train, y_test, feature_names)
-        results.append((config['name'], test_acc, test_f1, test_auprc))
+        results_list.append((config['name'], results))
     
-    # Summary
-    print("\n" + "="*80)
-    print("RESULTS SUMMARY")
-    print("="*80)
-    print(f"{'Configuration':<20} {'Test Accuracy':<15} {'Test F1':<15} {'Test AUPRC':<15}")
-    print("-" * 80)
-    for name, acc, f1, auprc in results:
-        print(f"{name:<20} {acc:<15.4f} {f1:<15.4f} {auprc:<15.4f}")
-    
-    # Best model
-    best_name, best_acc, best_f1, best_auprc = max(results, key=lambda x: x[2])
-    print(f"\nBest Model: {best_name} (F1: {best_f1:.4f}, AUPRC: {best_auprc:.4f})")
+    # Print summary
+    print_sklearn_results_summary(results_list, metric='f1', use_cv=USE_CROSS_VALIDATION)
+
 
 if __name__ == '__main__':
     main()

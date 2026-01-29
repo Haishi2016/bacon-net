@@ -12,30 +12,30 @@
     "HeartRate"
   ],
   "locked_perm": [
-    5,
-    2,
     3,
+    5,
+    0,
     1,
     4,
-    0
+    2
   ],
   "features": [
     {
       "index": 0,
+      "original_name": "BS",
+      "display_name": "BS",
+      "transformation": "identity"
+    },
+    {
+      "index": 1,
       "original_name": "HeartRate",
       "display_name": "HeartRate",
       "transformation": "identity"
     },
     {
-      "index": 1,
-      "original_name": "DiastolicBP",
-      "display_name": "DiastolicBP",
-      "transformation": "identity"
-    },
-    {
       "index": 2,
-      "original_name": "BS",
-      "display_name": "BS",
+      "original_name": "Age",
+      "display_name": "Age",
       "transformation": "identity"
     },
     {
@@ -52,8 +52,8 @@
     },
     {
       "index": 5,
-      "original_name": "Age",
-      "display_name": "Age",
+      "original_name": "DiastolicBP",
+      "display_name": "DiastolicBP",
       "transformation": "identity"
     }
   ],
@@ -61,29 +61,29 @@
     {
       "layer": 0,
       "aggregator_index": 0,
-      "andness": 1.874895,
+      "andness": 1.924424,
       "weights": {
-        "left": 0.990171,
-        "right": 0.009829
+        "left": 0.999958,
+        "right": 4.2e-05
       },
       "left_input": {
         "type": "feature",
         "index": 0,
-        "name": "HeartRate"
+        "name": "BS"
       },
       "right_input": {
         "type": "feature",
         "index": 1,
-        "name": "DiastolicBP"
+        "name": "HeartRate"
       }
     },
     {
       "layer": 1,
       "aggregator_index": 1,
-      "andness": -0.077314,
+      "andness": 1.789766,
       "weights": {
-        "left": 0.894951,
-        "right": 0.105049
+        "left": 0.996804,
+        "right": 0.003196
       },
       "left_input": {
         "type": "aggregator",
@@ -92,16 +92,16 @@
       "right_input": {
         "type": "feature",
         "index": 2,
-        "name": "BS"
+        "name": "Age"
       }
     },
     {
       "layer": 2,
       "aggregator_index": 2,
-      "andness": -0.21769,
+      "andness": -0.007951,
       "weights": {
-        "left": 0.911299,
-        "right": 0.088701
+        "left": 0.926694,
+        "right": 0.073306
       },
       "left_input": {
         "type": "aggregator",
@@ -116,10 +116,10 @@
     {
       "layer": 3,
       "aggregator_index": 3,
-      "andness": 0.083507,
+      "andness": -0.030195,
       "weights": {
-        "left": 0.715255,
-        "right": 0.284745
+        "left": 0.759275,
+        "right": 0.240725
       },
       "left_input": {
         "type": "aggregator",
@@ -134,10 +134,10 @@
     {
       "layer": 4,
       "aggregator_index": 4,
-      "andness": 1.919089,
+      "andness": 1.543529,
       "weights": {
-        "left": 0.981225,
-        "right": 0.018775
+        "left": 0.998319,
+        "right": 0.001681
       },
       "left_input": {
         "type": "aggregator",
@@ -146,7 +146,7 @@
       "right_input": {
         "type": "feature",
         "index": 5,
-        "name": "Age"
+        "name": "DiastolicBP"
       }
     }
   ]

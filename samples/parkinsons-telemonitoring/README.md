@@ -1,6 +1,6 @@
 # Parkinson's Telemonitoring Dataset
 
-This sample demonstrates BACON on the Parkinson's Telemonitoring dataset from UCI Machine Learning Repository.
+This sample demonstrates BACON on the Parkinson's [Telemonitoring dataset from UCI Machine Learning Repository](https://archive.ics.uci.edu/dataset/189/parkinsons+telemonitoring).
 
 ## Dataset Description
 
@@ -23,33 +23,42 @@ The dataset contains biomedical voice measurements from people with early-stage 
 - 42 Parkinson's disease patients
 - Multiple recordings per patient over 6 months
 
-## Usage
+**Notes:**
 
-```bash
-python main.py
-```
+- This dataset is challenging in two ways: 1) it's very small, containing only 42 patients. 2) it has multiple rows per patient. This is not a typical input of a decision making model.
+- We use cross-validation instead of 60/20/20 split in this case.
+- Other thinkings: 1) treat this as a regression instead of classification. 2) use one sample per subject (such as using averaged telemetries).
+## Runs
 
-This will:
-1. Load and preprocess the Parkinson's Telemonitoring dataset
-2. Train a BACON model with identity, negation, and peak transformations
-3. Analyze the learned tree structure
-4. Optimize classification thresholds
-5. Perform feature importance analysis through pruning
-6. Generate visualizations
+### LR
+| Run | Optimal threshold | Accuracy | F1 | ACPRC | Model |
+|-----|-------------------|----------|----|-------|--------|
+| 1 | 0.48 | 53.26% | 0.4493 | 0.3584 | LR-lbfgs |
+| 2 | 0.48 | 53.26% | 0.4493 | 0.3584 | LR-lbfgs |
+| 3 | 0.48 | 53.26% | 0.4493 | 0.3584 | LR-lbfgs |
+| 4 | 0.48 | 53.26% | 0.4493 | 0.3584 | LR-lbfgs |
+| 5 | 0.48 | 53.26% | 0.4493 | 0.3584 | LR-lbfgs |
 
-## Model Configuration
+### RF
+| Run | Optimal threshold | Accuracy | F1 | ACPRC | Model |
+|-----|-------------------|----------|----|-------|-------|
+| 1 | 0.37 | 95.00% | 0.9005 | 0.9645 | RF-200-None |
+| 2 | 0.37 | 95.00% | 0.9005 | 0.9645 | RF-200-None |
+| 3 | 0.37 | 95.00% | 0.9005 | 0.9645 | RF-200-None |
+| 4 | 0.37 | 95.00% | 0.9005 | 0.9645 | RF-200-None |
+| 5 | 0.37 | 95.00% | 0.9005 | 0.9645 | RF-200-None |
 
-- **Aggregator**: Half-weight LSP aggregator
-- **Transformations**: Identity, Negation, Peak
-- **Training**: Hierarchical permutation learning with 15 attempts
-- **Class weighting**: Enabled (balanced learning)
+### XGB
+| Run | Optimal threshold | Accuracy | F1 | ACPRC | Model |
+|-----|-------------------|----------|----|-------|-------|
+| 1 | 0.58 | 98.47% | 0.9692 | 0.9952 |
+| 2 | 0.58 | 98.47% | 0.9692 | 0.9952 |
+| 3 | 0.58 | 98.47% | 0.9692 | 0.9952 |
+| 4 | 0.58 | 98.47% | 0.9692 | 0.9952 |
+| 5 | 0.58 | 98.47% | 0.9692 | 0.9952 |
 
-## Expected Results
+### BACON
 
-The model learns to predict Parkinson's disease severity (motor function) using interpretable combinations of voice measurements. Peak transformations capture optimal ranges for acoustic features that indicate disease progression.
-
-## Reference
-
-Dataset: Parkinson's Telemonitoring (UCI ML Repository #189)
-- A. Tsanas, M.A. Little, P.E. McSharry, L.O. Ramig (2009)
-- "Accurate telemonitoring of Parkinson's disease progression by noninvasive speech tests"
+| Binary threshold | Weight penalty |  Transformers | Accuracy | F1 | AUPRC | File name | 
+|------------------|----------------|---------------|----------|----|-------|-----------|
+| 0.5 | 1e-4 | I, N | 68.32% | 0.6889 | 0.5899 | assembler-0.5.pth |

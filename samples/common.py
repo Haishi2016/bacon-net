@@ -6,6 +6,11 @@ standard analyses to ensure consistency across all sample implementations.
 
 import torch
 import logging
+import numpy as np
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    confusion_matrix, classification_report, average_precision_score
+)
 from bacon.baconNet import baconNet
 from bacon.visualization import (
     print_tree_structure,
@@ -22,6 +27,346 @@ from bacon.utils import (
     analyze_feature_importance_with_pruning,
     save_tree_structure_to_json
 )
+
+
+# =============================================================================
+# SKLEARN MODEL EVALUATION UTILITIES
+# =============================================================================
+
+def find_optimal_threshold_sklearn(y_true, y_prob, metric='f1'):
+    """Find optimal classification threshold on validation data.
+    
+    Args:
+        y_true: True labels
+        y_prob: Predicted probabilities
+        metric: Metric to optimize ('f1', 'accuracy', 'balanced_accuracy')
+        
+    Returns:
+        tuple: (best_threshold, best_score)
+    """
+    from sklearn.metrics import balanced_accuracy_score
+    
+    best_threshold = 0.5
+    best_score = 0.0
+    
+    for threshold in np.arange(0.1, 0.9, 0.01):
+        y_pred = (y_prob >= threshold).astype(int)
+        
+        if metric == 'f1':
+            score = f1_score(y_true, y_pred, zero_division=0)
+        elif metric == 'accuracy':
+            score = accuracy_score(y_true, y_pred)
+        elif metric == 'balanced_accuracy':
+            score = balanced_accuracy_score(y_true, y_pred)
+        else:
+            score = f1_score(y_true, y_pred, zero_division=0)
+        
+        if score > best_score:
+            best_score = score
+            best_threshold = threshold
+    
+    return best_threshold, best_score
+
+
+def evaluate_sklearn_model(model, X_train, y_train, X_val, y_val, X_test, y_test, 
+                           feature_names, class_names=None, optimize_threshold=True):
+    """Evaluate sklearn model with proper train/val/test separation.
+    
+    Args:
+        model: Trained sklearn model with predict and predict_proba methods
+        X_train: Training features (numpy array)
+        y_train: Training labels (numpy array)
+        X_val: Validation features (numpy array)
+        y_val: Validation labels (numpy array)
+        X_test: Test features (numpy array)
+        y_test: Test labels (numpy array)
+        feature_names: List of feature names
+        class_names: List of class names for classification report (default: ['Class 0', 'Class 1'])
+        optimize_threshold: Whether to optimize threshold on validation set (default: True)
+        
+    Returns:
+        dict: Dictionary with all metrics for train, val, and test sets
+    """
+    if class_names is None:
+        class_names = ['Class 0', 'Class 1']
+    
+    results = {}
+    
+    # Get probabilities for all sets
+    y_train_prob = model.predict_proba(X_train)[:, 1]
+    y_val_prob = model.predict_proba(X_val)[:, 1]
+    y_test_prob = model.predict_proba(X_test)[:, 1]
+    
+    # Find optimal threshold on validation set
+    if optimize_threshold:
+        optimal_threshold, val_best_score = find_optimal_threshold_sklearn(y_val, y_val_prob, metric='f1')
+        print(f"\n🎯 Optimal threshold (from validation F1): {optimal_threshold:.2f}")
+    else:
+        optimal_threshold = 0.5
+    
+    results['optimal_threshold'] = optimal_threshold
+    
+    # Training set evaluation (with optimal threshold)
+    y_train_pred = (y_train_prob >= optimal_threshold).astype(int)
+    results['train'] = {
+        'accuracy': accuracy_score(y_train, y_train_pred),
+        'precision': precision_score(y_train, y_train_pred, zero_division=0),
+        'recall': recall_score(y_train, y_train_pred, zero_division=0),
+        'f1': f1_score(y_train, y_train_pred, zero_division=0),
+        'auprc': average_precision_score(y_train, y_train_prob)
+    }
+    
+    # Validation set evaluation (with optimal threshold)
+    y_val_pred = (y_val_prob >= optimal_threshold).astype(int)
+    results['val'] = {
+        'accuracy': accuracy_score(y_val, y_val_pred),
+        'precision': precision_score(y_val, y_val_pred, zero_division=0),
+        'recall': recall_score(y_val, y_val_pred, zero_division=0),
+        'f1': f1_score(y_val, y_val_pred, zero_division=0),
+        'auprc': average_precision_score(y_val, y_val_prob)
+    }
+    
+    # Test set evaluation (with optimal threshold from validation)
+    y_test_pred = (y_test_prob >= optimal_threshold).astype(int)
+    results['test'] = {
+        'accuracy': accuracy_score(y_test, y_test_pred),
+        'precision': precision_score(y_test, y_test_pred, zero_division=0),
+        'recall': recall_score(y_test, y_test_pred, zero_division=0),
+        'f1': f1_score(y_test, y_test_pred, zero_division=0),
+        'auprc': average_precision_score(y_test, y_test_prob),
+        'confusion_matrix': confusion_matrix(y_test, y_test_pred),
+        'classification_report': classification_report(y_test, y_test_pred, 
+                                                        target_names=class_names,
+                                                        output_dict=True)
+    }
+    
+    # Print results
+    print("\n" + "="*60)
+    print(f"MODEL EVALUATION RESULTS (threshold={optimal_threshold:.2f})")
+    print("="*60)
+    
+    print("\nTraining Set Performance:")
+    print(f"  Accuracy:  {results['train']['accuracy']:.4f}")
+    print(f"  Precision: {results['train']['precision']:.4f}")
+    print(f"  Recall:    {results['train']['recall']:.4f}")
+    print(f"  F1 Score:  {results['train']['f1']:.4f}")
+    print(f"  AUPRC:     {results['train']['auprc']:.4f}")
+    
+    print("\nValidation Set Performance:")
+    print(f"  Accuracy:  {results['val']['accuracy']:.4f}")
+    print(f"  Precision: {results['val']['precision']:.4f}")
+    print(f"  Recall:    {results['val']['recall']:.4f}")
+    print(f"  F1 Score:  {results['val']['f1']:.4f}")
+    print(f"  AUPRC:     {results['val']['auprc']:.4f}")
+    
+    print("\n" + "="*60)
+    print("FINAL TEST SET PERFORMANCE")
+    print("="*60)
+    print(f"  Accuracy:  {results['test']['accuracy']:.4f}")
+    print(f"  Precision: {results['test']['precision']:.4f}")
+    print(f"  Recall:    {results['test']['recall']:.4f}")
+    print(f"  F1 Score:  {results['test']['f1']:.4f}")
+    print(f"  AUPRC:     {results['test']['auprc']:.4f}")
+    
+    print("\nConfusion Matrix:")
+    print(results['test']['confusion_matrix'])
+    
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_test_pred, target_names=class_names))
+    
+    # Feature importance
+    if hasattr(model, 'feature_importances_'):
+        importances = model.feature_importances_
+        feature_importance = sorted(zip(feature_names, importances), 
+                                   key=lambda x: x[1], reverse=True)
+        print("\nTop 10 Features by Importance:")
+        for i, (feature, importance) in enumerate(feature_importance[:10], 1):
+            print(f"  {i:2d}. {feature:20s}: {importance:.4f}")
+        results['feature_importance'] = feature_importance
+    elif hasattr(model, 'coef_'):
+        coef_abs = np.abs(model.coef_[0])
+        feature_importance = sorted(zip(feature_names, coef_abs), 
+                                   key=lambda x: x[1], reverse=True)
+        print("\nTop 10 Features by |Coefficient|:")
+        for i, (feature, importance) in enumerate(feature_importance[:10], 1):
+            print(f"  {i:2d}. {feature:20s}: {importance:.4f}")
+        results['feature_importance'] = feature_importance
+    
+    return results
+
+
+def evaluate_sklearn_model_cv(model, X, y, feature_names, n_splits=5, class_names=None, groups=None):
+    """Evaluate sklearn model using k-fold cross-validation.
+    
+    Uses GroupKFold when groups are provided (e.g., subject IDs) to prevent data leakage.
+    Uses StratifiedKFold otherwise.
+    
+    Appropriate for small datasets where hold-out test set would be unreliable.
+    
+    Args:
+        model: Sklearn model instance (will be cloned for each fold)
+        X: Features (numpy array)
+        y: Labels (numpy array)
+        feature_names: List of feature names
+        n_splits: Number of CV folds (default: 5)
+        class_names: List of class names for classification report
+        groups: Group labels for GroupKFold (e.g., subject IDs). If provided, uses group-based CV.
+        
+    Returns:
+        dict: Dictionary with CV metrics and optimal threshold
+    """
+    from sklearn.model_selection import StratifiedKFold, GroupKFold, cross_val_predict
+    from sklearn.base import clone
+    
+    if class_names is None:
+        class_names = ['Class 0', 'Class 1']
+    
+    results = {}
+    
+    # Use GroupKFold if groups provided (prevents data leakage with repeated measures)
+    if groups is not None:
+        n_unique_groups = len(np.unique(groups))
+        actual_splits = min(n_splits, n_unique_groups)
+        if actual_splits < n_splits:
+            print(f"⚠️  Only {n_unique_groups} unique groups, using {actual_splits}-fold CV instead of {n_splits}")
+        cv = GroupKFold(n_splits=actual_splits)
+        print(f"📊 Using GroupKFold with {actual_splits} folds ({n_unique_groups} unique groups)")
+        # Get out-of-fold predictions with groups
+        y_prob = cross_val_predict(model, X, y, cv=cv, groups=groups, method='predict_proba')[:, 1]
+    else:
+        cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        print(f"📊 Using StratifiedKFold with {n_splits} folds")
+        # Get out-of-fold predictions
+        y_prob = cross_val_predict(model, X, y, cv=cv, method='predict_proba')[:, 1]
+    
+    # Find optimal threshold on CV predictions
+    best_threshold = 0.5
+    best_f1 = 0.0
+    for threshold in np.arange(0.1, 0.9, 0.01):
+        y_pred_temp = (y_prob >= threshold).astype(int)
+        f1_temp = f1_score(y, y_pred_temp, zero_division=0)
+        if f1_temp > best_f1:
+            best_f1 = f1_temp
+            best_threshold = threshold
+    
+    results['optimal_threshold'] = best_threshold
+    
+    # Apply optimal threshold
+    y_pred = (y_prob >= best_threshold).astype(int)
+    
+    # Calculate metrics (these are CV metrics, used for both 'val' and 'test' keys for compatibility)
+    cv_metrics = {
+        'accuracy': accuracy_score(y, y_pred),
+        'precision': precision_score(y, y_pred, zero_division=0),
+        'recall': recall_score(y, y_pred, zero_division=0),
+        'f1': f1_score(y, y_pred, zero_division=0),
+        'auprc': average_precision_score(y, y_prob),
+        'confusion_matrix': confusion_matrix(y, y_pred),
+        'classification_report': classification_report(y, y_pred, 
+                                                        target_names=class_names,
+                                                        output_dict=True,
+                                                        zero_division=0)
+    }
+    
+    # Store same metrics for both 'val' and 'test' for API compatibility
+    results['cv'] = cv_metrics
+    results['val'] = cv_metrics  # For compatibility with print_sklearn_results_summary
+    results['test'] = cv_metrics  # For compatibility with print_sklearn_results_summary
+    
+    # Print results
+    print(f"\n🎯 Optimal threshold (from {n_splits}-fold CV): {best_threshold:.2f}")
+    
+    print("\n" + "="*60)
+    print(f"CROSS-VALIDATION RESULTS ({n_splits}-Fold)")
+    print("="*60)
+    print(f"  Accuracy:  {cv_metrics['accuracy']:.4f}")
+    print(f"  Precision: {cv_metrics['precision']:.4f}")
+    print(f"  Recall:    {cv_metrics['recall']:.4f}")
+    print(f"  F1 Score:  {cv_metrics['f1']:.4f}")
+    print(f"  AUPRC:     {cv_metrics['auprc']:.4f}")
+    
+    print("\nConfusion Matrix:")
+    print(cv_metrics['confusion_matrix'])
+    
+    print("\nClassification Report:")
+    print(classification_report(y, y_pred, target_names=class_names, zero_division=0))
+    
+    # Train final model on all data for feature importance
+    model_final = clone(model)
+    model_final.fit(X, y)
+    
+    if hasattr(model_final, 'feature_importances_'):
+        importances = model_final.feature_importances_
+        feature_importance = sorted(zip(feature_names, importances), 
+                                   key=lambda x: x[1], reverse=True)
+        print("\nTop 10 Features by Importance:")
+        for i, (feature, importance) in enumerate(feature_importance[:10], 1):
+            print(f"  {i:2d}. {feature:20s}: {importance:.4f}")
+        results['feature_importance'] = feature_importance
+    elif hasattr(model_final, 'coef_'):
+        coef_abs = np.abs(model_final.coef_[0])
+        feature_importance = sorted(zip(feature_names, coef_abs), 
+                                   key=lambda x: x[1], reverse=True)
+        print("\nTop 10 Features by |Coefficient|:")
+        for i, (feature, importance) in enumerate(feature_importance[:10], 1):
+            print(f"  {i:2d}. {feature:20s}: {importance:.4f}")
+        results['feature_importance'] = feature_importance
+    
+    return results
+
+
+def print_sklearn_results_summary(results_list, metric='f1', use_cv=False):
+    """Print summary table of multiple sklearn model results.
+    
+    Args:
+        results_list: List of tuples (model_name, results_dict)
+        metric: Metric to use for determining best model (default: 'f1')
+        use_cv: Whether results are from cross-validation (affects column headers)
+    """
+    print("\n" + "="*80)
+    print("RESULTS SUMMARY" + (" (Cross-Validation)" if use_cv else ""))
+    print("="*80)
+    
+    if use_cv:
+        print(f"{'Model':<25} {'Threshold':<10} {'CV Acc':<12} {'CV F1':<12} {'CV AUPRC':<12}")
+        print("-" * 70)
+        
+        for name, results in results_list:
+            threshold = results.get('optimal_threshold', 0.5)
+            print(f"{name:<25} "
+                  f"{threshold:<10.2f} "
+                  f"{results['cv']['accuracy']:<12.4f} "
+                  f"{results['cv']['f1']:<12.4f} "
+                  f"{results['cv']['auprc']:<12.4f}")
+        
+        # Find best model
+        best_name, best_results = max(results_list, key=lambda x: x[1]['cv'][metric])
+        print(f"\nBest Model (by CV {metric}): {best_name}")
+        print(f"  Optimal threshold: {best_results.get('optimal_threshold', 0.5):.2f}")
+        print(f"  CV {metric}: {best_results['cv'][metric]:.4f}")
+        print(f"  CV AUPRC: {best_results['cv']['auprc']:.4f}")
+    else:
+        print(f"{'Model':<25} {'Threshold':<10} {'Val F1':<12} {'Test Acc':<12} {'Test F1':<12} {'Test AUPRC':<12}")
+        print("-" * 80)
+        
+        for name, results in results_list:
+            threshold = results.get('optimal_threshold', 0.5)
+            print(f"{name:<25} "
+                  f"{threshold:<10.2f} "
+                  f"{results['val']['f1']:<12.4f} "
+                  f"{results['test']['accuracy']:<12.4f} "
+                  f"{results['test']['f1']:<12.4f} "
+                  f"{results['test']['auprc']:<12.4f}")
+        
+        # Find best model based on validation metric
+        best_name, best_results = max(results_list, key=lambda x: x[1]['val'][metric])
+        print(f"\nBest Model (by val {metric}): {best_name}")
+        print(f"  Optimal threshold: {best_results.get('optimal_threshold', 0.5):.2f}")
+        print(f"  Validation {metric}: {best_results['val'][metric]:.4f}")
+        print(f"  Test {metric}: {best_results['test'][metric]:.4f}")
+        print(f"  Test AUPRC: {best_results['test']['auprc']:.4f}")
+    
+    return best_name, best_results
 
 
 def create_bacon_model(
@@ -148,6 +493,166 @@ def train_bacon_model(
     
     logging.info(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
     return best_model, best_accuracy
+
+
+def train_bacon_model_cv(
+    model_factory,
+    X, Y,
+    feature_names,
+    n_splits=5,
+    balance_training=True,
+    binary_threshold=0.5,
+    train_kwargs=None,
+    device=None,
+    groups=None
+):
+    """Train and evaluate BACON model using cross-validation.
+    
+    Uses GroupKFold when groups are provided (e.g., subject IDs) to prevent data leakage.
+    Uses StratifiedKFold otherwise.
+    
+    Args:
+        model_factory: Callable that returns a new baconNet model instance
+        X: Features tensor
+        Y: Labels tensor
+        feature_names: List of feature names
+        n_splits: Number of CV folds (default: 5)
+        balance_training: Whether to balance training data (default: True)
+        binary_threshold: Classification threshold (default: 0.5)
+        train_kwargs: Dict of kwargs for train_bacon_model (default: None)
+        device: Torch device (default: None, uses X.device)
+        groups: Group labels for GroupKFold (e.g., subject IDs). If provided, uses group-based CV.
+        
+    Returns:
+        dict: CV results including predictions and metrics
+    """
+    from sklearn.model_selection import StratifiedKFold, GroupKFold
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, average_precision_score
+    
+    if device is None:
+        device = X.device
+    
+    if train_kwargs is None:
+        train_kwargs = {}
+    
+    # Use GroupKFold if groups provided (prevents data leakage with repeated measures)
+    if groups is not None:
+        n_unique_groups = len(np.unique(groups))
+        actual_splits = min(n_splits, n_unique_groups)
+        if actual_splits < n_splits:
+            print(f"⚠️  Only {n_unique_groups} unique groups, using {actual_splits}-fold CV instead of {n_splits}")
+        cv = GroupKFold(n_splits=actual_splits)
+        cv_type = f"GroupKFold ({n_unique_groups} unique groups)"
+    else:
+        actual_splits = n_splits
+        cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        cv_type = "StratifiedKFold"
+    
+    # Store out-of-fold predictions
+    y_prob_oof = torch.zeros_like(Y)
+    fold_results = []
+    
+    Y_np = Y.cpu().numpy().flatten()
+    X_np = X.cpu().numpy()
+    
+    print(f"\n📊 Starting {actual_splits}-fold cross-validation for BACON model")
+    print(f"   CV type: {cv_type}")
+    print("="*60)
+    
+    # Generate fold indices
+    if groups is not None:
+        fold_iterator = list(cv.split(X_np, Y_np, groups))
+    else:
+        fold_iterator = list(cv.split(X_np, Y_np))
+    
+    for fold_idx, (train_idx, val_idx) in enumerate(fold_iterator):
+        print(f"\n🔄 Fold {fold_idx + 1}/{actual_splits}")
+        print("-"*40)
+        
+        # Split data
+        X_train_fold = X[train_idx]
+        Y_train_fold = Y[train_idx]
+        X_val_fold = X[val_idx]
+        Y_val_fold = Y[val_idx]
+        
+        # Balance training data if requested
+        if balance_training:
+            from dataset import balance_data
+            X_train_fold, Y_train_fold = balance_data(X_train_fold, Y_train_fold, device)
+        
+        # Create fresh model for this fold
+        model = model_factory()
+        
+        # Train model (don't save to disk during CV)
+        train_kwargs_fold = train_kwargs.copy()
+        train_kwargs_fold['save_model'] = False
+        train_kwargs_fold['save_path'] = f'./assembler_fold{fold_idx}.pth'
+        
+        _, fold_acc = train_bacon_model(
+            model,
+            X_train_fold, Y_train_fold,
+            X_val_fold, Y_val_fold,
+            binary_threshold=binary_threshold,
+            **train_kwargs_fold
+        )
+        
+        # Get predictions for this fold
+        model.eval()
+        with torch.no_grad():
+            val_probs = model.inference_raw(X_val_fold)
+            y_prob_oof[val_idx] = val_probs
+        
+        fold_results.append({
+            'fold': fold_idx + 1,
+            'accuracy': fold_acc
+        })
+        
+        print(f"   Fold {fold_idx + 1} accuracy: {fold_acc:.4f}")
+    
+    # Calculate CV metrics
+    y_prob_np = y_prob_oof.cpu().numpy().flatten()
+    
+    # Find optimal threshold
+    best_threshold = 0.5
+    best_f1 = 0.0
+    for threshold in np.arange(0.1, 0.9, 0.01):
+        y_pred_temp = (y_prob_np >= threshold).astype(int)
+        f1_temp = f1_score(Y_np, y_pred_temp, zero_division=0)
+        if f1_temp > best_f1:
+            best_f1 = f1_temp
+            best_threshold = threshold
+    
+    y_pred = (y_prob_np >= best_threshold).astype(int)
+    
+    cv_metrics = {
+        'accuracy': accuracy_score(Y_np, y_pred),
+        'precision': precision_score(Y_np, y_pred, zero_division=0),
+        'recall': recall_score(Y_np, y_pred, zero_division=0),
+        'f1': f1_score(Y_np, y_pred, zero_division=0),
+        'auprc': average_precision_score(Y_np, y_prob_np)
+    }
+    
+    print("\n" + "="*60)
+    print(f"CROSS-VALIDATION RESULTS ({n_splits}-Fold)")
+    print("="*60)
+    print(f"🎯 Optimal threshold: {best_threshold:.2f}")
+    print(f"\nCV Performance:")
+    print(f"  Accuracy:  {cv_metrics['accuracy']:.4f}")
+    print(f"  Precision: {cv_metrics['precision']:.4f}")
+    print(f"  Recall:    {cv_metrics['recall']:.4f}")
+    print(f"  F1 Score:  {cv_metrics['f1']:.4f}")
+    print(f"  AUPRC:     {cv_metrics['auprc']:.4f}")
+    
+    print(f"\nPer-fold accuracies: {[r['accuracy'] for r in fold_results]}")
+    print(f"Mean fold accuracy: {np.mean([r['accuracy'] for r in fold_results]):.4f}")
+    
+    return {
+        'cv_metrics': cv_metrics,
+        'optimal_threshold': best_threshold,
+        'fold_results': fold_results,
+        'y_prob_oof': y_prob_oof,
+        'y_pred': y_pred
+    }
 
 
 def analyze_model_structure(model, feature_names):
@@ -316,6 +821,8 @@ def run_standard_analysis(
     model,
     X_train,
     Y_train,
+    X_val,
+    Y_val,
     X_test,
     Y_test,
     feature_names,
@@ -326,14 +833,16 @@ def run_standard_analysis(
     pruning_threshold=None,
     pruning_threshold_metric='f1'
 ):
-    """Run the complete standard analysis pipeline.
+    """Run the complete standard analysis pipeline with proper train/val/test separation.
     
     Args:
         model: Trained baconNet model
-        X_train: Training features
-        Y_train: Training labels
-        X_test: Test features
-        Y_test: Test labels
+        X_train: Training features (original, not balanced)
+        Y_train: Training labels (original, not balanced)
+        X_val: Validation features (for threshold optimization)
+        Y_val: Validation labels (for threshold optimization)
+        X_test: Test features (for final evaluation only)
+        Y_test: Test labels (for final evaluation only)
         feature_names: List of feature names
         title_prefix: Prefix for plots (e.g., "Heart Disease")
         device: torch device (default: None)
@@ -348,10 +857,6 @@ def run_standard_analysis(
     if device is None:
         device = X_train.device
     
-    # Combine train and test for comprehensive post-training analysis
-    X_all = torch.cat([X_train, X_test], dim=0)
-    Y_all = torch.cat([Y_train, Y_test], dim=0)
-    
     # Analyze model structure
     analyze_model_structure(model, feature_names)
     
@@ -363,75 +868,92 @@ def run_standard_analysis(
             json_filename = f"{safe_prefix}_tree_structure.json"
         save_tree_structure_to_json(model.assembler, json_filename, feature_names)
     
-    # Check for overfitting
-    analyze_overfitting(model, X_train, Y_train, X_test, Y_test)
+    # Check for overfitting: compare train vs val performance
+    print("\n" + "="*60)
+    print("OVERFITTING CHECK (Train vs Validation)")
+    print("="*60)
+    print("\nTraining Set Performance (threshold=0.5):")
+    print_metrics(model, X_train, Y_train, threshold=0.5)
+    print("\nValidation Set Performance (threshold=0.5):")
+    print_metrics(model, X_val, Y_val, threshold=0.5)
     
-    # Optimize thresholds on full dataset (post-training analysis)
-    print(f"\n📊 Post-training analysis on full dataset ({len(Y_all)} samples)")
-    threshold_results = optimize_thresholds(model, X_all, Y_all)
+    # Optimize thresholds on VALIDATION set only
+    print("\n" + "="*60)
+    print("THRESHOLD OPTIMIZATION (on Validation Set)")
+    print("="*60)
+    print(f"📊 Using validation set ({len(Y_val)} samples) for threshold optimization")
+    threshold_results = optimize_thresholds(model, X_val, Y_val)
     
     # Determine threshold for pruning
     if pruning_threshold is None:
         pruning_threshold = threshold_results[pruning_threshold_metric]['threshold']
         pruning_score = threshold_results[pruning_threshold_metric]['score']
-        print(f"\n🎯 Using optimized {pruning_threshold_metric.upper()} threshold for pruning: {pruning_threshold:.3f} (score: {pruning_score:.4f})")
+        print(f"\n🎯 Using optimized {pruning_threshold_metric.upper()} threshold: {pruning_threshold:.3f} (val score: {pruning_score:.4f})")
     else:
-        print(f"\n🎯 Using custom threshold for pruning: {pruning_threshold:.3f}")
+        print(f"\n🎯 Using custom threshold: {pruning_threshold:.3f}")
     
-    # Plot Precision-Recall Curve before pruning/growing analysis
+    # FINAL TEST SET EVALUATION - using optimized threshold
     print("\n" + "="*60)
-    print("PRECISION-RECALL CURVE")
+    print("FINAL TEST SET EVALUATION")
+    print("="*60)
+    print(f"📊 Final evaluation on held-out test set ({len(Y_test)} samples)")
+    print(f"   Using threshold optimized on validation set: {pruning_threshold:.3f}")
+    print_metrics(model, X_test, Y_test, threshold=pruning_threshold)
+    
+    # Plot Precision-Recall Curve on test set
+    print("\n" + "="*60)
+    print("PRECISION-RECALL CURVE (Test Set)")
     print("="*60)
     from bacon.visualization import plot_precision_recall_curve, plot_roc_curve
-    pr_title = f"{title_prefix}: Precision-Recall Curve" if title_prefix else "Precision-Recall Curve"
+    pr_title = f"{title_prefix}: Precision-Recall Curve (Test Set)" if title_prefix else "Precision-Recall Curve (Test Set)"
     pr_filename = f"{title_prefix.lower().replace(' ', '_')}_pr_curve.png" if title_prefix else "pr_curve.png"
     plot_precision_recall_curve(
         model, 
-        X_all, 
-        Y_all, 
+        X_test, 
+        Y_test, 
         threshold=pruning_threshold,
         title=pr_title,
         filename=pr_filename
     )
     
-    # Plot ROC Curve
+    # Plot ROC Curve on test set
     print("\n" + "="*60)
-    print("ROC CURVE")
+    print("ROC CURVE (Test Set)")
     print("="*60)
-    roc_title = f"{title_prefix}: ROC Curve" if title_prefix else "ROC Curve"
+    roc_title = f"{title_prefix}: ROC Curve (Test Set)" if title_prefix else "ROC Curve (Test Set)"
     roc_filename = f"{title_prefix.lower().replace(' ', '_')}_roc_curve.png" if title_prefix else "roc_curve.png"
     plot_roc_curve(
         model, 
-        X_all, 
-        Y_all, 
+        X_test, 
+        Y_test, 
         threshold=pruning_threshold,
         title=roc_title,
         filename=roc_filename
     )
     
-    # Analyze feature importance (use full dataset for post-training analysis)
+    # Analyze feature importance on VALIDATION set (not test)
     print("\n" + "="*60)
-    print("FEATURE IMPORTANCE ANALYSIS")
+    print("FEATURE IMPORTANCE ANALYSIS (Validation Set)")
     print("="*60)
-    print("📊 Using full dataset for pruning analysis (post-training)")
+    print("📊 Using validation set for pruning analysis")
     pruning_results = analyze_feature_importance(
-        model, X_all, Y_all, feature_names,
+        model, X_val, Y_val, feature_names,
         title_prefix=title_prefix,
         threshold=pruning_threshold,
         device=device,
-        baseline_enabled=False
+        baseline_enabled=True
     )
     
-    # Perform growing analysis (incremental feature addition)
+    # Perform growing analysis on validation set
     print("\n" + "="*60)
-    print("FEATURE GROWING ANALYSIS")
+    print("FEATURE GROWING ANALYSIS (Validation Set)")
     print("="*60)
-    print("📊 Using full dataset for growing analysis (post-training)")
+    print("📊 Using validation set for growing analysis")
     from bacon.utils import analyze_feature_importance_with_growing
     growing_results = analyze_feature_importance_with_growing(
         model,
-        X_all,
-        Y_all,
+        X_val,
+        Y_val,
         feature_names,
         threshold=pruning_threshold,
         device=device
@@ -451,14 +973,14 @@ def run_standard_analysis(
             filename=filename
         )
     
-    # Visualize predictions
-    best_threshold = threshold_results['accuracy']['threshold']
-    visualize_predictions(model, X_all, Y_all, best_threshold)
+    # Visualize predictions on test set
+    visualize_predictions(model, X_test, Y_test, pruning_threshold)
     
     print("\n✅ Analysis complete!")
     
     return {
         'thresholds': threshold_results,
         'pruning': pruning_results,
-        'growing': growing_results
+        'growing': growing_results,
+        'optimized_threshold': pruning_threshold
     }

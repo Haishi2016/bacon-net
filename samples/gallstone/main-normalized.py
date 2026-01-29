@@ -56,7 +56,7 @@ train_bacon_model(
     X_train, Y_train, X_test, Y_test,
     attempts=100,
     use_hierarchical_permutation=False,
-    acceptance_threshold=1.0,
+    acceptance_threshold=0.5,
     hierarchical_epochs_per_attempt=2000,
     hierarchical_bleed_ratio=0.5,
     hierarchical_group_size=15,    

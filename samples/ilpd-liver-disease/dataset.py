@@ -6,6 +6,74 @@ from sklearn.model_selection import train_test_split
 from ucimlrepo import fetch_ucirepo
 from bacon.utils import SigmoidScaler
 
+def balance_data(X_train, Y_train, device):
+    """Balance dataset by upsampling the minority class.
+    
+    Args:
+        X_train: Training features tensor
+        Y_train: Training labels tensor
+        device: PyTorch device
+    
+    Returns:
+        tuple: (X_train_balanced, Y_train_balanced)
+    """
+    print("\n" + "="*60)
+    print("BALANCING DATASET")
+    print("="*60)
+    
+    # Get class counts
+    Y_np = Y_train.cpu().numpy().flatten()
+    unique, counts = np.unique(Y_np, return_counts=True)
+    
+    print(f"\nOriginal class distribution:")
+    for label, count in zip(unique, counts):
+        print(f"  Class {int(label)}: {count} samples ({count/len(Y_np)*100:.1f}%)")
+    
+    # Find minority and majority classes
+    minority_class = unique[np.argmin(counts)]
+    majority_class = unique[np.argmax(counts)]
+    minority_count = counts.min()
+    majority_count = counts.max()
+    
+    print(f"\nMinority class: {int(minority_class)} ({minority_count} samples)")
+    print(f"Majority class: {int(majority_class)} ({majority_count} samples)")
+    
+    # Separate classes
+    minority_mask = Y_np == minority_class
+    majority_mask = Y_np == majority_class
+    
+    X_minority = X_train[minority_mask]
+    Y_minority = Y_train[minority_mask]
+    X_majority = X_train[majority_mask]
+    Y_majority = Y_train[majority_mask]
+    
+    # Upsample minority class
+    n_samples_needed = majority_count - minority_count
+    indices = torch.randint(0, len(X_minority), (n_samples_needed,))
+    
+    X_minority_upsampled = X_minority[indices]
+    Y_minority_upsampled = Y_minority[indices]
+    
+    # Combine
+    X_balanced = torch.cat([X_majority, X_minority, X_minority_upsampled], dim=0)
+    Y_balanced = torch.cat([Y_majority, Y_minority, Y_minority_upsampled], dim=0)
+    
+    # Shuffle
+    shuffle_idx = torch.randperm(len(X_balanced))
+    X_balanced = X_balanced[shuffle_idx]
+    Y_balanced = Y_balanced[shuffle_idx]
+    
+    print(f"\nBalanced dataset:")
+    Y_balanced_np = Y_balanced.cpu().numpy().flatten()
+    unique_balanced, counts_balanced = np.unique(Y_balanced_np, return_counts=True)
+    for label, count in zip(unique_balanced, counts_balanced):
+        print(f"  Class {int(label)}: {count} samples ({count/len(Y_balanced_np)*100:.1f}%)")
+    
+    print(f"\nTotal samples: {len(Y_np)} → {len(Y_balanced_np)}")
+    print("="*60)
+    
+    return X_balanced, Y_balanced
+
 def prepare_data(device):
     """Prepare ILPD (Indian Liver Patient Dataset)
     
