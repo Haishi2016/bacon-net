@@ -172,7 +172,7 @@ class baconNet(nn.Module):
             outputs = self.forward(x)
             # probs = torch.sigmoid(outputs)       # Convert to probabilities
             # predictions = (probs > 0.5).float() 
-            predictions = (outputs > threshold).float()
+            predictions = (outputs >= threshold).float()
             return predictions
     def inference_raw(self, x):        
         self.eval()  # Set the model to evaluation mode
@@ -185,7 +185,7 @@ class baconNet(nn.Module):
             outputs = self.forward(x)
             # probs = torch.sigmoid(outputs)       # Convert to probabilities
             # predictions = (probs > 0.5).float() 
-            predictions = (outputs > threshold).float()  # Binarize the output to match the target labels (0 or 1)
+            predictions = (outputs >= threshold).float()  # Binarize the output to match the target labels (0 or 1)
             accuracy = (predictions == y).float().mean()
             return accuracy.item()
         
@@ -815,7 +815,8 @@ class baconNet(nn.Module):
             tuple: Best model state dictionary and its accuracy.
         """
         best_accuracy = 0.0
-        best_model = None        
+        best_model = None
+        loaded_accuracy = 0.0  # Track accuracy of loaded model to avoid overwriting with worse model
 
         if os.path.exists(save_path):
             try:
@@ -829,6 +830,7 @@ class baconNet(nn.Module):
                         mae = (output - y_test).abs().mean().item()
                         acc = 1.0 - min(mae, 1.0)
                     logging.info(f"✅ Loaded model accuracy: {acc:.4f}")
+                    loaded_accuracy = acc  # Remember loaded accuracy
                     if acc >= acceptance_threshold:
                         return self.assembler.state_dict(), acc
                     else:
@@ -1166,8 +1168,8 @@ class baconNet(nn.Module):
                     best_locked_perm = self.assembler.locked_perm.clone() if self.assembler.locked_perm is not None else None
                     logging.info(f"   🏆 New best model! Accuracy: {best_accuracy:.4f}")
                     
-                    # Save intermediate best model after each improvement
-                    if save_model and save_path:
+                    # Save intermediate best model after each improvement (only if better than loaded model)
+                    if save_model and save_path and best_accuracy > loaded_accuracy:
                         # Temporarily store current state before loading best
                         temp_state = self.assembler.state_dict()
                         temp_is_frozen = self.assembler.is_frozen
@@ -1211,6 +1213,13 @@ class baconNet(nn.Module):
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
         
+        # If new model is worse than loaded model, reload the original from disk
+        if loaded_accuracy > 0 and best_accuracy <= loaded_accuracy and os.path.exists(save_path):
+            logging.info(f"⚠️ New model accuracy {best_accuracy:.4f} <= loaded model accuracy {loaded_accuracy:.4f}")
+            logging.info(f"   🔄 Reloading original model from {save_path}")
+            self.load_model(save_path)
+            return self.assembler.state_dict(), loaded_accuracy
+        
         # Load best model and restore its frozen state
         self.assembler.load_state_dict(best_model)
         if best_is_frozen and best_locked_perm is not None:
@@ -1224,8 +1233,11 @@ class baconNet(nn.Module):
             ).to(self.assembler.device)
         
         if save_model:
-            logging.info(f"✅ Saving the best model with accuracy {best_accuracy:.4f} to {save_path}")
-            self.save_model(save_path)
+            if best_accuracy > loaded_accuracy:
+                logging.info(f"✅ Saving the best model with accuracy {best_accuracy:.4f} to {save_path}")
+                self.save_model(save_path)
+            else:
+                logging.info(f"⚠️ New model accuracy {best_accuracy:.4f} <= loaded model accuracy {loaded_accuracy:.4f}, not overwriting {save_path}")
         return best_model, best_accuracy
     
     def prune_features(self, features):        
