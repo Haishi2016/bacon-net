@@ -381,6 +381,7 @@ def create_bacon_model(
     weight_penalty_strength=1e-3,
     permutation_initial_temperature=5.0,
     permutation_final_temperature=0.5,
+    training_policy=None,
     **kwargs
 ):
     """Create a baconNet model with standard configuration.
@@ -397,6 +398,7 @@ def create_bacon_model(
         weight_penalty_strength: Weight penalty strength (default: 1e-3)
         permutation_initial_temperature: Initial temperature (default: 5.0)
         permutation_final_temperature: Final temperature (default: 0.5)
+        training_policy: Training policy (e.g., FixedAndnessPolicy) (default: None)
         **kwargs: Additional arguments passed to baconNet
         
     Returns:
@@ -422,6 +424,7 @@ def create_bacon_model(
         weight_normalization=weight_normalization,
         use_class_weighting=use_class_weighting,
         weight_mode=weight_mode,
+        training_policy=training_policy,
         **kwargs
     )
     

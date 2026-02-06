@@ -258,6 +258,9 @@ def analyze_bacon_tree_conjunctive_disjunctive(model, balanced_threshold=(0.35, 
             else:
                 w = (w_tensor - w_min) / denom
                 w = w / w.sum()
+        elif model.weight_normalization == 'none':
+            # No normalization - use raw weights directly
+            w = w_tensor
         else:
             # No normalization or fixed weights
             w = torch.sigmoid((w_tensor - 0.5) * 4)  # mimic sharp sigmoid if used

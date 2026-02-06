@@ -118,7 +118,7 @@ def visualize_tree_structure(model, labels=None, layout=None):
         (torch.sigmoid(b) * 3 - 1).item() if model.normalize_andness else b.item()
         for b in model.biases
     ]
-    if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
+    if model.weight_mode == 'fixed' or model.weight_normalization in ('minmax', 'none'):
         w_list = model.weights
     else:
         w_list = [F.softmax(w, dim=0) for w in model.weights]
@@ -298,7 +298,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
         print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
 
     # Map weights and biases to CPU for printing
-    if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
+    if model.weight_mode == 'fixed' or model.weight_normalization in ('minmax', 'none'):
         weights = [w.detach().cpu() if hasattr(w, 'detach') else w for w in model.weights]
     else:
         weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
@@ -412,7 +412,7 @@ def print_table_structure(model, labels=None):
     print(f"{'Layer':<6} {'Left Feature':<20} {'Right Feature':<20} {'w (left)':<10} {'a (bias)':<10} {'1-w (right)':<12}")
     print("-" * 80)
 
-    if model.weight_mode == 'fixed' or model.weight_normalization == 'minmax':
+    if model.weight_mode == 'fixed' or model.weight_normalization in ('minmax', 'none'):
         weights = model.weights
     else:
         weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
