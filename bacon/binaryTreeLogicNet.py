@@ -331,10 +331,10 @@ class binaryTreeLogicNet(nn.Module):
             if self.weight_mode == 'fixed':
                 # Fixed weights are stored as single values, index them properly
                 w_val = w[0] if hasattr(w, '__getitem__') and len(w.shape) > 0 else w
-                out = self.aggregator.aggregate(left, right, a_scaled, w_val, 1-w_val)
+                out = self.aggregator.aggregate([left, right], a_scaled, [w_val, 1 - w_val])
             else:
                 # Trainable weights
-                out = self.aggregator.aggregate(left, right, a_scaled, w, 1-w)
+                out = self.aggregator.aggregate([left, right], a_scaled, [w, 1 - w])
 
             combine.node_index += 1
             return out
@@ -388,7 +388,7 @@ class binaryTreeLogicNet(nn.Module):
         while j < len(node_outputs):
             if j + 1 < len(node_outputs):
                 a, w = get_a_w(idx)
-                out = self.aggregator.aggregate(node_outputs[j], node_outputs[j + 1], a, w[0], w[1])
+                out = self.aggregator.aggregate([node_outputs[j], node_outputs[j + 1]], a, [w[0], w[1]])
                 pair_outputs.append(out)
                 self.layer_outputs.append(out.detach().clone())
                 idx += 1
@@ -401,7 +401,7 @@ class binaryTreeLogicNet(nn.Module):
         current = pair_outputs[0]
         for k in range(1, len(pair_outputs)):
             a, w = get_a_w(idx)
-            current = self.aggregator.aggregate(current, pair_outputs[k], a, w[0], w[1])
+            current = self.aggregator.aggregate([current, pair_outputs[k]], a, [w[0], w[1]])
             self.layer_outputs.append(current.detach().clone())
             idx += 1
         return current
@@ -484,7 +484,7 @@ class binaryTreeLogicNet(nn.Module):
                         left = node_outputs[-1]  # previous node
                         right = node_outputs[i + 1]  # next input
                                         
-                    nres = self.aggregator.aggregate(left, right, a, w[0], w[1])
+                    nres = self.aggregator.aggregate([left, right], a, [w[0], w[1]])
                     
                     # TODO: this is dangerous if weights a nan. In general, we should figure out why nan is happening at the first place
                     if torch.isnan(nres).any():

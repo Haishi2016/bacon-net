@@ -18,6 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from bacon.aggregators.base import AggregatorBase
+from typing import Sequence, Any
 
 
 class LspSoftmaxAggregator(AggregatorBase, nn.Module):
@@ -288,32 +289,85 @@ class LspSoftmaxAggregator(AggregatorBase, nn.Module):
     # ------------------------------------------------------------------
     # AggregatorBase interface (used by BACON tree)
     # ------------------------------------------------------------------
-    def aggregate_float(self, x: float, y: float, a: float, w0: float, w1: float) -> float:
-        """
-        Float aggregation (for scalar inputs).
-        Uses tree's 'a' parameter for operator selection.
-        w0, w1 are used for pruning support.
-        """
-        device = self.centers.device
-        x_t = torch.tensor([x], dtype=torch.float32, device=device)
-        y_t = torch.tensor([y], dtype=torch.float32, device=device)
-        a_t = torch.tensor(a, dtype=torch.float32, device=device)
-        w0_t = torch.tensor([w0], dtype=torch.float32, device=device)
-        w1_t = torch.tensor([w1], dtype=torch.float32, device=device)
-        result = self.forward(x_t, y_t, a_t, w0_t, w1_t)
-        return result.item()
+    def aggregate_float(self, values: Sequence[float], a: float, weights: Sequence[float]) -> float:
+        xs = torch.tensor(values, dtype=torch.float32, device=self.centers.device)
+        ws = torch.tensor(weights, dtype=torch.float32, device=self.centers.device)
+        a_t = torch.tensor(a, dtype=torch.float32, device=self.centers.device)
+        out = self.aggregate_tensor([xi for xi in xs], a_t, ws)
+        return float(out.item())
+
+    def aggregate_tensor(self, values: Sequence[Any], a: torch.Tensor, weights: Sequence[Any] | torch.Tensor) -> torch.Tensor:
+        if len(values) == 0:
+            raise ValueError("aggregate_tensor: values must be non-empty")
+        # Ensure centers device
+        dev = values[0].device
+        if self.centers.device != dev:
+            self.centers = self.centers.to(dev)
+        X = torch.stack(values, dim=0)  # [N, ...]
+        N = X.size(0)
+        eps = 1e-6
+        # Optional pruning bypass: if one weight dominates, return that input
+        w = None
+        if weights is not None:
+            if isinstance(weights, torch.Tensor):
+                w = weights.to(X.device, dtype=X.dtype)
+            else:
+                w = torch.stack([wi if isinstance(wi, torch.Tensor) else torch.as_tensor(wi, dtype=X.dtype, device=X.device) for wi in weights])
+            # Normalize for stability
+            s = w.sum() + eps
+            w = w / s
+            max_idx = torch.argmax(w).item()
+            if (w[max_idx] > 1.0 - 0.01) and torch.all(w < 0.01 + (torch.arange(N, device=w.device) == max_idx).float() * 1.0):
+                return X[max_idx]
+        # Compute N-ary operator outputs
+        Xc = torch.clamp(X, 0.0, 1.0)
+        a0 = Xc.prod(dim=0)                  # product
+        a1 = torch.min(Xc, dim=0).values     # min
+        a2 = Xc.mean(dim=0)                  # avg
+        a3 = torch.max(Xc, dim=0).values     # max
+        a4 = 1.0 - (1.0 - Xc).prod(dim=0)    # probabilistic sum
+        ops = torch.stack([a0, a1, a2, a3, a4], dim=0)             # [5, ...]
+        return self._mix_operators(ops, a)
     
-    def aggregate_tensor(self, x: torch.Tensor, y: torch.Tensor, 
-                         a: torch.Tensor, w0: torch.Tensor, w1: torch.Tensor) -> torch.Tensor:
-        """
-        Tensor aggregation (for batched inputs).
-        Uses tree's 'a' parameter for operator selection.
-        w0, w1 are used for pruning support (bypass inputs when one weight is ~0).
-        """
-        # Ensure centers on same device as inputs
-        if self.centers.device != x.device:
-            self.centers = self.centers.to(x.device)
-        return self.forward(x, y, a, w0, w1)
+    # -------- N-ary aggregation (new) --------
+    def aggregate_many_float(self, values: Sequence[float], a: float, weights: Sequence[float]) -> float:
+        xs = torch.tensor(values, dtype=torch.float32, device=self.centers.device)
+        ws = torch.tensor(weights, dtype=torch.float32, device=self.centers.device)
+        a_t = torch.tensor(a, dtype=torch.float32, device=self.centers.device)
+        out = self.aggregate_many_tensor([xi for xi in xs], a_t, ws)
+        return float(out.item())
+
+    def aggregate_many_tensor(self, values: Sequence[Any], a: torch.Tensor, weights: Sequence[Any] | torch.Tensor) -> torch.Tensor:
+        if len(values) == 0:
+            raise ValueError("aggregate_many_tensor: values must be non-empty")
+        # Ensure centers device
+        dev = values[0].device
+        if self.centers.device != dev:
+            self.centers = self.centers.to(dev)
+        X = torch.stack(values, dim=0)  # [N, ...]
+        N = X.size(0)
+        eps = 1e-6
+        # Optional pruning bypass: if one weight dominates, return that input
+        w = None
+        if weights is not None:
+            if isinstance(weights, torch.Tensor):
+                w = weights.to(X.device, dtype=X.dtype)
+            else:
+                w = torch.stack([wi if isinstance(wi, torch.Tensor) else torch.as_tensor(wi, dtype=X.dtype, device=X.device) for wi in weights])
+            # Normalize for stability
+            s = w.sum() + eps
+            w = w / s
+            max_idx = torch.argmax(w).item()
+            if (w[max_idx] > 1.0 - 0.01) and torch.all(w < 0.01 + (torch.arange(N, device=w.device) == max_idx).float() * 1.0):
+                return X[max_idx]
+        # Compute N-ary operator outputs
+        a0 = torch.clamp(X, 0.0, 1.0).prod(dim=0)                  # product
+        a1 = torch.min(torch.clamp(X, 0.0, 1.0), dim=0).values     # min
+        a2 = torch.clamp(X, 0.0, 1.0).mean(dim=0)                  # avg
+        a3 = torch.max(torch.clamp(X, 0.0, 1.0), dim=0).values     # max
+        a4 = 1.0 - (1.0 - torch.clamp(X, 0.0, 1.0)).prod(dim=0)    # probabilistic sum
+        ops = torch.stack([a0, a1, a2, a3, a4], dim=0)             # [5, ...]
+        return self._mix_operators(ops, a)
     
     # ------------------------------------------------------------------
     # nn.Module forward (can be used directly)
