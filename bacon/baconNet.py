@@ -5,12 +5,13 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Optional
-from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator
+from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator, LspSoftmaxAggregator
 from bacon.aggregators.bool import MinMaxAggregator
 
 _aggregator_registry = {
     "lsp.full_weight": FullWeightAggregator,
     "lsp.half_weight": HalfWeightAggregator,
+    "lsp.softmax": LspSoftmaxAggregator,
     "bool.min_max": MinMaxAggregator
 }
 
@@ -98,7 +99,8 @@ class baconNet(nn.Module):
                  lr_transformation=0.5,
                  lr_aggregator=0.1,
                  lr_other=0.1,
-                 use_class_weighting=True):
+                 use_class_weighting=True,
+                 training_policy=None):
         super(baconNet, self).__init__()        
         if aggregator not in _aggregator_registry:
             raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
@@ -110,6 +112,9 @@ class baconNet(nn.Module):
         self.permutation_final_temperature = permutation_final_temperature
         self.transformation_initial_temperature = transformation_initial_temperature
         self.transformation_final_temperature = transformation_final_temperature
+        
+        # Training policy (e.g., FixedAndnessPolicy)
+        self.training_policy = training_policy
         
         # Use transformation_initial_temperature if transformation_temperature not specified
         if transformation_temperature is None:
@@ -503,6 +508,11 @@ class baconNet(nn.Module):
                 depth_weight_penalty += self.assembler.weight_penalty_strength * ((torch.sigmoid(w) - 0.5) ** 2).mean()
             loss = loss + depth_weight_penalty
         
+        # Training policy regularization (e.g., andness penalty)
+        if self.training_policy is not None and hasattr(self.training_policy, 'penalty'):
+            policy_penalty = self.training_policy.penalty(self.assembler)
+            loss = loss + policy_penalty
+        
         return loss
     
     def _check_and_freeze_permutation(self, epoch, x_test, y_test, criterion, 
@@ -880,6 +890,12 @@ class baconNet(nn.Module):
                 confidence_plateau_patience = 1000  # Freeze if confidence doesn't improve for this many epochs after loss convergence
                 
                 for epoch in range(setup.actual_max_epochs):
+                    # Apply training policy (e.g., fixed andness) at start of each epoch
+                    if self.training_policy is not None:
+                        if hasattr(self.training_policy, 'on_epoch_start'):
+                            self.training_policy.on_epoch_start(epoch, setup.actual_max_epochs)
+                        self.training_policy.apply(self.assembler)
+                    
                     # Unfreeze aggregation after specified epochs
                     if setup.aggregation_frozen and epoch == freeze_aggregation_epochs:
                         for group in setup.param_groups:
