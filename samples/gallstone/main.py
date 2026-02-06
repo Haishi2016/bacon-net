@@ -4,6 +4,7 @@ sys.path.insert(0, '../../')
 sys.path.insert(0, '../')  # For common module
 
 import torch
+import argparse
 import logging
 from dataset import prepare_data, balance_data
 from common import create_bacon_model, train_bacon_model, run_standard_analysis
@@ -26,6 +27,12 @@ USE_SOFTMAX_LSP = False  # Set to False for traditional lsp.half_weight
 USE_FIXED_ANDNESS = True  # Disabled - causes 50% accuracy trap
 FIXED_ANDNESS_VALUE = 0.5  # AND-like (min operator)
 ANDNESS_PENALTY_WEIGHT = 0.01  # Not used when disabled
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--loss-trim-percentile", type=float, default=0.0)
+parser.add_argument("--loss-trim-mode", type=str, default="none", choices=["none", "drop_high", "drop_low"])
+parser.add_argument("--loss-trim-start-epoch", type=int, default=0)
+args = parser.parse_args()
 
 # Prepare data
 X_train, Y_train, X_test, Y_test, feature_names = prepare_data(device)
@@ -67,7 +74,10 @@ bacon = create_bacon_model(
     permutation_initial_temperature=5.0,
     permutation_final_temperature=0.5,
     weight_penalty_strength=1e-4,
-    training_policy=training_policy
+    training_policy=training_policy,
+    loss_trim_percentile=args.loss_trim_percentile,
+    loss_trim_mode=args.loss_trim_mode,
+    loss_trim_start_epoch=args.loss_trim_start_epoch
 )
 
 # Train model
