@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 import logging
 import os
@@ -100,6 +101,9 @@ class baconNet(nn.Module):
                  lr_aggregator=0.1,
                  lr_other=0.1,
                  use_class_weighting=True,
+                 loss_trim_percentile: float = 0.0,
+                 loss_trim_mode: str = "drop_high",
+                 loss_trim_start_epoch: int = 0,
                  training_policy=None):
         super(baconNet, self).__init__()        
         if aggregator not in _aggregator_registry:
@@ -134,6 +138,16 @@ class baconNet(nn.Module):
         
         # Class weighting for imbalanced data
         self.use_class_weighting = use_class_weighting
+        # Loss trimming hyperparameters
+        if loss_trim_percentile < 0.0 or loss_trim_percentile >= 1.0:
+            raise ValueError("loss_trim_percentile must be in [0.0, 1.0).")
+        if loss_trim_mode not in ("drop_high", "drop_low", "none"):
+            raise ValueError("loss_trim_mode must be 'drop_high', 'drop_low', or 'none'.")
+        self.loss_trim_percentile = float(loss_trim_percentile)
+        self.loss_trim_mode = loss_trim_mode
+        if loss_trim_start_epoch < 0:
+            raise ValueError("loss_trim_start_epoch must be >= 0.")
+        self.loss_trim_start_epoch = int(loss_trim_start_epoch)
         
         import logging
         logging.info(f"🔧 Creating baconNet with transformations: {transformations}")
@@ -429,15 +443,31 @@ class baconNet(nn.Module):
             logging.error(f"      Output stats: min={outputs.min().item():.6f}, max={outputs.max().item():.6f}, mean={outputs.mean().item():.6f}")
             outputs = torch.where(torch.isnan(outputs), torch.zeros_like(outputs), outputs)
         
-        # Compute main BCE loss with optional class weighting
+        # Compute per-sample BCE loss
+        per_sample_bce = F.binary_cross_entropy(outputs, y, reduction='none')
+        # Flatten to (N,)
+        per_sample_bce = per_sample_bce.view(-1)
+        # Optional class weighting
         if self.use_class_weighting and pos_weight is not None:
-            bce_losses = criterion(outputs, y)
-            if torch.isnan(bce_losses).any():
-                logging.error(f"   ❌ NaN in BCE losses (weighted)")
-            weights = torch.where(y == 1, pos_weight, 1.0)
-            main_loss = (bce_losses * weights).mean() * self.assembler.loss_amplifier
+            weights = torch.where(y.view(-1) == 1, torch.as_tensor(pos_weight, device=y.device, dtype=per_sample_bce.dtype), torch.ones_like(per_sample_bce))
+            per_sample = per_sample_bce * weights
         else:
-            main_loss = criterion(outputs, y) * self.assembler.loss_amplifier
+            per_sample = per_sample_bce
+        # Optional loss trimming by percentile
+        # Apply warmup schedule: no trimming before start epoch
+        trim_p = self.loss_trim_percentile if epoch >= self.loss_trim_start_epoch else 0.0
+        if trim_p > 0.0 and self.loss_trim_mode != "none" and per_sample.numel() > 1:
+            # Compute threshold
+            q = 1.0 - trim_p if self.loss_trim_mode == "drop_high" else trim_p
+            thresh = torch.quantile(per_sample.detach(), q)
+            if self.loss_trim_mode == "drop_high":
+                mask = per_sample <= thresh
+            else:
+                mask = per_sample >= thresh
+            if mask.any():
+                per_sample = per_sample[mask]
+        # Final main loss
+        main_loss = per_sample.mean() * self.assembler.loss_amplifier
         
         if torch.isnan(main_loss):
             logging.error(f"   ❌ NaN in main_loss at epoch {epoch + 1}")

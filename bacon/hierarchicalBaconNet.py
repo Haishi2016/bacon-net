@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 from bacon.frozonInputToLeaf import frozenInputToLeaf
 from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator
@@ -69,7 +70,10 @@ class HierarchicalBaconNet(nn.Module):
                  permutation_initial_temperature=5.0,
                  permutation_final_temperature=0.1,
                  transformation_initial_temperature=1.0,
-                 transformation_final_temperature=0.1):
+                 transformation_final_temperature=0.1,
+                 loss_trim_percentile: float = 0.0,
+                 loss_trim_mode: str = "drop_high",
+                 loss_trim_start_epoch: int = 0):
         super(HierarchicalBaconNet, self).__init__()
         
         # Resolve aggregator string to object
@@ -108,6 +112,16 @@ class HierarchicalBaconNet(nn.Module):
         self.lr_other = lr_other
         self.use_class_weighting = use_class_weighting
         self.loss_amplifier = loss_amplifier
+        # Loss trimming hyperparameters
+        if loss_trim_percentile < 0.0 or loss_trim_percentile >= 1.0:
+            raise ValueError("loss_trim_percentile must be in [0.0, 1.0).")
+        if loss_trim_mode not in ("drop_high", "drop_low", "none"):
+            raise ValueError("loss_trim_mode must be 'drop_high', 'drop_low', or 'none'.")
+        self.loss_trim_percentile = float(loss_trim_percentile)
+        self.loss_trim_mode = loss_trim_mode
+        if loss_trim_start_epoch < 0:
+            raise ValueError("loss_trim_start_epoch must be >= 0.")
+        self.loss_trim_start_epoch = int(loss_trim_start_epoch)
         
         # Temperature annealing parameters (aligned with baconNet)
         self.permutation_initial_temperature = permutation_initial_temperature
@@ -614,13 +628,25 @@ class HierarchicalBaconNet(nn.Module):
                 
                 outputs = self.forward(x)
                 
-                # Compute loss
+                # Compute per-sample BCE loss, optional class weighting and trimming
+                per_sample_bce = F.binary_cross_entropy(outputs, y, reduction='none').view(-1)
                 if self.use_class_weighting and pos_weight is not None:
-                    bce_losses = criterion(outputs, y)
-                    weights = torch.where(y == 1, pos_weight, 1.0)
-                    loss = (bce_losses * weights).mean() * self.loss_amplifier
+                    weights = torch.where(y.view(-1) == 1, torch.as_tensor(pos_weight, device=y.device, dtype=per_sample_bce.dtype), torch.ones_like(per_sample_bce))
+                    per_sample = per_sample_bce * weights
                 else:
-                    loss = criterion(outputs, y) * self.loss_amplifier
+                    per_sample = per_sample_bce
+                # Apply warmup schedule for trimming
+                trim_p = self.loss_trim_percentile if epoch >= self.loss_trim_start_epoch else 0.0
+                if trim_p > 0.0 and self.loss_trim_mode != "none" and per_sample.numel() > 1:
+                    q = 1.0 - trim_p if self.loss_trim_mode == "drop_high" else trim_p
+                    thresh = torch.quantile(per_sample.detach(), q)
+                    if self.loss_trim_mode == "drop_high":
+                        mask = per_sample <= thresh
+                    else:
+                        mask = per_sample >= thresh
+                    if mask.any():
+                        per_sample = per_sample[mask]
+                loss = per_sample.mean() * self.loss_amplifier
                 
                 loss.backward()
                 optimizer.step()

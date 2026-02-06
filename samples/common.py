@@ -382,6 +382,10 @@ def create_bacon_model(
     permutation_initial_temperature=5.0,
     permutation_final_temperature=0.5,
     training_policy=None,
+    # Loss trimming controls
+    loss_trim_percentile: float = 0.0,
+    loss_trim_mode: str = "none",
+    loss_trim_start_epoch: int = 0,
     **kwargs
 ):
     """Create a baconNet model with standard configuration.
@@ -399,7 +403,10 @@ def create_bacon_model(
         permutation_initial_temperature: Initial temperature (default: 5.0)
         permutation_final_temperature: Final temperature (default: 0.5)
         training_policy: Training policy (e.g., FixedAndnessPolicy) (default: None)
-        **kwargs: Additional arguments passed to baconNet
+        loss_trim_percentile: Fraction of batch to drop by loss percentile (default: 0.0)
+        loss_trim_mode: 'drop_high', 'drop_low', or 'none' (default: 'none')
+        loss_trim_start_epoch: Epoch to start trimming (warmup) (default: 0)
+        **kwargs: Additional arguments passed to baconNet (advanced)
         
     Returns:
         baconNet model instance
@@ -425,6 +432,9 @@ def create_bacon_model(
         use_class_weighting=use_class_weighting,
         weight_mode=weight_mode,
         training_policy=training_policy,
+        loss_trim_percentile=loss_trim_percentile,
+        loss_trim_mode=loss_trim_mode,
+        loss_trim_start_epoch=loss_trim_start_epoch,
         **kwargs
     )
     
