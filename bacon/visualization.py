@@ -589,7 +589,7 @@ def plot_gcd_aggregator_3d(model, w, a, grid_points=100):
     y_flat = Y.flatten()
 
     with torch.no_grad():
-        output = model.aggregator.aggregate(x_flat, y_flat, a, w, 1-w)
+        output = model.aggregator.aggregate([x_flat, y_flat], a, [w, 1 - w])
         output_grid = output.reshape(grid_points, grid_points).cpu().numpy()
 
     X = X.cpu().numpy()
@@ -620,7 +620,7 @@ def plot_gcd_aggregator_3d_minimal(model, w, a, grid_points=5):
 
     # Evaluate model
     with torch.no_grad():
-        Z = model.aggregator.aggregate(x_flat, y_flat, a, w, 1 - w).reshape(grid_points, grid_points).cpu().numpy()
+        Z = model.aggregator.aggregate([x_flat, y_flat], a, [w, 1 - w]).reshape(grid_points, grid_points).cpu().numpy()
 
     X = X.cpu().numpy()
     Y = Y.cpu().numpy()
