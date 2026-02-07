@@ -8,12 +8,15 @@ from dataclasses import dataclass
 from typing import Optional
 from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator, LspSoftmaxAggregator
 from bacon.aggregators.bool import MinMaxAggregator
+from bacon.aggregators.math import OperatorSetAggregator, BoolOperatorSet, ArithmeticOperatorSet
 
 _aggregator_registry = {
     "lsp.full_weight": FullWeightAggregator,
     "lsp.half_weight": HalfWeightAggregator,
     "lsp.softmax": LspSoftmaxAggregator,
-    "bool.min_max": MinMaxAggregator
+    "bool.min_max": MinMaxAggregator,
+    "math.operator_set.logic": BoolOperatorSet,
+    "math.operator_set.arith": ArithmeticOperatorSet,
 }
 
 @dataclass
@@ -73,6 +76,11 @@ class baconNet(nn.Module):
         lr_aggregator (float, optional): Learning rate for aggregator weights. Defaults to 0.1. Lower = more stable tree structure.
         lr_other (float, optional): Learning rate for other parameters. Defaults to 0.1.
         use_class_weighting (bool, optional): Whether to apply class weighting for imbalanced data. Defaults to True. When True, penalizes minority class errors more heavily (pos_weight = neg_count/pos_count). When False, uses standard BCE loss (original behavior).
+        full_tree_depth (int, optional): Depth of the fully connected tree. Only used when tree_layout="full". Defaults to None (uses input_size - 1).
+        full_tree_temperature (float, optional): Initial temperature for sigmoid edge weights. Defaults to 3.0.
+        full_tree_final_temperature (float, optional): Final temperature after annealing. Defaults to 0.1.
+        full_tree_max_egress (int, optional): Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).
+        loss_weight_full_tree_egress (float, optional): Weight for full tree egress constraint loss. Defaults to 0.0.
     """
     def __init__(self, input_size, 
                  tree_layout="left", 
@@ -104,7 +112,13 @@ class baconNet(nn.Module):
                  loss_trim_percentile: float = 0.0,
                  loss_trim_mode: str = "drop_high",
                  loss_trim_start_epoch: int = 0,
-                 training_policy=None):
+                 training_policy=None,
+                 # Full tree parameters
+                 full_tree_depth: int = None,
+                 full_tree_temperature: float = 3.0,
+                 full_tree_final_temperature: float = 0.1,
+                 full_tree_max_egress: int = None,
+                 loss_weight_full_tree_egress: float = 0.0):
         super(baconNet, self).__init__()        
         if aggregator not in _aggregator_registry:
             raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
@@ -129,6 +143,15 @@ class baconNet(nn.Module):
         self.loss_weight_perm_entropy = loss_weight_perm_entropy  # Permutation entropy regularization
         self.loss_weight_trans_entropy = loss_weight_trans_entropy  # Transformation entropy regularization
         self.loss_weight_perm_sparsity = loss_weight_perm_sparsity  # Permutation sparsity loss (encourage peaked distributions)
+        
+        # Full tree loss weights
+        self.loss_weight_full_tree_egress = loss_weight_full_tree_egress
+        
+        # Full tree parameters (stored for reference)
+        self.full_tree_depth = full_tree_depth
+        self.full_tree_temperature = full_tree_temperature
+        self.full_tree_final_temperature = full_tree_final_temperature
+        self.full_tree_max_egress = full_tree_max_egress
         
         # Learning rates for different parameter groups
         self.lr_permutation = lr_permutation
@@ -170,7 +193,12 @@ class baconNet(nn.Module):
                                             transformation_temperature=transformation_temperature,
                                             transformation_use_gumbel=transformation_use_gumbel,
                                             transformations=transformations,
-                                            weight_choices=None)
+                                            weight_choices=None,
+                                            # Full tree parameters
+                                            full_tree_depth=full_tree_depth,
+                                            full_tree_temperature=full_tree_temperature,
+                                            full_tree_final_temperature=full_tree_final_temperature,
+                                            full_tree_max_egress=full_tree_max_egress)
         
         if self.assembler.transformation_layer:
             actual_trans = self.assembler.transformation_layer.transformations
@@ -309,6 +337,11 @@ class baconNet(nn.Module):
             transformations=cfg._custom_transformations if hasattr(cfg, '_custom_transformations') else None,
             device=cfg.device,
             sinkhorn_iters=sinkhorn_iters,
+            # Full tree parameters
+            full_tree_depth=cfg.full_tree_depth,
+            full_tree_temperature=cfg.full_tree_temperature,
+            full_tree_final_temperature=cfg.full_tree_final_temperature,
+            full_tree_max_egress=cfg.full_tree_max_egress,
         )
         
         # Initialize hierarchical permutation if provided
@@ -537,6 +570,13 @@ class baconNet(nn.Module):
             for w in self.assembler.weights:
                 depth_weight_penalty += self.assembler.weight_penalty_strength * ((torch.sigmoid(w) - 0.5) ** 2).mean()
             loss = loss + depth_weight_penalty
+        
+        # Full tree regularization (when tree_layout="full")
+        if self.assembler.tree_layout == "full":
+            # Egress constraint loss: encourage each source to concentrate outgoing edges to top-K
+            if self.loss_weight_full_tree_egress > 0:
+                full_tree_egress = self.assembler.get_full_tree_egress_loss()
+                loss = loss + self.loss_weight_full_tree_egress * full_tree_egress
         
         # Training policy regularization (e.g., andness penalty)
         if self.training_policy is not None and hasattr(self.training_policy, 'penalty'):
@@ -1053,6 +1093,12 @@ class baconNet(nn.Module):
                             # Cool transformation layer independently
                             if self.assembler.transformation_layer is not None and setup.trans_temp_decay_rate is not None:
                                 self.assembler.transformation_layer.temperature *= setup.trans_temp_decay_rate
+                            
+                            # Cool full tree temperature if using "full" layout
+                            if self.assembler.tree_layout == "full" and self.assembler.fully_connected_tree is not None:
+                                progress = min(1.0, epoch / setup.anneal_over_epochs)
+                                self.assembler.anneal_full_tree_temperature(progress)
+                                self.assembler.anneal_full_tree_gumbel(progress)
                         else:
                             # Pause temperature annealing - keep exploring at current temperature
                             # Only log if we haven't paused before AND temperatures aren't already at minimum

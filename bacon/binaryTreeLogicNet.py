@@ -11,6 +11,7 @@ from bacon.transformationLayer import (
     StepUpTransformation,
     StepDownTransformation
 )
+from bacon.fullyConnectedTree import FullyConnectedTree
 import torch.optim as optim
 import numpy as np
 import copy
@@ -35,10 +36,14 @@ class binaryTreeLogicNet(nn.Module):
         min_noise (float, optional): Minimum noise level. Defaults to 0.0.
         max_noise (float, optional): Maximum noise level. Defaults to 2.0.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
-        tree_layout (str, optional): Layout of the tree. Defaults to "left".
+        tree_layout (str, optional): Layout of the tree. Defaults to "left". Options: "left", "balanced", "paired", "full".
         weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
         aggregator (callable, optional): Aggregator to be used. Defaults to "lsp.full_weight".
         device (torch.device, optional): Device to run the model on. Defaults to None (uses CUDA if available).
+        full_tree_depth (int, optional): Depth of the fully connected tree. Only used when tree_layout="full". Defaults to None (uses input_size - 1).
+        full_tree_temperature (float, optional): Initial temperature for sigmoid edge weights. Defaults to 3.0.
+        full_tree_final_temperature (float, optional): Final temperature after annealing. Defaults to 0.1.
+        full_tree_max_egress (int, optional): Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).
     """
     def __init__(self, 
                  input_size, 
@@ -65,8 +70,20 @@ class binaryTreeLogicNet(nn.Module):
                  transformation_use_gumbel: bool = False,
                  transformations = None,
                  device=None,
-                 sinkhorn_iters=100):
+                 sinkhorn_iters=100,
+                 # Full tree parameters
+                 full_tree_depth: int = None,
+                 full_tree_temperature: float = 3.0,
+                 full_tree_final_temperature: float = 0.1,
+                 full_tree_max_egress: int = None):
         super(binaryTreeLogicNet, self).__init__()
+        
+        # Store full tree parameters
+        self.full_tree_depth = full_tree_depth
+        self.full_tree_temperature = full_tree_temperature
+        self.full_tree_final_temperature = full_tree_final_temperature
+        self.full_tree_max_egress = full_tree_max_egress
+        
         self.original_input_size = input_size
         self.num_leaves = input_size  # 🔹 Each input gets its own leaf initially
         self.weight_mode = weight_mode
@@ -126,8 +143,16 @@ class binaryTreeLogicNet(nn.Module):
         self._reinitialize(weight_mode, weight_value, weight_range, weight_choices, self.is_frozen)
         self.reset_optimizer()  # Initialize optimizer        
         if hasattr(self.aggregator, "attach_to_tree"):
-            self.aggregator.attach_to_tree(self.num_layers)      
+            # For full tree layout, compute correct number of aggregator nodes
+            if self.tree_layout == "full" and self.fully_connected_tree is not None:
+                # Sum of all non-input layer widths = total aggregator nodes
+                num_agg_nodes = sum(self.fully_connected_tree.layer_widths[1:])
+            else:
+                num_agg_nodes = self.num_layers
+            self.aggregator.attach_to_tree(num_agg_nodes)      
             self.add_module("aggregator", self.aggregator)
+            # Ensure aggregator is on the correct device after attach_to_tree creates parameters
+            self.aggregator.to(self.device)
 
     def __deepcopy__(self, memo):
         """Custom deepcopy to preserve transformation configuration.
@@ -214,6 +239,22 @@ class binaryTreeLogicNet(nn.Module):
                 self.weights.append(nn.Parameter(torch.rand(2))) 
 
             self.biases.append(nn.Parameter(torch.rand(1) * 3 - 1))
+        
+        # Initialize FullyConnectedTree for "full" layout
+        if self.tree_layout == "full":
+            self.fully_connected_tree = FullyConnectedTree(
+                num_inputs=self.original_input_size,
+                depth=self.full_tree_depth,
+                temperature=self.full_tree_temperature,
+                final_temperature=self.full_tree_final_temperature,
+                use_gumbel=True,
+                max_egress=self.full_tree_max_egress,
+                device=self.device
+            )
+            self.add_module("fully_connected_tree", self.fully_connected_tree)
+        else:
+            self.fully_connected_tree = None
+        
         self.apply(self._initialize_weights)
         self.to(self.device) 
 
@@ -288,8 +329,8 @@ class binaryTreeLogicNet(nn.Module):
                 hard_assignment=torch.argmax(P_hard, dim=1),
                 num_inputs=self.original_input_size
             )
-        # Now load weights
-        self.load_state_dict(state_dict, strict=True)
+        # Now load weights (strict=False for backward compatibility with older models)
+        self.load_state_dict(state_dict, strict=False)
         self.to(self.device)
         
         # Clamp bias parameters to valid range when normalize_andness is False
@@ -439,6 +480,17 @@ class binaryTreeLogicNet(nn.Module):
                 final = self.build_balanced_tree(node_outputs, self.weights, self.biases)
             elif self.tree_layout == "paired":
                 final = self.build_paired_tree(node_outputs, self.weights, self.biases)
+            elif self.tree_layout == "full":
+                # Use FullyConnectedTree for forward pass
+                out = self.fully_connected_tree(leaf_values, aggregator=self.aggregator, 
+                                                 normalize_andness=self.normalize_andness)
+                # FullyConnectedTree already returns (batch, 1) shape
+                # Only clamp for classification (LSP-style), not for arithmetic regression
+                from bacon.aggregators.math import ArithmeticOperatorSet
+                if not isinstance(self.aggregator, ArithmeticOperatorSet):
+                    epsilon = 1e-7
+                    out = torch.clamp(out, min=epsilon, max=1.0-epsilon)
+                return out
             else:
                 self.layer_outputs = []  
 
@@ -649,4 +701,76 @@ class binaryTreeLogicNet(nn.Module):
                 # Prune feature k (k>=2): bypass right input (new feature) in agg k-1
                 agg_idx = feature_index - 1
                 self.weights[agg_idx].data = torch.tensor([1.0, 0.0], dtype=torch.float32, device=self.device)
-                self.pruned_aggregators.add(agg_idx)        
+                self.pruned_aggregators.add(agg_idx)
+    
+    # =========================================================================
+    # Full Tree Methods (for tree_layout="full")
+    # =========================================================================
+    
+    def get_full_tree_egress_loss(self) -> torch.Tensor:
+        """Get egress constraint loss for fully connected tree.
+        
+        Encourages each source node to concentrate outgoing edges to top-K destinations,
+        where K is controlled by full_tree_max_egress parameter.
+        Returns 0 if not using "full" layout or max_egress is None.
+        """
+        if self.tree_layout != "full" or self.fully_connected_tree is None:
+            return torch.tensor(0.0, device=self.device)
+        return self.fully_connected_tree.get_egress_constraint_loss()
+    
+    def anneal_full_tree_temperature(self, progress: float) -> None:
+        """Anneal the temperature of the fully connected tree.
+        
+        Args:
+            progress: Training progress from 0.0 to 1.0
+        """
+        if self.tree_layout == "full" and self.fully_connected_tree is not None:
+            self.fully_connected_tree.anneal_temperature(progress)
+    
+    def anneal_full_tree_gumbel(self, progress: float, initial: float = 1.0, final: float = 0.0) -> None:
+        """Anneal the Gumbel noise scale of the fully connected tree.
+        
+        Args:
+            progress: Training progress from 0.0 to 1.0
+            initial: Initial noise scale
+            final: Final noise scale
+        """
+        if self.tree_layout == "full" and self.fully_connected_tree is not None:
+            self.fully_connected_tree.anneal_gumbel_noise(progress, initial, final)
+    
+    def harden_full_tree(self, mode: str = "argmax") -> None:
+        """Harden the fully connected tree to discrete edge selections.
+        
+        Args:
+            mode: Hardening mode ("argmax", "threshold", "hungarian")
+        """
+        if self.tree_layout == "full" and self.fully_connected_tree is not None:
+            self.fully_connected_tree.harden(mode)
+            self.is_frozen = True
+            logging.info(f"🔒 Full tree hardened with mode='{mode}'")
+    
+    def unharden_full_tree(self) -> None:
+        """Revert full tree hardening to allow continued training."""
+        if self.tree_layout == "full" and self.fully_connected_tree is not None:
+            self.fully_connected_tree.unharden()
+            self.is_frozen = False
+    
+    def get_full_tree_confidence(self) -> float:
+        """Get confidence score for fully connected tree edge selections.
+        
+        Higher values indicate more peaked edge weight distributions.
+        Returns 0 if not using "full" layout.
+        """
+        if self.tree_layout != "full" or self.fully_connected_tree is None:
+            return 0.0
+        return self.fully_connected_tree.get_confidence()
+    
+    def get_full_tree_structure(self) -> dict:
+        """Get the learned structure of the fully connected tree.
+        
+        Returns dictionary with layer widths, significant edges, and biases.
+        Returns empty dict if not using "full" layout.
+        """
+        if self.tree_layout != "full" or self.fully_connected_tree is None:
+            return {}
+        return self.fully_connected_tree.get_tree_structure()        

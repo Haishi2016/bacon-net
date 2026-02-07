@@ -1,20 +1,26 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from abc import abstractmethod
+from typing import Sequence
+
+from bacon.aggregators.base import AggregatorBase
 
 
-class OperatorSetAggregator(nn.Module):
+class OperatorSetAggregator(nn.Module, AggregatorBase):
     """
-    Per-node operator finder aggregator.
+    Base class for per-node operator selection aggregators.
 
-    - Configurable operator set:
-        kind="logic",  op_names like ["and", "or"]
-        kind="arith",  op_names like ["add", "sub", "mul", "div"]
-    - For each internal node in BACON there is a separate learnable
-      logits vector over operators.
+    For each internal node in BACON, there is a separate learnable logits 
+    vector over operators. During forward pass, softmax/Gumbel-softmax is 
+    applied to select operators differentiably.
+
+    Subclasses must implement:
+        - get_default_op_names(): Return default operator names for this type
+        - _apply_op(name, values, a, weights): Apply the named operator
 
     BACON integration:
-      * binaryTreeLogicNet.__init__ (or _reinitialize) calls:
+      * binaryTreeLogicNet.__init__ calls:
             if hasattr(self.aggregator, "attach_to_tree"):
                 self.aggregator.attach_to_tree(self.num_layers)
 
@@ -23,31 +29,27 @@ class OperatorSetAggregator(nn.Module):
                 self.aggregator.start_forward()
 
       * Tree building keeps calling:
-            self.aggregator.aggregate(left, right, a, w[0], w[1])
-        as before. The aggregator internally steps a node counter.
+            self.aggregator.aggregate(values, a, weights)
+        where values is a sequence of tensors and weights is a sequence of weights.
     """
 
     def __init__(
         self,
-        kind: str = "logic",
         op_names=None,
         use_gumbel: bool = True,
         tau: float = 1.0,
         eps: float = 1e-6,
+        auto_harden_threshold: float | None = None,
     ):
-        super().__init__()
+        nn.Module.__init__(self)
 
-        assert kind in ("logic", "arith"), f"Unknown kind: {kind}"
-        self.kind = kind
         self.eps = eps
         self.use_gumbel = use_gumbel
         self.tau = tau
+        self.auto_harden_threshold = auto_harden_threshold
 
         if op_names is None:
-            if kind == "logic":
-                op_names = ["and", "or"]
-            else:
-                op_names = ["add", "sub", "mul", "div"]
+            op_names = self.get_default_op_names()
 
         self.op_names = list(op_names)
         self.num_ops = len(self.op_names)
@@ -58,6 +60,30 @@ class OperatorSetAggregator(nn.Module):
 
         # Internal pointer used during a single forward pass
         self._node_ptr: int = 0
+
+    # ------------------------------------------------------------------
+    # Abstract methods for subclasses
+    # ------------------------------------------------------------------
+    @abstractmethod
+    def get_default_op_names(self) -> list:
+        """Return the default list of operator names for this aggregator type."""
+        pass
+
+    @abstractmethod
+    def _apply_op(self, name: str, values: Sequence[torch.Tensor], a: torch.Tensor, weights: Sequence[torch.Tensor]) -> torch.Tensor:
+        """
+        Apply the named operator to the input values.
+        
+        Args:
+            name: Operator name (e.g., "add", "and")
+            values: Sequence of input tensors
+            a: Andness parameter
+            weights: Sequence of weight tensors
+            
+        Returns:
+            Result tensor
+        """
+        pass
 
     # ------------------------------------------------------------------
     # Wiring from BACON
@@ -79,16 +105,67 @@ class OperatorSetAggregator(nn.Module):
         self._node_ptr = 0
 
     # ------------------------------------------------------------------
+    # AggregatorBase interface implementation
+    # ------------------------------------------------------------------
+    def aggregate_float(self, values: Sequence[float], a: float, weights: Sequence[float]) -> float:
+        """Float path: convert to tensors and use tensor implementation."""
+        xs = torch.tensor(values, dtype=torch.float32)
+        ws = torch.tensor(weights, dtype=torch.float32)
+        a_t = torch.tensor(a, dtype=torch.float32)
+        out = self.aggregate_tensor([xi for xi in xs], a_t, [wi for wi in ws])
+        return float(out.item())
+
+    def aggregate_tensor(self, values: Sequence[torch.Tensor], a: torch.Tensor, weights: Sequence[torch.Tensor] | torch.Tensor) -> torch.Tensor:
+        """Tensor path: main aggregation logic."""
+        return self._aggregate_impl(values, a, weights)
+
+    # ------------------------------------------------------------------
     # Main aggregation API used by BACON
     # ------------------------------------------------------------------
-    def aggregate(self, left, right, a, w0, w1):
+    def aggregate(self, values, a, weights):
         """
         Standard BACON aggregator signature.
+        Dispatches to float or tensor implementation based on input type.
+        
+        Args:
+            values: Sequence of input values (floats or tensors)
+            a: Andness parameter (used for logic ops)
+            weights: Sequence of weights
+        """
+        if not isinstance(values, (list, tuple)):
+            raise TypeError("values must be a list/tuple of scalars or tensors")
+        if len(values) == 0:
+            raise ValueError("values must be non-empty")
+        
+        first = values[0]
+        if isinstance(first, (float, int)):
+            return self.aggregate_float(values, a, weights)
+        elif isinstance(first, torch.Tensor):
+            return self.aggregate_tensor(values, a, weights)
+        else:
+            raise TypeError("Unsupported input type for values")
+
+    def _aggregate_impl(self, values, a, weights):
+        """
+        Core aggregation implementation for tensors.
         Uses the current node pointer to select a logits vector, applies
         softmax / Gumbel-softmax, and mixes candidate operators.
         """
         if self.op_logits_per_node is None or self.num_layers is None:
-            raise RuntimeError("OperatorSetAggregator: attach_to_tree(num_layers) must be called before use.")
+            raise RuntimeError(f"{self.__class__.__name__}: attach_to_tree(num_layers) must be called before use.")
+
+        # Convert weights to list of tensors
+        device = values[0].device
+        dtype = values[0].dtype
+        if isinstance(weights, torch.Tensor):
+            w_tensors = [weights[i] for i in range(weights.shape[0])]
+        else:
+            w_tensors = []
+            for w in weights:
+                if isinstance(w, torch.Tensor):
+                    w_tensors.append(w.to(device=device, dtype=dtype))
+                else:
+                    w_tensors.append(torch.tensor(w, device=device, dtype=dtype))
 
         if self._node_ptr >= self.num_layers:
             # Safety check; shouldn't normally happen if tree wiring is consistent.
@@ -101,64 +178,160 @@ class OperatorSetAggregator(nn.Module):
         # Move pointer for the next node
         self._node_ptr += 1
 
+        # Determine if we should use hard selection
+        # auto_harden_threshold: if max prob exceeds threshold, use hard=True
+        use_hard = False
+        if self.auto_harden_threshold is not None:
+            with torch.no_grad():
+                # Use temperature-adjusted softmax to match gumbel_softmax behavior
+                if self.use_gumbel:
+                    probs = F.softmax(logits / self.tau, dim=0)
+                else:
+                    probs = F.softmax(logits, dim=0)
+                max_prob = probs.max().item()
+                use_hard = max_prob >= self.auto_harden_threshold
+
         if self.use_gumbel:
-            op_w = F.gumbel_softmax(logits, tau=self.tau, hard=False, dim=0)  # [K]
+            op_w = F.gumbel_softmax(logits, tau=self.tau, hard=use_hard, dim=0)  # [K]
         else:
-            op_w = F.softmax(logits, dim=0)  # [K]
+            if use_hard:
+                # Hard selection via straight-through estimator
+                probs = F.softmax(logits, dim=0)
+                hard_sel = F.one_hot(probs.argmax(dim=0), self.num_ops).float()
+                op_w = hard_sel - probs.detach() + probs  # STE
+            else:
+                op_w = F.softmax(logits, dim=0)  # [K]
 
         # Build all candidate operator outputs
         cand = []
         for name in self.op_names:
-            if self.kind == "logic":
-                out = self._apply_logic_op(name, left, right, a, w0, w1)
-            else:
-                out = self._apply_arith_op(name, left, right)
+            out = self._apply_op(name, values, a, w_tensors)
             cand.append(out)
 
-        cand = torch.stack(cand, dim=0)  # [K,B] if inputs are [B]
+        cand = torch.stack(cand, dim=0)  # [K, B] if inputs are [B]
 
+        # Mix operators according to learned weights
         out = (op_w.view(self.num_ops, 1) * cand).sum(dim=0)
-        out = torch.clamp(out, 0.0, 1.0)
         return out
 
-    # ------------------------------------------------------------------
-    # Logical ops (simple min/max flavor)
-    # ------------------------------------------------------------------
-    def _apply_logic_op(self, name, left, right, a, w0, w1):
-        """
-        Very simple logical ops using min/max; you can replace by your
-        full LSP versions if desired.
-        """
-        name = name.lower()
-        if name == "and":
-            return torch.min(left, right)          # strong AND
-        elif name == "or":
-            return torch.max(left, right)          # strong OR
-        else:
-            raise ValueError(f"Unknown logic op: {name}")
 
-    # ------------------------------------------------------------------
-    # Arithmetic ops
-    # ------------------------------------------------------------------
-    def _apply_arith_op(self, name, left, right):
+# =============================================================================
+# Boolean Operator Set
+# =============================================================================
+
+class BoolOperatorSet(OperatorSetAggregator):
+    """
+    Boolean/logical operator set aggregator.
+    
+    Default operators: ["and", "or"]
+    
+    Operations:
+        - and: minimum of all values (strong AND)
+        - or: maximum of all values (strong OR)
+    """
+
+    def __init__(
+        self,
+        op_names=None,
+        use_gumbel: bool = True,
+        tau: float = 1.0,
+        eps: float = 1e-6,
+        auto_harden_threshold: float | None = None,
+    ):
+        super().__init__(op_names=op_names, use_gumbel=use_gumbel, tau=tau, eps=eps, 
+                         auto_harden_threshold=auto_harden_threshold)
+
+    def get_default_op_names(self) -> list:
+        return ["and", "or"]
+
+    def _apply_op(self, name: str, values: Sequence[torch.Tensor], a: torch.Tensor, weights: Sequence[torch.Tensor]) -> torch.Tensor:
+        """Apply boolean operation."""
+        name = name.lower()
+        
+        if name == "and":
+            # AND: minimum of all values
+            result = values[0]
+            for v in values[1:]:
+                result = torch.min(result, v)
+            return result
+            
+        elif name == "or":
+            # OR: maximum of all values
+            result = values[0]
+            for v in values[1:]:
+                result = torch.max(result, v)
+            return result
+            
+        else:
+            raise ValueError(f"Unknown boolean op: {name}")
+
+
+# =============================================================================
+# Arithmetic Operator Set
+# =============================================================================
+
+class ArithmeticOperatorSet(OperatorSetAggregator):
+    """
+    Arithmetic operator set aggregator with proper weighted operations.
+    
+    Default operators: ["add", "sub", "mul", "div"]
+    
+    Operations use proper weights (no normalization to [0,1]):
+        - add: weighted sum = sum(w_i * x_i)
+        - sub: weighted subtraction in order = w_0*x_0 - w_1*x_1 - ...
+        - mul: product of weighted inputs = prod(w_i * x_i)
+        - div: weighted division = (w_0*x_0) / (w_1*x_1 + eps)
+    """
+
+    def __init__(
+        self,
+        op_names=None,
+        use_gumbel: bool = True,
+        tau: float = 1.0,
+        eps: float = 1e-6,
+        auto_harden_threshold: float | None = None,
+    ):
+        super().__init__(op_names=op_names, use_gumbel=use_gumbel, tau=tau, eps=eps, 
+                         auto_harden_threshold=auto_harden_threshold)
+
+    def get_default_op_names(self) -> list:
+        return ["add", "sub", "mul", "div"]
+
+    def _apply_op(self, name: str, values: Sequence[torch.Tensor], a: torch.Tensor, weights: Sequence[torch.Tensor]) -> torch.Tensor:
         """
-        Arithmetic ops; assume inputs roughly in [0,1].
-        Output is squashed to [0,1].
+        Apply arithmetic operation with proper weights.
+        No normalization - outputs can be any real number.
         """
         name = name.lower()
+        
         if name == "add":
-            z = left + right             # [0,2]
-            z = z / 2.0
+            # Weighted sum: sum(w_i * x_i)
+            result = torch.zeros_like(values[0])
+            for v, w in zip(values, weights):
+                result = result + w * v
+            return result
+            
         elif name == "sub":
-            z = left - right             # [-1,1]
-            z = (z + 1.0) / 2.0
+            # Weighted subtraction in order: w_0*x_0 - w_1*x_1 - w_2*x_2 - ...
+            result = weights[0] * values[0]
+            for v, w in zip(values[1:], weights[1:]):
+                result = result - w * v
+            return result
+            
         elif name == "mul":
-            z = left * right             # [0,1]
+            # Product of weighted inputs: prod(w_i * x_i)
+            result = weights[0] * values[0]
+            for v, w in zip(values[1:], weights[1:]):
+                result = result * (w * v)
+            return result
+            
         elif name == "div":
-            denom = torch.abs(right) + self.eps
-            raw = left / denom
-            z = torch.tanh(raw)          # [-1,1]
-            z = (z + 1.0) / 2.0
+            # Weighted division: (w_0*x_0) / (w_1*x_1 + eps)
+            numerator = weights[0] * values[0]
+            denominator = weights[1] * values[1] if len(values) > 1 else torch.ones_like(values[0])
+            # Add eps to avoid division by zero
+            denominator = denominator + self.eps * torch.sign(denominator + self.eps)
+            return numerator / denominator
+            
         else:
             raise ValueError(f"Unknown arithmetic op: {name}")
-        return z
