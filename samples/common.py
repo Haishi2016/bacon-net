@@ -386,6 +386,14 @@ def create_bacon_model(
     loss_trim_percentile: float = 0.0,
     loss_trim_mode: str = "none",
     loss_trim_start_epoch: int = 0,
+    # Tree layout options
+    tree_layout: str = "left",
+    # Full tree options (only used when tree_layout="full")
+    full_tree_depth: int = None,
+    full_tree_temperature: float = 3.0,
+    full_tree_final_temperature: float = 0.1,
+    full_tree_max_egress: int = None,
+    loss_weight_full_tree_egress: float = 0.0,
     **kwargs
 ):
     """Create a baconNet model with standard configuration.
@@ -406,6 +414,12 @@ def create_bacon_model(
         loss_trim_percentile: Fraction of batch to drop by loss percentile (default: 0.0)
         loss_trim_mode: 'drop_high', 'drop_low', or 'none' (default: 'none')
         loss_trim_start_epoch: Epoch to start trimming (warmup) (default: 0)
+        tree_layout: Tree structure layout. Options: "left", "balanced", "paired", "full" (default: "left")
+        full_tree_depth: Depth of the fully connected tree when tree_layout="full". (default: None = input_size - 1)
+        full_tree_temperature: Initial temperature for full tree sigmoid (default: 3.0)
+        full_tree_final_temperature: Final temperature after annealing (default: 0.1)
+        full_tree_max_egress: Each source concentrates on top-K destinations (default: None = no constraint)
+        loss_weight_full_tree_egress: Weight for full tree egress constraint loss (default: 0.0)
         **kwargs: Additional arguments passed to baconNet (advanced)
         
     Returns:
@@ -435,6 +449,13 @@ def create_bacon_model(
         loss_trim_percentile=loss_trim_percentile,
         loss_trim_mode=loss_trim_mode,
         loss_trim_start_epoch=loss_trim_start_epoch,
+        # Tree layout options
+        tree_layout=tree_layout,
+        full_tree_depth=full_tree_depth,
+        full_tree_temperature=full_tree_temperature,
+        full_tree_final_temperature=full_tree_final_temperature,
+        full_tree_max_egress=full_tree_max_egress,
+        loss_weight_full_tree_egress=loss_weight_full_tree_egress,
         **kwargs
     )
     

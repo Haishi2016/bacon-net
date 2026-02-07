@@ -171,52 +171,119 @@ def visualize_tree_structure(model, labels=None, layout=None):
             current = parent
             idx += 1
         root = current
-    else:
-        # Left-associative structure
-        for i in range(model.num_layers):
-            left = f"Node{i}" if i > 0 else leaf_names[0]
-            right = leaf_names[i + 1]
-            parent = f"Node{i+1}"
-            add_parent(parent, left, right, i)
-        root = f"Node{model.num_layers}"
-
-    # Add labels for leaf nodes
-    for leaf in leaf_nodes:
-        if leaf not in node_labels:
-            node_labels[leaf] = leaf
-
-    # Build the graph
-    G = nx.DiGraph()
-    def add_edges(node):
-        if node in node_dict:
-            l, r = node_dict[node]
-            G.add_edge(node, l, weight=weight_map.get((node, l), 1.0))
-            G.add_edge(node, r, weight=weight_map.get((node, r), 1.0))
-            add_edges(l)
-            add_edges(r)
+    elif effective_layout == 'full':
+        # Fully connected tree visualization
+        # Uses the learned edge structure from FullyConnectedTree
+        if hasattr(model, 'fully_connected_tree') and model.fully_connected_tree is not None:
+            structure = model.fully_connected_tree.get_tree_structure()
+            G = nx.DiGraph()
+            
+            # Add leaf nodes
+            for i, name in enumerate(leaf_names):
+                G.add_node(f"L0_{i}", label=name)
+            
+            # Add intermediate and output nodes based on layer widths
+            layer_widths = structure['layer_widths']
+            for l in range(1, len(layer_widths)):
+                for j in range(layer_widths[l]):
+                    node_id = f"L{l}_{j}"
+                    # Get andness for this node
+                    andness = None
+                    for b in structure['biases']:
+                        if b['layer'] == l and b['node'] == j:
+                            andness = b['andness']
+                            break
+                    label = f"{andness:.2f}" if andness is not None else f"N{l}.{j}"
+                    G.add_node(node_id, label=label)
+            
+            # Add edges with weights
+            for edge in structure['edges']:
+                src_node = f"L{edge['layer']}_{edge['src']}"
+                dst_node = f"L{edge['layer']+1}_{edge['dst']}"
+                if G.has_node(src_node) and G.has_node(dst_node):
+                    G.add_edge(src_node, dst_node, weight=edge['weight'])
+            
+            # Layout: arrange nodes by layer
+            pos = {}
+            for l in range(len(layer_widths)):
+                width = layer_widths[l]
+                for j in range(width):
+                    node_id = f"L{l}_{j}"
+                    if l == 0:
+                        # Leaf layer - spread horizontally
+                        x = j - (width - 1) / 2
+                    else:
+                        # Upper layers - center based on width
+                        x = j - (width - 1) / 2
+                    y = -l  # Higher layers at top
+                    pos[node_id] = (x, y)
+            
+            # Get labels
+            node_labels_fc = nx.get_node_attributes(G, 'label')
+            edge_labels_fc = {e: f"{w:.2f}" for e, w in nx.get_edge_attributes(G, "weight").items()}
+            
+            # Draw
+            plt.figure(figsize=(16, 10))
+            nx.draw(G, pos, with_labels=True, labels=node_labels_fc, node_color='lightgreen', 
+                    node_size=1500, font_size=8, arrows=True, arrowsize=15)
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_fc, font_color='red', font_size=7)
+            plt.title("BACON Fully Connected Tree Structure")
+            plt.axis("off")
+            plt.margins(0.2)
+            plt.tight_layout()
+            plt.show()
+            return  # Early return for full layout
         else:
-            G.add_node(node)
+            # Fallback to left-associative if no fully_connected_tree
+            effective_layout = 'left'
+    
+    if effective_layout not in ('full',):  # Non-full layouts continue here
+        # Left-associative structure (default)
+        if root is None:
+            for i in range(model.num_layers):
+                left = f"Node{i}" if i > 0 else leaf_names[0]
+                right = leaf_names[i + 1]
+                parent = f"Node{i+1}"
+                add_parent(parent, left, right, i)
+            root = f"Node{model.num_layers}"
 
-    add_edges(root)
+        # Add labels for leaf nodes
+        for leaf in leaf_nodes:
+            if leaf not in node_labels:
+                node_labels[leaf] = leaf
 
-    # Use general DFS layout (works for all binary trees constructed above)
-    pos = left_associative_layout(G, root)
-    edge_labels = {e: f"{w:.2f}" for e, w in nx.get_edge_attributes(G, "weight").items()}
+        # Build the graph
+        G = nx.DiGraph()
+        def add_edges(node):
+            if node in node_dict:
+                l, r = node_dict[node]
+                G.add_edge(node, l, weight=weight_map.get((node, l), 1.0))
+                G.add_edge(node, r, weight=weight_map.get((node, r), 1.0))
+                add_edges(l)
+                add_edges(r)
+            else:
+                G.add_node(node)
 
-    # Draw
-    plt.figure(figsize=(14, 8))
-    nx.draw(G, pos, with_labels=True, labels=node_labels, node_color='lightblue', node_size=2000, font_size=9)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red')
-    title = "Left-Associative"
-    if effective_layout == 'balanced':
-        title = 'Balanced'
-    elif effective_layout == 'paired':
-        title = 'Paired'
-    plt.title(f"BACON Tree Structure ({title})")
-    plt.axis("off")
-    plt.margins(0.1)
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    plt.show()
+        add_edges(root)
+
+        # Use general DFS layout (works for all binary trees constructed above)
+        pos = left_associative_layout(G, root)
+        edge_labels = {e: f"{w:.2f}" for e, w in nx.get_edge_attributes(G, "weight").items()}
+
+        # Draw
+        plt.figure(figsize=(14, 8))
+        nx.draw(G, pos, with_labels=True, labels=node_labels, node_color='lightblue', node_size=2000, font_size=9)
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red')
+        title = "Left-Associative"
+        if effective_layout == 'balanced':
+            title = 'Balanced'
+        elif effective_layout == 'paired':
+            title = 'Paired'
+        plt.title(f"BACON Tree Structure ({title})")
+        plt.axis("off")
+        plt.margins(0.1)
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.show()
 
 def print_tree_structure(model, labels=None, classic_boolean=False, layout=None):
     # print(f" FC_OUT Weight: {model.fc_out.weight.item():.2f}")
@@ -294,6 +361,8 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
         print("\n🧠 Logical Aggregation Tree (Balanced):\n")
     elif effective_layout == 'paired':
         print("\n🧠 Logical Aggregation Tree (Paired):\n")
+    elif effective_layout == 'full':
+        pass  # Header printed in full layout section
     else:
         print("\n🧠 Logical Aggregation Tree (Left-Associative):\n")
 
@@ -360,6 +429,61 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
             current = f"({current} -{wl:.2f}- [{op}] -{wr:.2f}- {parts[k]})"
             idx += 1
         print(current)
+        return
+    elif effective_layout == 'full':
+        # Print full tree structure
+        print("\n🧠 Logical Aggregation Tree (Fully Connected):\n")
+        if hasattr(model, 'fully_connected_tree') and model.fully_connected_tree is not None:
+            structure = model.fully_connected_tree.get_tree_structure()
+            print(f"Depth: {structure['depth']}")
+            print(f"Layer widths: {structure['layer_widths']}")
+            
+            # Check if edges have scale info
+            has_scales = len(structure['edges']) > 0 and 'scale' in structure['edges'][0]
+            
+            print(f"\nSignificant Edges (selection weight > 0.01):")
+            if has_scales:
+                print(f"{'Layer':<6} {'Source':<8} {'Dest':<6} {'Select':<10} {'Scale':<10}")
+                print("-" * 45)
+                for edge in structure['edges']:
+                    print(f"{edge['layer']:<6} {edge['src']:<8} {edge['dst']:<6} {edge['weight']:.4f}     {edge['scale']:.4f}")
+            else:
+                print(f"{'Layer':<6} {'Source':<8} {'Dest':<6} {'Weight':<10}")
+                print("-" * 35)
+                for edge in structure['edges']:
+                    print(f"{edge['layer']:<6} {edge['src']:<8} {edge['dst']:<6} {edge['weight']:.4f}")
+            
+            # Check if aggregator uses operator selection (e.g., ArithmeticOperatorSet)
+            aggregator = model.aggregator
+            has_operators = hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node is not None
+            
+            if has_operators:
+                # Show operator selections instead of andness
+                print(f"\nNode Operator Selections:")
+                print(f"{'Layer':<6} {'Node':<6} {'Operator':<12} {'Confidence':<10}")
+                print("-" * 40)
+                op_names = aggregator.op_names if hasattr(aggregator, 'op_names') else None
+                for i, b in enumerate(structure['biases']):
+                    if i < len(aggregator.op_logits_per_node):
+                        logits = aggregator.op_logits_per_node[i]
+                        probs = torch.softmax(logits, dim=0)
+                        best_idx = torch.argmax(probs).item()
+                        confidence = probs[best_idx].item()
+                        op_name = op_names[best_idx] if op_names else f"op{best_idx}"
+                        print(f"{b['layer']:<6} {b['node']:<6} {op_name:<12} {confidence:.4f}")
+            else:
+                # Show andness values (for LSP-style aggregators)
+                print(f"\nNode Andness Values:")
+                print(f"{'Layer':<6} {'Node':<6} {'Andness':<10}")
+                print("-" * 25)
+                for b in structure['biases']:
+                    print(f"{b['layer']:<6} {b['node']:<6} {b['andness']:.4f}")
+            
+            # Also print confidence
+            confidence = model.fully_connected_tree.get_confidence()
+            print(f"\nEdge Confidence: {confidence:.4f} (1.0 = all edges at 0 or 1)")
+        else:
+            print("No fully connected tree found in model.")
         return
     else:
         # Left-associative ASCII tree (existing behavior)

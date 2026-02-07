@@ -65,6 +65,7 @@ trans = [
 # Create model with custom configuration
 bacon = create_bacon_model(
     input_size=num_features,
+    tree_layout="full",
     aggregator=aggregator_type,
     weight_mode='trainable',
     transformations=trans,
@@ -77,7 +78,12 @@ bacon = create_bacon_model(
     training_policy=training_policy,
     loss_trim_percentile=args.loss_trim_percentile,
     loss_trim_mode=args.loss_trim_mode,
-    loss_trim_start_epoch=args.loss_trim_start_epoch
+    loss_trim_start_epoch=args.loss_trim_start_epoch,
+     # Full tree settings
+    full_tree_temperature=1.0,
+    full_tree_final_temperature=0.5,
+    full_tree_max_egress=None,  # No egress constraint for simple test
+    loss_weight_full_tree_egress=0.5,
 )
 
 # Train model
