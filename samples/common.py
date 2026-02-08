@@ -393,7 +393,13 @@ def create_bacon_model(
     full_tree_temperature: float = 3.0,
     full_tree_final_temperature: float = 0.1,
     full_tree_max_egress: int = None,
+    full_tree_shape: str = "triangle",
     loss_weight_full_tree_egress: float = 0.0,
+    # Learning rates for different parameter groups
+    lr_permutation: float = 0.3,
+    lr_transformation: float = 0.5,
+    lr_aggregator: float = 0.1,
+    lr_other: float = 0.1,
     **kwargs
 ):
     """Create a baconNet model with standard configuration.
@@ -419,7 +425,12 @@ def create_bacon_model(
         full_tree_temperature: Initial temperature for full tree sigmoid (default: 3.0)
         full_tree_final_temperature: Final temperature after annealing (default: 0.1)
         full_tree_max_egress: Each source concentrates on top-K destinations (default: None = no constraint)
+        full_tree_shape: Shape of the fully connected tree - "triangle" or "square" (default: "triangle")
         loss_weight_full_tree_egress: Weight for full tree egress constraint loss (default: 0.0)
+        lr_permutation: Learning rate for permutation layer (default: 0.3)
+        lr_transformation: Learning rate for transformation layer (default: 0.5)
+        lr_aggregator: Learning rate for aggregator weights (default: 0.1)
+        lr_other: Learning rate for other parameters (default: 0.1)
         **kwargs: Additional arguments passed to baconNet (advanced)
         
     Returns:
@@ -455,7 +466,13 @@ def create_bacon_model(
         full_tree_temperature=full_tree_temperature,
         full_tree_final_temperature=full_tree_final_temperature,
         full_tree_max_egress=full_tree_max_egress,
+        full_tree_shape=full_tree_shape,
         loss_weight_full_tree_egress=loss_weight_full_tree_egress,
+        # Learning rates
+        lr_permutation=lr_permutation,
+        lr_transformation=lr_transformation,
+        lr_aggregator=lr_aggregator,
+        lr_other=lr_other,
         **kwargs
     )
     

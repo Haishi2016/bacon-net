@@ -41,6 +41,7 @@ class binaryTreeLogicNet(nn.Module):
         aggregator (callable, optional): Aggregator to be used. Defaults to "lsp.full_weight".
         device (torch.device, optional): Device to run the model on. Defaults to None (uses CUDA if available).
         full_tree_depth (int, optional): Depth of the fully connected tree. Only used when tree_layout="full". Defaults to None (uses input_size - 1).
+        full_tree_shape (str, optional): Shape of the fully connected tree. "triangle" (default) or "square".
         full_tree_temperature (float, optional): Initial temperature for sigmoid edge weights. Defaults to 3.0.
         full_tree_final_temperature (float, optional): Final temperature after annealing. Defaults to 0.1.
         full_tree_max_egress (int, optional): Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).
@@ -73,6 +74,7 @@ class binaryTreeLogicNet(nn.Module):
                  sinkhorn_iters=100,
                  # Full tree parameters
                  full_tree_depth: int = None,
+                 full_tree_shape: str = "triangle",
                  full_tree_temperature: float = 3.0,
                  full_tree_final_temperature: float = 0.1,
                  full_tree_max_egress: int = None):
@@ -80,6 +82,7 @@ class binaryTreeLogicNet(nn.Module):
         
         # Store full tree parameters
         self.full_tree_depth = full_tree_depth
+        self.full_tree_shape = full_tree_shape
         self.full_tree_temperature = full_tree_temperature
         self.full_tree_final_temperature = full_tree_final_temperature
         self.full_tree_max_egress = full_tree_max_egress
@@ -245,6 +248,7 @@ class binaryTreeLogicNet(nn.Module):
             self.fully_connected_tree = FullyConnectedTree(
                 num_inputs=self.original_input_size,
                 depth=self.full_tree_depth,
+                shape=self.full_tree_shape,
                 temperature=self.full_tree_temperature,
                 final_temperature=self.full_tree_final_temperature,
                 use_gumbel=True,

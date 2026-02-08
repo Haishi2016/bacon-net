@@ -80,10 +80,10 @@ bacon = create_bacon_model(
     loss_trim_mode=args.loss_trim_mode,
     loss_trim_start_epoch=args.loss_trim_start_epoch,
      # Full tree settings
-    full_tree_temperature=1.0,
-    full_tree_final_temperature=0.5,
+    full_tree_temperature=5.0,
+    full_tree_final_temperature=5.0,
     full_tree_max_egress=None,  # No egress constraint for simple test
-    loss_weight_full_tree_egress=0.5,
+    loss_weight_full_tree_egress=0.1,
 )
 
 # Train model

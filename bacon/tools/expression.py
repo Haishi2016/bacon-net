@@ -149,16 +149,17 @@ def print_operator_selections(model: "baconNet", variables: List[str] = None):
             logging.info(f"   Node {sel['node']}: {sel['operator']} (conf={sel['confidence']:.2f}) [{probs_str}]")
 
 
-def print_reconstructed_expression(model: "baconNet", variables: List[str]):
+def print_reconstructed_expression(model: "baconNet", variables: List[str], precision: int = 2):
     """
     Print the reconstructed expression from the trained model.
     
     Args:
         model: Trained BACON model with OperatorSetAggregator
         variables: List of variable names (e.g., ['a', 'b', 'c'])
+        precision: Number of decimal places for weights (default: 2)
     """
-    expr = reconstruct_expression(model, variables, show_weights=True)
-    expr_no_weights = reconstruct_expression(model, variables, show_weights=False)
+    expr = reconstruct_expression(model, variables, show_weights=True, precision=precision)
+    expr_no_weights = reconstruct_expression(model, variables, show_weights=False, precision=precision)
     
     logging.info("\n📐 Reconstructed Expression:")
     logging.info(f"   With weights:    {expr}")
@@ -196,6 +197,8 @@ def _op_symbol(op: str) -> str:
         'div': '/',
         'and': '∧',
         'or': '∨',
+        'identity': '→',
+        'zero': '0',
     }
     return symbols.get(op.lower(), op)
 
@@ -399,6 +402,12 @@ def _reconstruct_full_tree(
                     combined = " * ".join(terms)
                 elif op == 'div':
                     combined = f"{terms[0]} / " + " / ".join(terms[1:])
+                elif op == 'identity':
+                    # Identity: just use the first term
+                    combined = terms[0]
+                elif op == 'zero':
+                    # Zero: output is always 0
+                    combined = "0"
                 else:
                     combined = f" {op_sym} ".join(terms)
                 

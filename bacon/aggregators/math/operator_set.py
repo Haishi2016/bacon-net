@@ -295,7 +295,7 @@ class ArithmeticOperatorSet(OperatorSetAggregator):
                          auto_harden_threshold=auto_harden_threshold)
 
     def get_default_op_names(self) -> list:
-        return ["add", "sub", "mul", "div"]
+        return ["add", "sub", "mul", "div", "identity", "zero"]
 
     def _apply_op(self, name: str, values: Sequence[torch.Tensor], a: torch.Tensor, weights: Sequence[torch.Tensor]) -> torch.Tensor:
         """
@@ -332,6 +332,18 @@ class ArithmeticOperatorSet(OperatorSetAggregator):
             # Add eps to avoid division by zero
             denominator = denominator + self.eps * torch.sign(denominator + self.eps)
             return numerator / denominator
+        
+        elif name == "identity":
+            # Pass through the highest-weighted input, ignore others
+            # Allows nodes to "select" one input from many in deeper trees
+            # Stack weights to find the max
+            weight_stack = torch.stack([w.abs() if isinstance(w, torch.Tensor) else torch.tensor(abs(w)) for w in weights])
+            max_idx = weight_stack.argmax().item()
+            return weights[max_idx] * values[max_idx]
+        
+        elif name == "zero":
+            # Always return zero (effectively prunes/disables this node)
+            return torch.zeros_like(values[0])
             
         else:
             raise ValueError(f"Unknown arithmetic op: {name}")

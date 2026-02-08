@@ -77,6 +77,7 @@ class baconNet(nn.Module):
         lr_other (float, optional): Learning rate for other parameters. Defaults to 0.1.
         use_class_weighting (bool, optional): Whether to apply class weighting for imbalanced data. Defaults to True. When True, penalizes minority class errors more heavily (pos_weight = neg_count/pos_count). When False, uses standard BCE loss (original behavior).
         full_tree_depth (int, optional): Depth of the fully connected tree. Only used when tree_layout="full". Defaults to None (uses input_size - 1).
+        full_tree_shape (str, optional): Shape of the fully connected tree. "triangle" (default) or "square".
         full_tree_temperature (float, optional): Initial temperature for sigmoid edge weights. Defaults to 3.0.
         full_tree_final_temperature (float, optional): Final temperature after annealing. Defaults to 0.1.
         full_tree_max_egress (int, optional): Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).
@@ -115,6 +116,7 @@ class baconNet(nn.Module):
                  training_policy=None,
                  # Full tree parameters
                  full_tree_depth: int = None,
+                 full_tree_shape: str = "triangle",
                  full_tree_temperature: float = 3.0,
                  full_tree_final_temperature: float = 0.1,
                  full_tree_max_egress: int = None,
@@ -149,6 +151,7 @@ class baconNet(nn.Module):
         
         # Full tree parameters (stored for reference)
         self.full_tree_depth = full_tree_depth
+        self.full_tree_shape = full_tree_shape
         self.full_tree_temperature = full_tree_temperature
         self.full_tree_final_temperature = full_tree_final_temperature
         self.full_tree_max_egress = full_tree_max_egress
@@ -196,6 +199,7 @@ class baconNet(nn.Module):
                                             weight_choices=None,
                                             # Full tree parameters
                                             full_tree_depth=full_tree_depth,
+                                            full_tree_shape=full_tree_shape,
                                             full_tree_temperature=full_tree_temperature,
                                             full_tree_final_temperature=full_tree_final_temperature,
                                             full_tree_max_egress=full_tree_max_egress)
@@ -339,6 +343,7 @@ class baconNet(nn.Module):
             sinkhorn_iters=sinkhorn_iters,
             # Full tree parameters
             full_tree_depth=cfg.full_tree_depth,
+            full_tree_shape=cfg.full_tree_shape,
             full_tree_temperature=cfg.full_tree_temperature,
             full_tree_final_temperature=cfg.full_tree_final_temperature,
             full_tree_max_egress=cfg.full_tree_max_egress,
