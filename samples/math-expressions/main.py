@@ -17,6 +17,7 @@ import sys
 sys.path.insert(0, '../../')
 
 import re
+import copy
 import torch
 import torch.nn as nn
 import numpy as np
@@ -35,7 +36,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # Mathematical expression to approximate
 # Examples: "a+b+c", "a*b+c", "3*a+2*b-c", "(a+b)*c", "sqrt(a)+b"
-EXPRESSION = "a + 2* b + 10*c"
+EXPRESSION = "3.1415926*a * 2* b * 10*c"
 
 # Dataset configuration
 NUM_SAMPLES = 2000           # Number of training samples
@@ -45,8 +46,19 @@ OUTPUT_NOISE_PERCENT = 0.0 # Noise level for outputs (0-100)
 
 # Training configuration
 EPOCHS = 8000               # Number of training epochs
-LEARNING_RATE = 0.1        # Learning rate
+LEARNING_RATE = 0.5         # Learning rate
 TREE_LAYOUT = "full"        # Tree structure: "left", "balanced", "full"
+
+# Learning rate restore/rollback - when loss bounces, restore best state and reduce LR
+LR_RESTORE_PATIENCE = 500     # Wait this many epochs before considering restore
+LR_RESTORE_THRESHOLD = 1.5    # Restore if MSE > threshold * best_mse
+LR_DECAY_FACTOR = 0.8         # Multiply LR by this on restore
+MIN_LEARNING_RATE = 0.001     # Stop reducing LR below this
+MAX_RESTORES = 10              # Maximum number of restores (prevents infinite loops)
+
+# Early stopping - stop training when MSE is low enough
+EARLY_STOP_MSE = 0.01         # Stop if MSE drops below this threshold (None = disabled)
+EARLY_STOP_PATIENCE = 0       # Epochs to wait after reaching threshold (0 = immediate)
 
 # Operators to use. None = all operators ["add", "sub", "mul", "div"]
 OPERATOR_NAMES = None 
@@ -69,6 +81,7 @@ OPERATOR_AUTO_HARDEN_THRESHOLD = None
 # Use Gumbel noise for operator selection exploration
 OPERATOR_USE_GUMBEL = True
 
+FULL_TREE_DEPTH  = 2
 # Random seed for reproducibility
 SEED = 42
 
@@ -262,7 +275,7 @@ def create_regression_model(
         Configured baconNet model
     """
     model = baconNet(
-        full_tree_depth=1,  # depth=1: direct input→output connection (simplest)
+        full_tree_depth=FULL_TREE_DEPTH,  # depth=1: direct input→output connection (simplest)
         input_size=num_inputs,
         aggregator='math.operator_set.arith',
         weight_mode='trainable',  # Allow weights to be learned
@@ -344,16 +357,30 @@ def train_regression_model(
         op_anneal = OPERATOR_ANNEAL_EPOCHS if OPERATOR_ANNEAL_EPOCHS is not None else epochs
         logging.info(f"   Operator tau annealing: {OPERATOR_INITIAL_TAU} → {OPERATOR_FINAL_TAU} over {op_anneal} epochs")
         aggregator.tau = OPERATOR_INITIAL_TAU
-        # Warmup phase: first 30% of training with reduced regularization
+    
+    # LR restore tracking
+    logging.info(f"   LR restore: patience={LR_RESTORE_PATIENCE}, threshold={LR_RESTORE_THRESHOLD}x, decay={LR_DECAY_FACTOR}")
+    best_mse = float('inf')
+    best_state = None
+    best_epoch = 0
+    epochs_since_best = 0
+    num_restores = 0
+    current_lr = learning_rate
+    temp_epoch = 0  # Separate counter for temperature annealing (can be restored)
+    
+    # Early stopping tracking
+    early_stop_epoch = None  # When we first reached threshold
+    
+    # Warmup phase: first 30% of training with reduced regularization
     warmup_epochs = int(epochs * 0.3)
     
     for epoch in range(epochs):
         optimizer.zero_grad()
         
         # Anneal temperature for full tree (sharper edges as training progresses)
-        # Use separate schedule for edge annealing
+        # Use temp_epoch for annealing (restored on rollback)
         edge_anneal_epochs = EDGE_ANNEAL_EPOCHS if EDGE_ANNEAL_EPOCHS is not None else epochs
-        edge_progress = min(1.0, epoch / max(1, edge_anneal_epochs - 1))
+        edge_progress = min(1.0, temp_epoch / max(1, edge_anneal_epochs - 1))
         if is_full_tree:
             model.assembler.anneal_full_tree_temperature(edge_progress)
             model.assembler.anneal_full_tree_gumbel(edge_progress)
@@ -361,7 +388,7 @@ def train_regression_model(
         # Anneal operator temperature (high early = exploration, low later = commitment)
         if hasattr(aggregator, 'tau'):
             anneal_epochs = OPERATOR_ANNEAL_EPOCHS if OPERATOR_ANNEAL_EPOCHS is not None else epochs
-            op_progress = min(1.0, epoch / max(1, anneal_epochs - 1))
+            op_progress = min(1.0, temp_epoch / max(1, anneal_epochs - 1))
             aggregator.tau = OPERATOR_INITIAL_TAU + op_progress * (OPERATOR_FINAL_TAU - OPERATOR_INITIAL_TAU)
         
         outputs = model(X_train)
@@ -389,6 +416,41 @@ def train_regression_model(
         loss_value = mse_loss.item()
         loss_history.append(loss_value)
         
+        # Track best state and handle LR restore
+        if loss_value < best_mse:
+            best_mse = loss_value
+            best_state = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
+            epochs_since_best = 0
+        else:
+            epochs_since_best += 1
+        
+        # Check if we should restore to best state and reduce LR
+        should_restore = (
+            epochs_since_best >= LR_RESTORE_PATIENCE and
+            loss_value > best_mse * LR_RESTORE_THRESHOLD and
+            num_restores < MAX_RESTORES and
+            current_lr > MIN_LEARNING_RATE and
+            best_state is not None
+        )
+        
+        if should_restore:
+            # Restore best state
+            model.load_state_dict(best_state)
+            
+            # NOTE: We do NOT restore temp_epoch. Let temperature continue annealing
+            # even after restore. This forces eventual commitment to structure.
+            # The reduced LR compensates for the temperature mismatch.
+            
+            # Reduce learning rate
+            current_lr = max(current_lr * LR_DECAY_FACTOR, MIN_LEARNING_RATE)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = current_lr
+            
+            num_restores += 1
+            epochs_since_best = 0
+            logging.info(f"   🔄 Epoch {epoch + 1}: Restored to epoch {best_epoch + 1} (MSE={best_mse:.4f}), LR → {current_lr:.6f} (restore {num_restores}/{MAX_RESTORES})")
+        
         if (epoch + 1) % print_every == 0 or epoch == 0:
             # Compute R² score
             with torch.no_grad():
@@ -405,6 +467,27 @@ def train_regression_model(
                         extra_info += f", egress={eg:.3f}"
                 
             logging.info(f"   Epoch {epoch + 1:5d}: MSE = {loss_value:.6f}, R² = {r2.item():.4f}{extra_info}")
+        
+        # Check early stopping condition
+        if EARLY_STOP_MSE is not None and loss_value <= EARLY_STOP_MSE:
+            if EARLY_STOP_PATIENCE == 0:
+                logging.info(f"\n🎯 Early stopping: MSE {loss_value:.6f} <= {EARLY_STOP_MSE}")
+                break
+            elif early_stop_epoch is None:
+                early_stop_epoch = epoch
+            elif epoch - early_stop_epoch >= EARLY_STOP_PATIENCE:
+                logging.info(f"\n🎯 Early stopping: MSE {loss_value:.6f} <= {EARLY_STOP_MSE} for {EARLY_STOP_PATIENCE} epochs")
+                break
+        else:
+            early_stop_epoch = None  # Reset if MSE goes back up
+        
+        # Increment temperature epoch (for annealing schedule)
+        temp_epoch += 1
+    
+    # Restore best state at end of training
+    if best_state is not None and loss_value > best_mse * 1.01:  # If not already at best
+        model.load_state_dict(best_state)
+        logging.info(f"\n🏆 Restored to best state from epoch {best_epoch + 1} (MSE={best_mse:.6f})")
     
     # Harden the tree to discrete selections
     if is_full_tree and harden_after_training:
@@ -485,7 +568,7 @@ def main():
     print_operator_selections(model, variables)
     
     # Print reconstructed expression
-    print_reconstructed_expression(model, variables)
+    print_reconstructed_expression(model, variables, precision=4)
     
     # Print tree structure
     logging.info("\n📋 Learned Tree Structure:")

@@ -55,6 +55,7 @@ class FullyConnectedTree(nn.Module):
         num_inputs: int,
         depth: Optional[int] = None,
         layer_widths: Optional[List[int]] = None,
+        shape: str = "triangle",  # "triangle" or "square"
         temperature: float = 3.0,
         final_temperature: float = 0.1,
         use_gumbel: bool = True,
@@ -66,17 +67,24 @@ class FullyConnectedTree(nn.Module):
         
         self.num_inputs = num_inputs
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.shape = shape
         
         # Default depth matches left/balanced tree (n-1 aggregators for n inputs)
         if depth is None:
             depth = num_inputs - 1
         self.depth = depth
         
-        # Compute layer widths: all hidden layers have width = num_inputs, output = 1
-        # This allows full connectivity and flexibility during training
+        # Compute layer widths based on shape
         if layer_widths is None:
-            # Layer 0: num_inputs, Layers 1 to depth-1: num_inputs, Layer depth: 1
-            layer_widths = [num_inputs] * depth + [1]
+            if shape == "triangle":
+                # Triangular: [n, n-1, n-2, ..., 1] - natural reduction like binary tree
+                layer_widths = list(range(num_inputs, 0, -1))[:depth + 1]
+                # Ensure we have enough layers and end with 1
+                while len(layer_widths) < depth + 1:
+                    layer_widths.append(1)
+            else:  # "square"
+                # Square: [n, n, n, ..., 1] - full connectivity at each layer
+                layer_widths = [num_inputs] * depth + [1]
         
         # Ensure output is 1
         if layer_widths[-1] != 1:
