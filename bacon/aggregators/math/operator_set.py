@@ -47,6 +47,10 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
         self.use_gumbel = use_gumbel
         self.tau = tau
         self.auto_harden_threshold = auto_harden_threshold
+        
+        # Phase 1 default operator: if set, use this operator instead of learned blend
+        # This prevents gradient explosion from div during structure discovery phase
+        self.phase1_default_op: str | None = None
 
         if op_names is None:
             op_names = self.get_default_op_names()
@@ -88,15 +92,36 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
     # ------------------------------------------------------------------
     # Wiring from BACON
     # ------------------------------------------------------------------
-    def attach_to_tree(self, num_layers: int):
+    def attach_to_tree(self, num_layers: int, initial_op_bias: str = None):
         """
         Called once BACON knows how many internal nodes (layers) exist.
         Creates a set of operator logits, one per internal node.
+        
+        If already attached with correct num_layers, does nothing (preserves existing logits).
+        
+        Args:
+            num_layers: Number of internal nodes in the tree
+            initial_op_bias: If set, initialize logits to favor this operator (e.g., "mul")
         """
+        # If already attached with same size, preserve existing logits
+        if self.num_layers == num_layers and self.op_logits_per_node is not None:
+            return
+            
         self.num_layers = num_layers
-        self.op_logits_per_node = nn.ParameterList(
-            [nn.Parameter(torch.zeros(self.num_ops)) for _ in range(num_layers)]
-        )
+        
+        if initial_op_bias and initial_op_bias in self.op_names:
+            # Initialize with bias toward specified operator
+            bias_idx = self.op_names.index(initial_op_bias)
+            init_logits = torch.zeros(self.num_ops)
+            init_logits[bias_idx] = 2.0  # Bias toward this operator
+            self.op_logits_per_node = nn.ParameterList(
+                [nn.Parameter(init_logits.clone()) for _ in range(num_layers)]
+            )
+        else:
+            # Default: uniform initialization
+            self.op_logits_per_node = nn.ParameterList(
+                [nn.Parameter(torch.zeros(self.num_ops)) for _ in range(num_layers)]
+            )
 
     def start_forward(self):
         """
@@ -177,6 +202,11 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
 
         # Move pointer for the next node
         self._node_ptr += 1
+
+        # Phase 1 default: use a single safe operator instead of learned blend
+        # This prevents gradient explosion from div during structure discovery phase
+        if self.phase1_default_op is not None:
+            return self._apply_op(self.phase1_default_op, values, a, w_tensors)
 
         # Determine if we should use hard selection
         # auto_harden_threshold: if max prob exceeds threshold, use hard=True
@@ -280,7 +310,7 @@ class ArithmeticOperatorSet(OperatorSetAggregator):
         - add: weighted sum = sum(w_i * x_i)
         - sub: weighted subtraction in order = w_0*x_0 - w_1*x_1 - ...
         - mul: product of weighted inputs = prod(w_i * x_i)
-        - div: weighted division = (w_0*x_0) / (w_1*x_1 + eps)
+        - div: weighted division = (w_0*x_0) / (w_1*x_1 + eps), clamped for stability
     """
 
     def __init__(
@@ -290,12 +320,15 @@ class ArithmeticOperatorSet(OperatorSetAggregator):
         tau: float = 1.0,
         eps: float = 1e-6,
         auto_harden_threshold: float | None = None,
+        output_clamp: float = 1e4,  # Clamp div/mul outputs to prevent explosion
     ):
         super().__init__(op_names=op_names, use_gumbel=use_gumbel, tau=tau, eps=eps, 
                          auto_harden_threshold=auto_harden_threshold)
+        self.output_clamp = output_clamp
 
     def get_default_op_names(self) -> list:
-        return ["add", "sub", "mul", "div", "identity", "zero"]
+        # return ["add", "sub", "mul", "div", "identity", "zero"]
+        return ["add", "sub", "mul", "div", "identity"]
 
     def _apply_op(self, name: str, values: Sequence[torch.Tensor], a: torch.Tensor, weights: Sequence[torch.Tensor]) -> torch.Tensor:
         """
@@ -323,6 +356,9 @@ class ArithmeticOperatorSet(OperatorSetAggregator):
             result = weights[0] * values[0]
             for v, w in zip(values[1:], weights[1:]):
                 result = result * (w * v)
+            # Clamp to prevent explosion during soft operator selection
+            if self.output_clamp is not None:
+                result = torch.clamp(result, -self.output_clamp, self.output_clamp)
             return result
             
         elif name == "div":
@@ -331,7 +367,11 @@ class ArithmeticOperatorSet(OperatorSetAggregator):
             denominator = weights[1] * values[1] if len(values) > 1 else torch.ones_like(values[0])
             # Add eps to avoid division by zero
             denominator = denominator + self.eps * torch.sign(denominator + self.eps)
-            return numerator / denominator
+            result = numerator / denominator
+            # Clamp to prevent explosion during soft operator selection
+            if self.output_clamp is not None:
+                result = torch.clamp(result, -self.output_clamp, self.output_clamp)
+            return result
         
         elif name == "identity":
             # Pass through the highest-weighted input, ignore others

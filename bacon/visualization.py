@@ -1313,3 +1313,398 @@ def plot_roc_curve(model, X, Y, threshold=0.5, title="ROC Curve", filename=None)
     
     return roc_auc
 
+
+# =============================================================================
+# Alternating Tree Visualization
+# =============================================================================
+
+def visualize_alternating_tree(
+    assembler_or_model,
+    aggregator=None,
+    variable_names=None,
+    title: str = "Alternating Coefficient-Aggregation Tree",
+    expression=None,
+    mse=None,
+    r2=None,
+    show: bool = True,
+    save_path=None
+):
+    """
+    Create an interactive visualization of the alternating tree structure.
+    
+    Features:
+    - Drag individual nodes
+    - Zoom in/out with scroll wheel
+    - Pan by dragging background
+    - Physics simulation for layout
+    
+    Args:
+        assembler_or_model: Either binaryTreeLogicNet (with .alternating_tree) or AlternatingTree directly
+        aggregator: ArithmeticOperatorSet (optional if assembler has .aggregator)
+        variable_names: Names for input variables (e.g., ['a', 'b', 'c'])
+        title: Chart title
+        expression: The learned/reconstructed expression string
+        mse: Final MSE value
+        r2: Final R² value
+        show: Whether to display the chart
+        save_path: Optional path to save HTML file
+        
+    Returns:
+        Pyvis Network object
+    """
+    # Support both: assembler with .alternating_tree or direct AlternatingTree
+    if hasattr(assembler_or_model, 'alternating_tree'):
+        # It's an assembler (binaryTreeLogicNet)
+        model = assembler_or_model.alternating_tree
+        if aggregator is None:
+            aggregator = assembler_or_model.aggregator
+    else:
+        # It's a direct AlternatingTree
+        model = assembler_or_model
+    
+    if model is None:
+        print("❌ No alternating tree found")
+        return None
+    
+    try:
+        from pyvis.network import Network
+    except ImportError:
+        print("❌ Pyvis not installed. Run: pip install pyvis")
+        return None
+    
+    # Create network with physics for nice layout
+    # Note: heading is set to empty - we add custom header via HTML injection
+    net = Network(
+        height="800px",
+        width="100%",
+        bgcolor="#fafafa",
+        font_color="white",
+        directed=True,
+        heading=""  # Empty - custom header added later
+    )
+    
+    # Configure physics for hierarchical layout
+    net.set_options("""
+    {
+        "physics": {
+            "enabled": true,
+            "hierarchicalRepulsion": {
+                "centralGravity": 0.0,
+                "springLength": 150,
+                "springConstant": 0.01,
+                "nodeDistance": 120
+            },
+            "solver": "hierarchicalRepulsion"
+        },
+        "layout": {
+            "hierarchical": {
+                "enabled": true,
+                "direction": "UD",
+                "sortMethod": "directed",
+                "levelSeparation": 120,
+                "nodeSpacing": 100
+            }
+        },
+        "interaction": {
+            "dragNodes": true,
+            "dragView": true,
+            "zoomView": true,
+            "hover": true
+        },
+        "edges": {
+            "smooth": {
+                "enabled": true,
+                "type": "cubicBezier"
+            }
+        }
+    }
+    """)
+    
+    num_inputs = model.num_inputs
+    if variable_names is None:
+        variable_names = [f"x{i}" for i in range(num_inputs)]
+    
+    node_id = 0
+    layer_node_ids = []  # Track node IDs per layer
+    
+    # === Input layer ===
+    input_ids = []
+    for i in range(num_inputs):
+        nid = f"input_{i}"
+        input_ids.append(nid)
+        net.add_node(
+            nid,
+            label=variable_names[i],
+            color="#4CAF50",  # Green
+            size=30,
+            shape="circle",
+            title=f"Input: {variable_names[i]}",
+            level=0,
+            font={"color": "white", "size": 14}
+        )
+    layer_node_ids.append(input_ids)
+    
+    level = 1
+    coeff_idx = 0
+    agg_node_idx = 0
+    
+    for layer_idx, agg_layer in enumerate(model.agg_layers):
+        # === Coefficient layer ===
+        if coeff_idx < len(model.coeff_layers):
+            coeff_layer = model.coeff_layers[coeff_idx]
+            coeffs = coeff_layer.get_coefficients().cpu().numpy()
+            
+            coeff_ids = []
+            for i in range(len(coeffs)):
+                nid = f"coeff_{coeff_idx}_{i}"
+                coeff_ids.append(nid)
+                coeff_val = coeffs[i]
+                net.add_node(
+                    nid,
+                    label=f"×{coeff_val:.2f}",
+                    color="#FF9800",  # Orange
+                    size=25,
+                    shape="circle",
+                    title=f"Coefficient: {coeff_val:.4f}",
+                    level=level,
+                    font={"color": "white", "size": 12}
+                )
+                
+                # Edge from previous layer (1:1 fixed connection)
+                prev_ids = layer_node_ids[-1]
+                if i < len(prev_ids):
+                    net.add_edge(
+                        prev_ids[i], nid,
+                        color="rgba(100, 100, 100, 0.5)",
+                        width=2,
+                        dashes=True,
+                        title="Fixed 1:1"
+                    )
+            
+            layer_node_ids.append(coeff_ids)
+            coeff_idx += 1
+            level += 1
+        
+        # === Aggregation layer ===
+        is_learned_routing = hasattr(agg_layer, 'learn_routing') and agg_layer.learn_routing
+        if hasattr(agg_layer, 'get_edge_weights'):
+            edge_weights = agg_layer.get_edge_weights().detach().cpu().numpy()
+        else:
+            edge_weights = agg_layer.edges.cpu().numpy()
+        
+        # Get operator names
+        op_names = []
+        if aggregator and hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node:
+            for node_i in range(agg_layer.out_width):
+                global_idx = agg_node_idx + node_i
+                if global_idx < len(aggregator.op_logits_per_node):
+                    logits = aggregator.op_logits_per_node[global_idx]
+                    probs = torch.softmax(logits, dim=0).detach().cpu()
+                    op_idx = probs.argmax().item()
+                    op_name = aggregator.op_names[op_idx]
+                    conf = probs[op_idx].item()
+                    op_names.append((op_name, conf))
+                else:
+                    op_names.append(("?", 0))
+        else:
+            op_names = [("agg", 1.0)] * agg_layer.out_width
+        
+        agg_ids = []
+        for j in range(agg_layer.out_width):
+            nid = f"agg_{layer_idx}_{j}"
+            agg_ids.append(nid)
+            op_name, conf = op_names[j]
+            layer_type = "learned" if is_learned_routing else "fixed"
+            
+            net.add_node(
+                nid,
+                label=op_name,
+                color="#2196F3",  # Blue
+                size=35,
+                shape="circle",
+                title=f"Operator: {op_name} ({conf:.0%})<br>Routing: {layer_type}",
+                level=level,
+                font={"color": "white", "size": 14, "bold": True}
+            )
+            
+            # Edges from previous layer
+            prev_ids = layer_node_ids[-1]
+            for i in range(agg_layer.in_width):
+                w = edge_weights[i, j]
+                if w > 0.05:
+                    if is_learned_routing:
+                        # Learned: solid blue
+                        alpha = 0.3 + 0.7 * w
+                        edge_color = f"rgba(33, 150, 243, {alpha})"
+                        edge_width = 1 + 4 * w
+                        dashes = False
+                    else:
+                        # Fixed: dashed gray
+                        edge_color = "rgba(100, 100, 100, 0.6)"
+                        edge_width = 2
+                        dashes = True
+                    
+                    net.add_edge(
+                        prev_ids[i], nid,
+                        color=edge_color,
+                        width=edge_width,
+                        dashes=dashes,
+                        title=f"Weight: {w:.3f}" + (" (fixed)" if dashes else " (learned)")
+                    )
+        
+        layer_node_ids.append(agg_ids)
+        agg_node_idx += agg_layer.out_width
+        level += 1
+    
+    # Add output node
+    net.add_node(
+        "output",
+        label="Output",
+        color="#9C27B0",  # Purple
+        size=30,
+        shape="circle",
+        title="Final output",
+        level=level,
+        font={"color": "white", "size": 14}
+    )
+    
+    # Connect last agg layer to output
+    if layer_node_ids:
+        last_ids = layer_node_ids[-1]
+        for nid in last_ids:
+            net.add_edge(
+                nid, "output",
+                color="rgba(156, 39, 176, 0.6)",
+                width=2,
+                dashes=True,
+                title="Output"
+            )
+    
+    # Save and/or show
+    output_path = save_path or "alternating_tree_viz.html"
+    net.save_graph(output_path)
+    
+    # Inject custom header with stats into the HTML
+    _inject_alternating_tree_header(output_path, title, expression, mse, r2)
+    
+    print(f"💾 Saved visualization to: {output_path}")
+    
+    if show:
+        import webbrowser
+        import os
+        webbrowser.open('file://' + os.path.realpath(output_path))
+    
+    return net
+
+
+def _inject_alternating_tree_header(filepath: str, title: str, expression=None, mse=None, r2=None):
+    """Inject a custom header with stats into the saved HTML file."""
+    with open(filepath, 'r', encoding='utf-8') as f:
+        html = f.read()
+    
+    # Build stats line
+    stats_parts = []
+    if expression:
+        stats_parts.append(f"<b>Expression:</b> <code>{expression}</code>")
+    if r2 is not None:
+        stats_parts.append(f"<b>R²:</b> {r2:.4f}")
+    if mse is not None:
+        stats_parts.append(f"<b>MSE:</b> {mse:.4f}")
+    
+    stats_html = " &nbsp;|&nbsp; ".join(stats_parts) if stats_parts else ""
+    
+    # Create header HTML
+    header_html = f'''
+    <div style="text-align: center; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: Arial, sans-serif; margin-bottom: 10px; border-radius: 8px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 24px;">{title}</h2>
+        <div style="font-size: 14px; opacity: 0.95;">{stats_html}</div>
+    </div>
+    '''
+    
+    # Insert after <body> tag
+    html = html.replace('<body>', f'<body>\n{header_html}', 1)
+    
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+
+def print_alternating_tree_structure(assembler_or_model, aggregator=None, variable_names=None):
+    """Print ASCII representation of the alternating tree structure.
+    
+    Args:
+        assembler_or_model: Either binaryTreeLogicNet (with .alternating_tree) or AlternatingTree directly
+        aggregator: ArithmeticOperatorSet (optional if assembler has .aggregator)
+        variable_names: Names for input variables (e.g., ['a', 'b', 'c'])
+    """
+    # Support both: assembler with .alternating_tree or direct AlternatingTree
+    if hasattr(assembler_or_model, 'alternating_tree'):
+        # It's an assembler (binaryTreeLogicNet)
+        model = assembler_or_model.alternating_tree
+        if aggregator is None:
+            aggregator = assembler_or_model.aggregator
+    else:
+        # It's a direct AlternatingTree
+        model = assembler_or_model
+    
+    if model is None:
+        print("❌ No alternating tree found")
+        return
+    
+    num_inputs = model.num_inputs
+    if variable_names is None:
+        variable_names = [f"x{i}" for i in range(num_inputs)]
+    
+    print("\n" + "="*60)
+    print("ALTERNATING TREE STRUCTURE")
+    print("="*60)
+    
+    # Input layer
+    print(f"\n📥 Inputs: {' '.join(variable_names)}")
+    
+    coeff_idx = 0
+    agg_node_idx = 0
+    
+    for layer_idx, agg_layer in enumerate(model.agg_layers):
+        # Coefficient layer
+        if coeff_idx < len(model.coeff_layers):
+            coeff_layer = model.coeff_layers[coeff_idx]
+            coeffs = coeff_layer.get_coefficients().cpu().numpy()
+            coeff_str = " ".join([f"×{c:.2f}" for c in coeffs])
+            print(f"   ↓")
+            print(f"📊 Coefficients [{coeff_idx}]: {coeff_str}")
+            coeff_idx += 1
+        
+        # Aggregation layer
+        if hasattr(agg_layer, 'get_edge_weights'):
+            edge_weights = agg_layer.get_edge_weights().detach().cpu().numpy()
+        else:
+            edge_weights = agg_layer.edges.cpu().numpy()
+        
+        # Routing info
+        print(f"   ↓")
+        routing_type = "learned" if hasattr(agg_layer, 'learn_routing') and agg_layer.learn_routing else "fixed"
+        print(f"🔀 Routing [{layer_idx}] ({routing_type}): {agg_layer.in_width} → {agg_layer.out_width}")
+        
+        for j in range(agg_layer.out_width):
+            sources = []
+            for i in range(agg_layer.in_width):
+                w = edge_weights[i, j]
+                if w > 0.1:
+                    sources.append(f"{i}({w:.2f})")
+            
+            op_name = "?"
+            if aggregator and hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node:
+                global_idx = agg_node_idx + j
+                if global_idx < len(aggregator.op_logits_per_node):
+                    logits = aggregator.op_logits_per_node[global_idx]
+                    probs = torch.softmax(logits, dim=0).detach().cpu()
+                    op_idx = probs.argmax().item()
+                    op_name = aggregator.op_names[op_idx]
+            
+            print(f"   Node {j} [{op_name}] ← {', '.join(sources)}")
+        
+        agg_node_idx += agg_layer.out_width
+    
+    print("   ↓")
+    print("📤 Output")
+    print("="*60 + "\n")

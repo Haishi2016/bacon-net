@@ -394,6 +394,9 @@ def create_bacon_model(
     full_tree_final_temperature: float = 0.1,
     full_tree_max_egress: int = None,
     full_tree_shape: str = "triangle",
+    full_tree_concentrate_ingress: bool = False,
+    full_tree_use_sinkhorn: bool = False,
+    use_permutation_layer: bool = True,
     loss_weight_full_tree_egress: float = 0.0,
     # Learning rates for different parameter groups
     lr_permutation: float = 0.3,
@@ -426,6 +429,8 @@ def create_bacon_model(
         full_tree_final_temperature: Final temperature after annealing (default: 0.1)
         full_tree_max_egress: Each source concentrates on top-K destinations (default: None = no constraint)
         full_tree_shape: Shape of the fully connected tree - "triangle" or "square" (default: "triangle")
+        use_permutation_layer: Whether to use the permutation layer (default: True).
+            Set to False for full tree layout to let the tree learn input routing directly.
         loss_weight_full_tree_egress: Weight for full tree egress constraint loss (default: 0.0)
         lr_permutation: Learning rate for permutation layer (default: 0.3)
         lr_transformation: Learning rate for transformation layer (default: 0.5)
@@ -467,6 +472,9 @@ def create_bacon_model(
         full_tree_final_temperature=full_tree_final_temperature,
         full_tree_max_egress=full_tree_max_egress,
         full_tree_shape=full_tree_shape,
+        full_tree_concentrate_ingress=full_tree_concentrate_ingress,
+        full_tree_use_sinkhorn=full_tree_use_sinkhorn,
+        use_permutation_layer=use_permutation_layer,
         loss_weight_full_tree_egress=loss_weight_full_tree_egress,
         # Learning rates
         lr_permutation=lr_permutation,
@@ -498,6 +506,7 @@ def train_bacon_model(
     frozen_training_epochs=200,
     max_epochs=5000,
     binary_threshold = 0.5,
+    task_type="classification",
     **kwargs
 ):
     """Train a baconNet model with standard configuration.
@@ -505,9 +514,9 @@ def train_bacon_model(
     Args:
         model: baconNet model instance
         X_train: Training features
-        Y_train: Training labels
+        Y_train: Training labels/targets
         X_test: Test features
-        Y_test: Test labels
+        Y_test: Test labels/targets
         attempts: Number of training attempts (default: 10)
         acceptance_threshold: Acceptance threshold (default: 0.80)
         use_hierarchical_permutation: Use hierarchical permutation (default: True)
@@ -519,12 +528,13 @@ def train_bacon_model(
         freeze_confidence_threshold: Confidence threshold for freezing (default: 0.95)
         freeze_min_confidence: Minimum confidence (default: 0.85)
         max_epochs: Maximum epochs (default: 5000)
+        task_type: "classification" (BCE loss, accuracy) or "regression" (MSE loss, R²)
         **kwargs: Additional arguments passed to find_best_model
         
     Returns:
-        tuple: (best_model, best_accuracy)
+        tuple: (best_model, best_metric) where metric is accuracy for classification, R² for regression
     """
-    (best_model, best_accuracy) = model.find_best_model(
+    (best_state_dict, best_metric) = model.find_best_model(
         X_train, Y_train, X_test, Y_test,
         attempts=attempts,
         use_hierarchical_permutation=use_hierarchical_permutation,
@@ -539,11 +549,17 @@ def train_bacon_model(
         max_epochs=max_epochs,
         frozen_training_epochs=frozen_training_epochs,
         binary_threshold=binary_threshold,
+        task_type=task_type,
         **kwargs
     )
     
-    logging.info(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
-    return best_model, best_accuracy
+    # Load the best state dict back into the model
+    if best_state_dict is not None:
+        model.assembler.load_state_dict(best_state_dict)
+    
+    metric_name = "R²" if task_type == "regression" else "accuracy"
+    logging.info(f"🏆 Best {metric_name}: {best_metric * 100:.2f}%")
+    return model, best_metric
 
 
 def train_bacon_model_cv(

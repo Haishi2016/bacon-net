@@ -31,8 +31,11 @@ class TrainingSetup:
     use_temperature_annealing: bool
     perm_temp_decay_rate: Optional[float]
     trans_temp_decay_rate: Optional[float]
+    operator_tau_decay_rate: Optional[float]  # For operator selection annealing
+    operator_initial_tau: Optional[float]  # Starting tau for operator selection
     anneal_over_epochs: int
     original_sparsity_weight: Optional[float]
+    task_type: str  # "classification" or "regression"
     # Tracking variables
     loss_history: list
     accuracy_history: list
@@ -47,6 +50,14 @@ class TrainingSetup:
     epochs_since_improvement: int
     temp_paused: bool
     transformation_converged: bool
+    # Frozen training stability tracking
+    best_frozen_loss: Optional[float]
+    best_frozen_state: Optional[dict]
+    frozen_lr_reduced: bool
+    # Best overall state tracking (across entire training)
+    best_overall_loss: Optional[float]
+    best_overall_state: Optional[dict]
+    best_overall_epoch: Optional[int]
 class baconNet(nn.Module):
     """
     Represents a BACON network for interpretable decision-making using graded logic.
@@ -71,6 +82,8 @@ class baconNet(nn.Module):
         loss_weight_perm_entropy (float, optional): Weight for permutation entropy regularization. Defaults to 0.0. Higher = encourage exploration. Typical range: 0.0-0.1.
         loss_weight_trans_entropy (float, optional): Weight for transformation entropy regularization. Defaults to 0.0. Higher = encourage decisive transformation selection. Typical range: 0.0-0.1.
         loss_weight_perm_sparsity (float, optional): Weight for permutation sparsity loss. Defaults to 0.01. Penalizes high entropy (flat distributions) to encourage peaked/sparse permutations. Higher = stronger push toward confident or clear multi-modal distributions. Typical range: 0.0-0.1.
+        loss_weight_operator_sparsity (float, optional): Weight for operator selection sparsity loss. Defaults to 1.0. Penalizes uncertain operator choices to encourage commitment. Higher = faster operator decision.
+        loss_weight_operator_l2 (float, optional): Weight for L2 regularization on operator logits. Defaults to 0.0. Keeps logits bounded so tau can control commitment timing. Use > 0 when operators commit too early.
         lr_permutation (float, optional): Learning rate for permutation layer. Defaults to 0.3. Higher = faster exploration of feature orderings.
         lr_transformation (float, optional): Learning rate for transformation layer. Defaults to 0.5. Higher = faster transformation selection.
         lr_aggregator (float, optional): Learning rate for aggregator weights. Defaults to 0.1. Lower = more stable tree structure.
@@ -82,6 +95,14 @@ class baconNet(nn.Module):
         full_tree_final_temperature (float, optional): Final temperature after annealing. Defaults to 0.1.
         full_tree_max_egress (int, optional): Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).
         loss_weight_full_tree_egress (float, optional): Weight for full tree egress constraint loss. Defaults to 0.0.
+        loss_weight_full_tree_ingress (float, optional): Weight for full tree ingress constraint loss (max 2 inputs per node). Defaults to 0.5.
+        use_permutation_layer (bool, optional): Whether to use the permutation layer. Defaults to True.
+            Set to False for full tree layout to let the tree learn input routing directly.
+        regression_loss_type (str, optional): Loss type for regression mode. Defaults to "mse".
+            - "mse": Standard MSE loss. Simple but scale-sensitive (mul at root dominates gradients).
+            - "correlation": Pearson correlation loss (1 - r²). Scale-invariant but too lenient.
+            - "normalized_mse": Z-score both pred and target, then MSE. Best for arithmetic - 
+              scale-invariant but requires correct pattern matching.
     """
     def __init__(self, input_size, 
                  tree_layout="left", 
@@ -105,6 +126,8 @@ class baconNet(nn.Module):
                  loss_weight_perm_entropy=0.0,
                  loss_weight_trans_entropy=0.0,
                  loss_weight_perm_sparsity=0.01,
+                 loss_weight_operator_sparsity=1.0,
+                 loss_weight_operator_l2=0.0,
                  lr_permutation=0.3,
                  lr_transformation=0.5,
                  lr_aggregator=0.1,
@@ -120,7 +143,21 @@ class baconNet(nn.Module):
                  full_tree_temperature: float = 3.0,
                  full_tree_final_temperature: float = 0.1,
                  full_tree_max_egress: int = None,
-                 loss_weight_full_tree_egress: float = 0.0):
+                 full_tree_concentrate_ingress: bool = False,
+                 full_tree_use_sinkhorn: bool = False,
+                 loss_weight_full_tree_egress: float = 0.0,
+                 loss_weight_full_tree_ingress: float = 0.5,
+                 loss_weight_full_tree_ingress_balance: float = 0.0,
+                 loss_weight_full_tree_scale_reg: float = 0.0,
+                 # Alternating tree parameters
+                 alternating_learn_first_routing: bool = True,
+                 alternating_learn_subsequent_routing: bool = True,
+                 alternating_max_egress: int = 1,
+                 alternating_use_straight_through: bool = True,
+                 loss_weight_alternating_balance: float = 50.0,
+                 loss_weight_alternating_egress: float = 0.5,
+                 use_permutation_layer: bool = True,
+                 regression_loss_type: str = "mse"):
         super(baconNet, self).__init__()        
         if aggregator not in _aggregator_registry:
             raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
@@ -145,9 +182,22 @@ class baconNet(nn.Module):
         self.loss_weight_perm_entropy = loss_weight_perm_entropy  # Permutation entropy regularization
         self.loss_weight_trans_entropy = loss_weight_trans_entropy  # Transformation entropy regularization
         self.loss_weight_perm_sparsity = loss_weight_perm_sparsity  # Permutation sparsity loss (encourage peaked distributions)
+        self.loss_weight_operator_sparsity = loss_weight_operator_sparsity  # Operator selection sparsity (encourage commitment)
+        self.loss_weight_operator_l2 = loss_weight_operator_l2  # L2 on operator logits (prevent premature commitment)
         
         # Full tree loss weights
         self.loss_weight_full_tree_egress = loss_weight_full_tree_egress
+        self.loss_weight_full_tree_ingress = loss_weight_full_tree_ingress
+        self.loss_weight_full_tree_ingress_balance = loss_weight_full_tree_ingress_balance
+        self.loss_weight_full_tree_scale_reg = loss_weight_full_tree_scale_reg
+        
+        # Alternating tree loss weights
+        self.alternating_learn_first_routing = alternating_learn_first_routing
+        self.alternating_learn_subsequent_routing = alternating_learn_subsequent_routing
+        self.alternating_max_egress = alternating_max_egress
+        self.alternating_use_straight_through = alternating_use_straight_through
+        self.loss_weight_alternating_balance = loss_weight_alternating_balance
+        self.loss_weight_alternating_egress = loss_weight_alternating_egress
         
         # Full tree parameters (stored for reference)
         self.full_tree_depth = full_tree_depth
@@ -155,6 +205,12 @@ class baconNet(nn.Module):
         self.full_tree_temperature = full_tree_temperature
         self.full_tree_final_temperature = full_tree_final_temperature
         self.full_tree_max_egress = full_tree_max_egress
+        self.full_tree_concentrate_ingress = full_tree_concentrate_ingress
+        self.full_tree_use_sinkhorn = full_tree_use_sinkhorn
+        self.use_permutation_layer = use_permutation_layer
+        
+        # Regression loss type: "mse" or "correlation"
+        self.regression_loss_type = regression_loss_type
         
         # Learning rates for different parameter groups
         self.lr_permutation = lr_permutation
@@ -202,7 +258,17 @@ class baconNet(nn.Module):
                                             full_tree_shape=full_tree_shape,
                                             full_tree_temperature=full_tree_temperature,
                                             full_tree_final_temperature=full_tree_final_temperature,
-                                            full_tree_max_egress=full_tree_max_egress)
+                                            full_tree_max_egress=full_tree_max_egress,
+                                            full_tree_concentrate_ingress=full_tree_concentrate_ingress,
+                                            full_tree_use_sinkhorn=full_tree_use_sinkhorn,
+                                            # Alternating tree parameters
+                                            alternating_learn_first_routing=alternating_learn_first_routing,
+                                            alternating_learn_subsequent_routing=alternating_learn_subsequent_routing,
+                                            alternating_max_egress=alternating_max_egress,
+                                            alternating_use_straight_through=alternating_use_straight_through,
+                                            alternating_balance_weight=loss_weight_alternating_balance,
+                                            alternating_egress_weight=loss_weight_alternating_egress,
+                                            use_permutation_layer=use_permutation_layer)
         
         if self.assembler.transformation_layer:
             actual_trans = self.assembler.transformation_layer.transformations
@@ -307,8 +373,16 @@ class baconNet(nn.Module):
     def _setup_training_attempt(self, y, coarse_perm, hierarchical_group_size, 
                                 hierarchical_bleed_ratio, hierarchical_bleed_decay,
                                 sinkhorn_iters, loss_weight_perm_sparsity,
-                                freeze_aggregation_epochs, epochs_per_attempt, annealing_epochs):
+                                freeze_aggregation_epochs, epochs_per_attempt, annealing_epochs,
+                                task_type="classification",
+                                operator_initial_tau=5.0, operator_final_tau=0.5,
+                                operator_freeze_min_confidence=0.7,
+                                operator_freeze_epochs=0):
         """Set up all components needed for a training attempt.
+        
+        Args:
+            task_type: "classification" for BCE loss or "regression" for MSE loss
+            operator_freeze_epochs: Epochs to freeze operator selection (phase 1)
         
         Returns:
             TrainingSetup: Dataclass containing all setup state
@@ -347,6 +421,16 @@ class baconNet(nn.Module):
             full_tree_temperature=cfg.full_tree_temperature,
             full_tree_final_temperature=cfg.full_tree_final_temperature,
             full_tree_max_egress=cfg.full_tree_max_egress,
+            full_tree_concentrate_ingress=cfg.full_tree_concentrate_ingress,
+            full_tree_use_sinkhorn=cfg.full_tree_use_sinkhorn,
+            use_permutation_layer=cfg.use_permutation_layer,
+            # Alternating tree parameters
+            alternating_learn_first_routing=cfg.alternating_learn_first_routing,
+            alternating_learn_subsequent_routing=cfg.alternating_learn_subsequent_routing,
+            alternating_max_egress=cfg.alternating_max_egress,
+            alternating_use_straight_through=cfg.alternating_use_straight_through,
+            alternating_balance_weight=cfg.alternating_balance_weight,
+            alternating_egress_weight=cfg.alternating_egress_weight,
         )
         
         # Initialize hierarchical permutation if provided
@@ -381,8 +465,23 @@ class baconNet(nn.Module):
             if self.loss_weight_perm_entropy > 0 or self.loss_weight_trans_entropy > 0 or self.loss_weight_perm_sparsity > 0:
                 logging.info(f"   ⚖️  Loss weights (normalized): main={norm_main:.3f}, perm_entropy={norm_perm:.3f}, trans_entropy={norm_trans:.3f}, perm_sparsity={norm_sparsity:.3f}")
         
-        # Setup criterion with class weighting
-        if self.use_class_weighting:
+        # Log full tree constraints if enabled
+        if self.assembler.tree_layout == "full":
+            if self.loss_weight_full_tree_ingress > 0 or self.loss_weight_full_tree_egress > 0 or self.full_tree_concentrate_ingress:
+                ingress_mode = "column-softmax" if self.full_tree_concentrate_ingress else "soft penalty"
+                logging.info(f"   🌳 Full tree constraints: ingress={self.loss_weight_full_tree_ingress:.2f} ({ingress_mode}), egress={self.loss_weight_full_tree_egress:.2f}")
+        
+        # Setup criterion based on task type
+        pos_weight = None
+        if task_type == "regression":
+            criterion = nn.MSELoss()
+            if self.regression_loss_type == "correlation":
+                logging.info(f"   📈 Regression mode: using Pearson correlation loss (1 - r²)")
+            elif self.regression_loss_type == "normalized_mse":
+                logging.info(f"   📈 Regression mode: using normalized MSE (z-score both, then MSE)")
+            else:
+                logging.info(f"   📈 Regression mode: using MSE loss")
+        elif self.use_class_weighting:
             pos_count = y.sum().item()
             neg_count = len(y) - pos_count
             if pos_count > 0:
@@ -393,11 +492,9 @@ class baconNet(nn.Module):
             else:
                 logging.warning(f"   ⚠️  Class weighting enabled but no positive samples found, using standard BCE")
                 criterion = nn.BCELoss()
-                pos_weight = None
         else:
             logging.info(f"   ⚖️  Class weighting disabled: using standard BCE loss (original behavior)")
             criterion = nn.BCELoss()
-            pos_weight = None
         
         # Handle sparsity weight override
         original_sparsity_weight = None
@@ -405,6 +502,13 @@ class baconNet(nn.Module):
             original_sparsity_weight = self.loss_weight_perm_sparsity
             self.loss_weight_perm_sparsity = loss_weight_perm_sparsity
             logging.info(f"   🎯 Using custom sparsity loss weight: {loss_weight_perm_sparsity}")
+        
+        # Log operator sparsity weight if applicable
+        if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'op_logits_per_node'):
+            if self.loss_weight_operator_sparsity > 0:
+                logging.info(f"   🔧 Operator sparsity weight: {self.loss_weight_operator_sparsity} (encourages commitment)")
+            if self.loss_weight_operator_l2 > 0:
+                logging.info(f"   🔧 Operator L2 weight: {self.loss_weight_operator_l2} (keeps logits bounded)")
         
         # Freeze aggregation if requested
         aggregation_frozen = False
@@ -443,6 +547,21 @@ class baconNet(nn.Module):
                 self.assembler.transformation_layer.temperature = trans_initial_temp
                 logging.info(f"   🔗 Transformation annealing: {trans_initial_temp:.1f} → {trans_final_temp:.1f} over {anneal_over_epochs_val} epochs (decay: {trans_temp_decay_rate:.6f})")
         
+        # Operator tau annealing setup (for OperatorSetAggregator)
+        operator_tau_decay_rate = None
+        if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'tau'):
+            self.assembler.aggregator.tau = operator_initial_tau
+            # If using two-phase training, tau annealing happens only in phase 2
+            # So we need to anneal over (anneal_over_epochs - operator_freeze_epochs) epochs
+            effective_anneal_epochs = max(1, anneal_over_epochs_val - operator_freeze_epochs)
+            operator_tau_decay_rate = (operator_final_tau / operator_initial_tau) ** (1.0 / effective_anneal_epochs)
+            if operator_freeze_epochs > 0:
+                logging.info(f"   🔧 Operator tau annealing: {operator_initial_tau:.1f} → {operator_final_tau:.1f} over epochs {operator_freeze_epochs}-{anneal_over_epochs_val} (decay: {operator_tau_decay_rate:.6f})")
+            else:
+                logging.info(f"   🔧 Operator tau annealing: {operator_initial_tau:.1f} → {operator_final_tau:.1f} over {anneal_over_epochs_val} epochs (decay: {operator_tau_decay_rate:.6f})")
+            if operator_freeze_min_confidence > 0:
+                logging.info(f"   🎯 Operator freeze threshold: {operator_freeze_min_confidence:.0%} confidence required before freezing")
+        
         # Return dataclass with all setup state
         return TrainingSetup(
             optimizer=optimizer,
@@ -454,8 +573,11 @@ class baconNet(nn.Module):
             use_temperature_annealing=use_temperature_annealing,
             perm_temp_decay_rate=perm_temp_decay_rate,
             trans_temp_decay_rate=trans_temp_decay_rate,
+            operator_tau_decay_rate=operator_tau_decay_rate,
+            operator_initial_tau=operator_initial_tau if operator_tau_decay_rate else None,
             anneal_over_epochs=anneal_over_epochs_val,
             original_sparsity_weight=original_sparsity_weight,
+            task_type=task_type,
             # Initialize tracking variables
             loss_history=[],
             accuracy_history=[],
@@ -469,43 +591,110 @@ class baconNet(nn.Module):
             best_loss=float('inf'),
             epochs_since_improvement=0,
             temp_paused=False,
-            transformation_converged=False
+            transformation_converged=False,
+            # Frozen training stability
+            best_frozen_loss=None,
+            best_frozen_state=None,
+            frozen_lr_reduced=False,
+            # Best overall state
+            best_overall_loss=float('inf'),
+            best_overall_state=None,
+            best_overall_epoch=None
         )
     
     def _compute_composite_loss(self, outputs, y, criterion, pos_weight, epoch, 
-                                sparsity_schedule, use_temperature_annealing, current_sparsity_weight):
-        """Compute composite loss with all regularization terms."""
+                                sparsity_schedule, use_temperature_annealing, current_sparsity_weight,
+                                task_type="classification"):
+        """Compute composite loss with all regularization terms.
+        
+        Args:
+            task_type: "classification" for BCE loss or "regression" for MSE loss
+        """
         # Check for NaN in outputs
         if torch.isnan(outputs).any():
             logging.error(f"   ❌ NaN detected in model outputs at epoch {epoch + 1}")
             logging.error(f"      Output stats: min={outputs.min().item():.6f}, max={outputs.max().item():.6f}, mean={outputs.mean().item():.6f}")
             outputs = torch.where(torch.isnan(outputs), torch.zeros_like(outputs), outputs)
         
-        # Compute per-sample BCE loss
-        per_sample_bce = F.binary_cross_entropy(outputs, y, reduction='none')
-        # Flatten to (N,)
-        per_sample_bce = per_sample_bce.view(-1)
-        # Optional class weighting
-        if self.use_class_weighting and pos_weight is not None:
-            weights = torch.where(y.view(-1) == 1, torch.as_tensor(pos_weight, device=y.device, dtype=per_sample_bce.dtype), torch.ones_like(per_sample_bce))
-            per_sample = per_sample_bce * weights
-        else:
-            per_sample = per_sample_bce
-        # Optional loss trimming by percentile
-        # Apply warmup schedule: no trimming before start epoch
-        trim_p = self.loss_trim_percentile if epoch >= self.loss_trim_start_epoch else 0.0
-        if trim_p > 0.0 and self.loss_trim_mode != "none" and per_sample.numel() > 1:
-            # Compute threshold
-            q = 1.0 - trim_p if self.loss_trim_mode == "drop_high" else trim_p
-            thresh = torch.quantile(per_sample.detach(), q)
-            if self.loss_trim_mode == "drop_high":
-                mask = per_sample <= thresh
+        # Compute per-sample loss based on task type
+        if task_type == "regression":
+            if self.regression_loss_type == "correlation":
+                # Pearson correlation loss: 1 - r²
+                # This is scale-invariant, helping when mul creates large output variations
+                pred = outputs.view(-1)
+                target = y.view(-1)
+                
+                # Compute means
+                pred_mean = pred.mean()
+                target_mean = target.mean()
+                
+                # Compute covariance and standard deviations
+                pred_centered = pred - pred_mean
+                target_centered = target - target_mean
+                
+                covariance = (pred_centered * target_centered).mean()
+                pred_std = pred_centered.pow(2).mean().sqrt()
+                target_std = target_centered.pow(2).mean().sqrt()
+                
+                # Pearson correlation (with stability epsilon)
+                eps = 1e-8
+                correlation = covariance / (pred_std * target_std + eps)
+                
+                # Loss is 1 - r² (so perfect correlation = 0 loss)
+                correlation_loss = 1.0 - correlation.pow(2)
+                
+                # For correlation, we compute batch-level loss directly (no per-sample trimming)
+                main_loss = correlation_loss * self.assembler.loss_amplifier
+            elif self.regression_loss_type == "normalized_mse":
+                # Normalized MSE: z-score both predictions and targets, then compute MSE
+                # This is scale-invariant but stricter than correlation - requires matching patterns
+                pred = outputs.view(-1)
+                target = y.view(-1)
+                
+                eps = 1e-8
+                
+                # Z-score normalization
+                pred_mean = pred.mean()
+                pred_std = pred.std() + eps
+                target_mean = target.mean()
+                target_std = target.std() + eps
+                
+                pred_normalized = (pred - pred_mean) / pred_std
+                target_normalized = (target - target_mean) / target_std
+                
+                # MSE on normalized values
+                normalized_mse = F.mse_loss(pred_normalized, target_normalized)
+                
+                # For normalized MSE, compute batch-level loss directly
+                main_loss = normalized_mse * self.assembler.loss_amplifier
             else:
-                mask = per_sample >= thresh
-            if mask.any():
-                per_sample = per_sample[mask]
-        # Final main loss
-        main_loss = per_sample.mean() * self.assembler.loss_amplifier
+                per_sample = F.mse_loss(outputs, y, reduction='none').view(-1)
+        else:
+            per_sample_bce = F.binary_cross_entropy(outputs, y, reduction='none').view(-1)
+            # Optional class weighting (only for classification)
+            if self.use_class_weighting and pos_weight is not None:
+                weights = torch.where(y.view(-1) == 1, torch.as_tensor(pos_weight, device=y.device, dtype=per_sample_bce.dtype), torch.ones_like(per_sample_bce))
+                per_sample = per_sample_bce * weights
+            else:
+                per_sample = per_sample_bce
+        
+        # For correlation/normalized_mse loss, main_loss is already computed; otherwise compute from per_sample
+        if not (task_type == "regression" and self.regression_loss_type in ("correlation", "normalized_mse")):
+            # Optional loss trimming by percentile
+            # Apply warmup schedule: no trimming before start epoch
+            trim_p = self.loss_trim_percentile if epoch >= self.loss_trim_start_epoch else 0.0
+            if trim_p > 0.0 and self.loss_trim_mode != "none" and per_sample.numel() > 1:
+                # Compute threshold
+                q = 1.0 - trim_p if self.loss_trim_mode == "drop_high" else trim_p
+                thresh = torch.quantile(per_sample.detach(), q)
+                if self.loss_trim_mode == "drop_high":
+                    mask = per_sample <= thresh
+                else:
+                    mask = per_sample >= thresh
+                if mask.any():
+                    per_sample = per_sample[mask]
+            # Final main loss
+            main_loss = per_sample.mean() * self.assembler.loss_amplifier
         
         if torch.isnan(main_loss):
             logging.error(f"   ❌ NaN in main_loss at epoch {epoch + 1}")
@@ -569,6 +758,39 @@ class baconNet(nn.Module):
                 col_uniqueness_penalty = ((col_sums - 1.0) ** 2).mean()
                 loss = loss + current_sparsity_weight * col_uniqueness_penalty
         
+        # Operator selection sparsity regularization (for OperatorSetAggregator)
+        # Penalizes uncertain operator selections to encourage commitment
+        if self.loss_weight_operator_sparsity > 0 and hasattr(self.assembler, 'aggregator'):
+            aggregator = self.assembler.aggregator
+            if hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node is not None:
+                op_entropy_total = 0.0
+                for logits in aggregator.op_logits_per_node:
+                    # Get current tau for temperature-adjusted probabilities
+                    tau = getattr(aggregator, 'tau', 1.0)
+                    probs = torch.softmax(logits / tau, dim=0)
+                    probs_clamped = torch.clamp(probs, min=1e-8, max=1.0 - 1e-8)
+                    # Entropy: high when uncertain, low when committed
+                    entropy = -(probs_clamped * torch.log(probs_clamped)).sum()
+                    op_entropy_total += entropy
+                # Normalize by number of nodes
+                num_nodes = len(aggregator.op_logits_per_node)
+                if num_nodes > 0:
+                    op_sparsity_loss = self.loss_weight_operator_sparsity * (op_entropy_total / num_nodes)
+                    loss = loss + op_sparsity_loss
+        
+        # Operator logit L2 regularization - keeps logits bounded so tau can control commitment
+        # This prevents premature operator commitment by keeping softmax close to uniform when tau is high
+        if self.loss_weight_operator_l2 > 0 and hasattr(self.assembler, 'aggregator'):
+            aggregator = self.assembler.aggregator
+            if hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node is not None:
+                l2_total = 0.0
+                for logits in aggregator.op_logits_per_node:
+                    l2_total += (logits ** 2).mean()
+                num_nodes = len(aggregator.op_logits_per_node)
+                if num_nodes > 0:
+                    op_l2_loss = self.loss_weight_operator_l2 * (l2_total / num_nodes)
+                    loss = loss + op_l2_loss
+        
         # Weight regularization
         if self.assembler.weight_mode == "trainable":
             depth_weight_penalty = 0.0
@@ -578,10 +800,50 @@ class baconNet(nn.Module):
         
         # Full tree regularization (when tree_layout="full")
         if self.assembler.tree_layout == "full":
+            # Get current R² if available (used to modulate structural penalties)
+            # High R² + bad structure = coefficient hacking, needs stronger penalty
+            r2_factor = 1.0
+            if hasattr(self, '_current_r2') and self._current_r2 is not None:
+                # Scale factor increases with R²: at R²=0 factor=1, at R²=1 factor=3
+                r2_factor = 1.0 + 2.0 * max(0.0, self._current_r2)
+            
             # Egress constraint loss: encourage each source to concentrate outgoing edges to top-K
             if self.loss_weight_full_tree_egress > 0:
                 full_tree_egress = self.assembler.get_full_tree_egress_loss()
                 loss = loss + self.loss_weight_full_tree_egress * full_tree_egress
+            
+            # Ingress constraint loss: discourage more than 2 inputs per aggregator node
+            if self.loss_weight_full_tree_ingress > 0:
+                full_tree_ingress = self.assembler.get_full_tree_ingress_loss()
+                ingress_penalty = self.loss_weight_full_tree_ingress * full_tree_ingress
+                loss = loss + ingress_penalty
+                # Debug: log ingress penalty every 500 epochs
+                if hasattr(self, '_epoch_for_logging') and self._epoch_for_logging % 500 == 0:
+                    logging.debug(f"      Ingress penalty: {ingress_penalty.item():.4f} (raw: {full_tree_ingress.item():.4f})")
+            
+            # Ingress balance loss: prevent all sources from routing to same destination
+            # R²-modulated: higher R² with imbalanced structure = harsher penalty
+            if self.loss_weight_full_tree_ingress_balance > 0:
+                balance_loss = self.assembler.get_full_tree_ingress_balance_loss()
+                loss = loss + self.loss_weight_full_tree_ingress_balance * r2_factor * balance_loss
+            
+            # Scale regularization: penalize extreme coefficients to prevent coefficient hacking
+            # R²-modulated: high R² with extreme scales = likely hacking
+            if self.loss_weight_full_tree_scale_reg > 0:
+                scale_reg = self.assembler.get_full_tree_scale_regularization_loss()
+                loss = loss + self.loss_weight_full_tree_scale_reg * r2_factor * scale_reg
+        
+        # Alternating tree structural losses
+        if self.assembler.tree_layout == "alternating" and self.assembler.alternating_tree is not None:
+            # Balance loss: prevent all sources from routing to same destination
+            if self.loss_weight_alternating_balance > 0:
+                balance_loss = self.assembler.get_alternating_tree_balance_loss()
+                loss = loss + self.loss_weight_alternating_balance * balance_loss
+            
+            # Egress loss: encourage peaked routing distributions
+            if self.loss_weight_alternating_egress > 0:
+                egress_loss = self.assembler.get_alternating_tree_egress_loss()
+                loss = loss + self.loss_weight_alternating_egress * egress_loss
         
         # Training policy regularization (e.g., andness penalty)
         if self.training_policy is not None and hasattr(self.training_policy, 'penalty'):
@@ -595,8 +857,17 @@ class baconNet(nn.Module):
                                      early_stop_threshold, perm_final_temp,
                                      has_converged_before_freeze, best_confidence,
                                      epochs_without_confidence_improvement, confidence_plateau_patience,
-                                     freeze_confidence_warning_shown, current_loss, binary_threshold=0.5):
+                                     freeze_confidence_warning_shown, current_loss, binary_threshold=0.5,
+                                     task_type="classification", operator_freeze_min_confidence=0.0,
+                                     skip_frozen_threshold=0.95):
         """Check if permutation should be frozen and perform freezing if ready.
+        
+        Args:
+            operator_freeze_min_confidence: Minimum operator selection confidence required before freezing.
+                                           0.0 = no requirement (legacy behavior), 0.7 = require 70% average.
+            skip_frozen_threshold: Minimum metric (R² or accuracy) required to skip frozen training.
+                                  Only skip if freeze improves metric AND we're above this threshold.
+                                  Default 0.95 means skip only if already excellent.
         
         Returns:
             tuple: (just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown, skip_frozen_training)
@@ -633,6 +904,20 @@ class baconNet(nn.Module):
                 else:
                     epochs_without_confidence_improvement += 1
                 
+                # Check operator confidence if aggregator supports it
+                operator_confidence_ok = True  # Default to True for aggregators without operator selection
+                current_op_confidence = 0.0
+                if operator_freeze_min_confidence > 0 and hasattr(self.assembler, 'aggregator'):
+                    aggregator = self.assembler.aggregator
+                    if hasattr(aggregator, 'tau') and hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node is not None:
+                        with torch.no_grad():
+                            confidences = []
+                            for logits in aggregator.op_logits_per_node:
+                                probs = torch.softmax(logits / aggregator.tau, dim=0)
+                                confidences.append(probs.max().item())
+                            current_op_confidence = sum(confidences) / len(confidences) if confidences else 1.0
+                        operator_confidence_ok = current_op_confidence >= operator_freeze_min_confidence
+                
                 # Freeze conditions
                 confidence_reached = mean_confidence >= freeze_confidence_threshold
                 loss_threshold = early_stop_threshold * self.assembler.loss_amplifier * 1.5
@@ -640,13 +925,16 @@ class baconNet(nn.Module):
                 confidence_plateaued = (has_converged_before_freeze and 
                                        epochs_without_confidence_improvement >= confidence_plateau_patience)
                 
-                should_freeze = confidence_reached or good_confidence_and_loss or confidence_plateaued
+                perm_should_freeze = confidence_reached or good_confidence_and_loss or confidence_plateaued
+                should_freeze = perm_should_freeze and operator_confidence_ok
                 
                 if not should_freeze:
                     temp_ready_to_freeze = self.assembler.input_to_leaf.temperature < perm_final_temp * 1.1
                     if temp_ready_to_freeze and not freeze_confidence_warning_shown:
                         logging.info(f"   ⚠️  Permutation temp low ({self.assembler.input_to_leaf.temperature:.3f}) but not ready to freeze")
-                        logging.info(f"      Mean max probability: {mean_confidence:.3f} (target: {freeze_confidence_threshold:.2f})")
+                        logging.info(f"      Permutation confidence: {mean_confidence:.3f} (target: {freeze_confidence_threshold:.2f})")
+                        if not operator_confidence_ok:
+                            logging.info(f"      Operator confidence: {current_op_confidence:.3f} (target: {operator_freeze_min_confidence:.2f}) ← blocking freeze")
                         if has_converged_before_freeze:
                             logging.info(f"      Loss converged, waiting for confidence plateau ({epochs_without_confidence_improvement}/{confidence_plateau_patience} epochs)")
                         else:
@@ -675,12 +963,19 @@ class baconNet(nn.Module):
                     before_output = self.assembler(x_test)
                     before_loss_raw = criterion(before_output, y_test)
                     before_loss = before_loss_raw.mean() if before_loss_raw.dim() > 0 else before_loss_raw
-                    before_pred = (before_output > binary_threshold).float()
-                    before_accuracy = (before_pred == y_test).float().mean().item()
+                    if task_type == "regression":
+                        ss_res = ((y_test - before_output) ** 2).sum()
+                        ss_tot = ((y_test - y_test.mean()) ** 2).sum()
+                        before_metric = (1 - ss_res / (ss_tot + 1e-8)).item()
+                        metric_name = "R²"
+                    else:
+                        before_pred = (before_output > binary_threshold).float()
+                        before_metric = (before_pred == y_test).float().mean().item()
+                        metric_name = "Accuracy"
                     
                     max_probs = soft_perm.max(dim=1)[0]
                     logging.info(f"      📊 BEFORE FREEZE (test set):")
-                    logging.info(f"         Loss: {before_loss.item():.4f}, Test Accuracy: {before_accuracy:.4f}")
+                    logging.info(f"         Loss: {before_loss.item():.4f}, Test {metric_name}: {before_metric:.4f}")
                     logging.info(f"         Soft perm max probs: min={max_probs.min():.3f}, mean={max_probs.mean():.3f}, max={max_probs.max():.3f}")
                     
                     for i in range(min(5, soft_perm.size(0))):
@@ -811,16 +1106,24 @@ class baconNet(nn.Module):
                     after_output = self.assembler(x_test)
                     after_loss_raw = criterion(after_output, y_test)
                     after_loss = after_loss_raw.mean() if after_loss_raw.dim() > 0 else after_loss_raw
-                    after_pred = (after_output > binary_threshold).float()
-                    after_accuracy = (after_pred == y_test).float().mean().item()
+                    if task_type == "regression":
+                        ss_res = ((y_test - after_output) ** 2).sum()
+                        ss_tot = ((y_test - y_test.mean()) ** 2).sum()
+                        after_metric = (1 - ss_res / (ss_tot + 1e-8)).item()
+                    else:
+                        after_pred = (after_output > binary_threshold).float()
+                        after_metric = (after_pred == y_test).float().mean().item()
                     
                     logging.info(f"      📊 AFTER FREEZE:")
                     logging.info(f"         Loss: {after_loss.item():.4f} (Δ={after_loss.item()-before_loss.item():+.4f})")
-                    logging.info(f"         Test Accuracy: {after_accuracy:.4f} (Δ={after_accuracy-before_accuracy:+.4f})")
+                    logging.info(f"         Test {metric_name}: {after_metric:.4f} (Δ={after_metric-before_metric:+.4f})")
                     
-                    pred_changes = (before_pred != after_pred).sum().item()
-                    if pred_changes > 0:
-                        logging.info(f"         ⚠️  {pred_changes}/{len(y_test)} predictions changed after freeze")
+                    if task_type != "regression":
+                        before_pred = (before_output > binary_threshold).float()
+                        after_pred = (after_output > binary_threshold).float()
+                        pred_changes = (before_pred != after_pred).sum().item()
+                        if pred_changes > 0:
+                            logging.info(f"         ⚠️  {pred_changes}/{len(y_test)} predictions changed after freeze")
                     
                     output_diff = (after_output - before_output).abs().max().item()
                     logging.info(f"         Max output difference: {output_diff:.6f}")
@@ -828,14 +1131,17 @@ class baconNet(nn.Module):
                 self.assembler.train()
                 logging.info(f"   🔒 Successfully frozen model (locked_perm created)")
                 
-                # Check if freeze improved accuracy - if so, skip frozen training
-                if after_accuracy > before_accuracy:
-                    accuracy_gain = (after_accuracy - before_accuracy) * 100
-                    logging.info(f"   ✅ Freeze improved accuracy by {accuracy_gain:.2f}% - stopping immediately (skipping frozen training)")
-                    logging.info(f"      Rationale: Hard permutation performs better than soft, further training may degrade performance")
-                    # Set flag to break out of training loop
-                    just_froze = True
-                    return just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown, True  # skip_frozen_training=True
+                # Check if freeze improved metric - skip frozen training only if already excellent
+                if after_metric > before_metric:
+                    metric_gain = (after_metric - before_metric) * 100
+                    if after_metric >= skip_frozen_threshold:
+                        logging.info(f"   ✅ Freeze improved {metric_name} by {metric_gain:.2f}% to {after_metric:.4f} (≥{skip_frozen_threshold:.2f}) - stopping immediately")
+                        logging.info(f"      Rationale: Already above threshold, further training may degrade performance")
+                        just_froze = True
+                        return just_froze, best_confidence, epochs_without_confidence_improvement, freeze_confidence_warning_shown, True  # skip_frozen_training=True
+                    else:
+                        logging.info(f"   📈 Freeze improved {metric_name} by {metric_gain:.2f}% to {after_metric:.4f} (below {skip_frozen_threshold:.2f})")
+                        logging.info(f"      Continuing with frozen training to refine weights...")
                 
                 just_froze = True
                 
@@ -856,10 +1162,10 @@ class baconNet(nn.Module):
                         convergence_patience = 500,
                         convergence_delta = 0.001,
                         freeze_confidence_threshold = 0.95,
-                        freeze_min_confidence = 0.85,  # Minimum confidence for early freeze with low loss (raised from 0.75)
+                        freeze_min_confidence = 0.85,
                         loss_weight_perm_sparsity = None,
-                        sparsity_schedule = None,  # (initial_weight, final_weight, transition_epochs)
-                        freeze_aggregation_epochs = 0,  # Freeze aggregation for first N epochs
+                        sparsity_schedule = None,
+                        freeze_aggregation_epochs = 0,
                         save_model = True,
                         use_hierarchical_permutation = False,
                         force_freeze = True,
@@ -868,7 +1174,13 @@ class baconNet(nn.Module):
                         hierarchical_bleed_ratio = 0.1,
                         hierarchical_bleed_decay = 2.0,
                         sinkhorn_iters = 100,
-                        binary_threshold=0.5):
+                        binary_threshold=0.5,
+                        task_type="classification",
+                        operator_initial_tau=5.0,
+                        operator_final_tau=0.5,
+                        operator_freeze_min_confidence=0.7,
+                        operator_freeze_epochs=0,
+                        skip_frozen_threshold=0.99):
         """ Find the best model by training multiple times and evaluating accuracy.
 
         Args:
@@ -896,30 +1208,56 @@ class baconNet(nn.Module):
             hierarchical_epochs_per_attempt (int, optional): Epochs to run for each coarse permutation. If None, uses max_epochs. Defaults to None.
             hierarchical_bleed_ratio (float, optional): Ratio of std for adjacent blocks (0.0=hard blocks, 0.1=10% bleed, 1.0=full bleed). Defaults to 0.1.
             hierarchical_bleed_decay (float, optional): How quickly bleeding decays with distance (higher=faster decay). Defaults to 2.0.
+            operator_freeze_min_confidence (float, optional): Minimum average operator selection confidence required before 
+                freezing permutation. Blocks freeze until operators commit to their choices. 0.0 disables the requirement 
+                (legacy behavior), 0.7 requires 70% average operator confidence. Defaults to 0.7.
+            operator_freeze_epochs (int, optional): Freeze operator selection for first N epochs, allowing only 
+                edge/routing to learn. This decouples structure discovery from operator selection. After N epochs,
+                operators unfreeze and start learning. Defaults to 0 (no operator freeze).
+            skip_frozen_threshold (float, optional): Minimum metric required to skip frozen training after freeze.
+                Only skips frozen training if freeze improves metric AND we're above this threshold.
+                For regression tasks, this should be very high (e.g., 0.99) to ensure weights fully converge.
+                Defaults to 0.99.
         Returns:
-            tuple: Best model state dictionary and its accuracy.
+            tuple: Best model state dictionary and its metric (accuracy or R²).
         """
-        best_accuracy = 0.0
+        best_metric = -float('inf') if task_type == "regression" else 0.0
         best_model = None
-        loaded_accuracy = 0.0  # Track accuracy of loaded model to avoid overwriting with worse model
+        loaded_metric = -float('inf') if task_type == "regression" else 0.0
 
         if os.path.exists(save_path):
             try:
                 logging.info(f"📂 Found saved model at {save_path}, loading...")
                 self.load_model(save_path)
+                
+                # Debug: Check what was loaded
+                if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'op_logits_per_node'):
+                    if self.assembler.aggregator.op_logits_per_node is not None:
+                        for i, logits in enumerate(self.assembler.aggregator.op_logits_per_node):
+                            probs = torch.softmax(logits, dim=0)
+                            logging.info(f"   📋 After load - Node {i} op probs: {probs.tolist()}")
+                
                 if self.assembler.is_frozen:
-                    if binary_threshold >= 0:
-                        acc = self.evaluate(x_test, y_test, threshold=binary_threshold)
+                    if task_type == "regression":
+                        output = self.inference_raw(x_test)
+                        ss_res = ((y_test - output) ** 2).sum()
+                        ss_tot = ((y_test - y_test.mean()) ** 2).sum()
+                        metric = (1 - ss_res / (ss_tot + 1e-8)).item()  # R²
+                        metric_name = "R²"
+                    elif binary_threshold >= 0:
+                        metric = self.evaluate(x_test, y_test, threshold=binary_threshold)
+                        metric_name = "accuracy"
                     else:
                         output = self.inference_raw(x_test)
                         mae = (output - y_test).abs().mean().item()
-                        acc = 1.0 - min(mae, 1.0)
-                    logging.info(f"✅ Loaded model accuracy: {acc:.4f}")
-                    loaded_accuracy = acc  # Remember loaded accuracy
-                    if acc >= acceptance_threshold:
-                        return self.assembler.state_dict(), acc
+                        metric = 1.0 - min(mae, 1.0)
+                        metric_name = "accuracy"
+                    logging.info(f"✅ Loaded model {metric_name}: {metric:.4f}")
+                    loaded_metric = metric
+                    if metric >= acceptance_threshold:
+                        return self.assembler.state_dict(), metric
                     else:
-                        logging.info(f"⚠️ Loaded accuracy {acc:.4f} < threshold {acceptance_threshold:.4f}, will retrain")
+                        logging.info(f"⚠️ Loaded {metric_name} {metric:.4f} < threshold {acceptance_threshold:.4f}, will retrain")
             except Exception as e:
                 logging.warning(f"⚠️ Failed to load model from {save_path}: {e}")
 
@@ -955,14 +1293,36 @@ class baconNet(nn.Module):
                     y, coarse_perms[attempt], hierarchical_group_size,
                     hierarchical_bleed_ratio, hierarchical_bleed_decay,
                     sinkhorn_iters, loss_weight_perm_sparsity,
-                    freeze_aggregation_epochs, epochs_per_attempt, annealing_epochs
+                    freeze_aggregation_epochs, epochs_per_attempt, annealing_epochs,
+                    task_type=task_type,
+                    operator_initial_tau=operator_initial_tau,
+                    operator_final_tau=operator_final_tau,
+                    operator_freeze_min_confidence=operator_freeze_min_confidence,
+                    operator_freeze_epochs=operator_freeze_epochs
                 )
+                
+                # Two-phase training: freeze operators for first N epochs (only edges learn)
+                if operator_freeze_epochs > 0:
+                    if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'op_logits_per_node'):
+                        aggregator = self.assembler.aggregator
+                        if aggregator.op_logits_per_node is not None:
+                            for logits in aggregator.op_logits_per_node:
+                                logits.requires_grad = False
+                            # Use "add" as safe default during phase 1 (no gradient explosion from div)
+                            if hasattr(aggregator, 'phase1_default_op'):
+                                aggregator.phase1_default_op = "add"
+                                logging.info(f"   ❄️  Operator selection frozen for first {operator_freeze_epochs} epochs (phase 1: edges only, using 'add')")
+                            else:
+                                logging.info(f"   ❄️  Operator selection frozen for first {operator_freeze_epochs} epochs (phase 1: edges only)")
                 
                 # Adaptive temperature annealing parameters
                 improvement_patience = 150  # Pause temp decay if no improvement for this many epochs
                 improvement_window = 100  # Check improvement over this many epochs (larger = more stable)
                 min_improvement_delta = 0.005  # Minimum loss decrease over window (0.5% improvement required)
                 confidence_plateau_patience = 1000  # Freeze if confidence doesn't improve for this many epochs after loss convergence
+                
+                # Initialize R² tracking for R²-modulated regularization
+                self._current_r2 = None
                 
                 for epoch in range(setup.actual_max_epochs):
                     # Apply training policy (e.g., fixed andness) at start of each epoch
@@ -980,6 +1340,22 @@ class baconNet(nn.Module):
                         setup.aggregation_frozen = False
                         logging.info(f"   🔓 Aggregation unfrozen at epoch {epoch} (joint training begins)")
                     
+                    # Unfreeze operator selection after specified epochs (two-phase training)
+                    if operator_freeze_epochs > 0 and epoch == operator_freeze_epochs:
+                        if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'op_logits_per_node'):
+                            aggregator = self.assembler.aggregator
+                            if aggregator.op_logits_per_node is not None:
+                                for logits in aggregator.op_logits_per_node:
+                                    logits.requires_grad = True
+                                # Clear phase1 default so operators can learn
+                                if hasattr(aggregator, 'phase1_default_op'):
+                                    aggregator.phase1_default_op = None
+                                # Reset best tracking - phase 1 states used "add" only, not valid for final model
+                                setup.best_overall_loss = float('inf')
+                                setup.best_overall_state = None
+                                setup.best_overall_epoch = epoch
+                                logging.info(f"   🔓 Operator selection unfrozen at epoch {epoch} (phase 2: operators start learning)")
+                    
                     self.assembler.train()
                     setup.optimizer.zero_grad(set_to_none=True)
                     just_froze = False  # Flag to skip backward if we freeze during this iteration
@@ -989,18 +1365,35 @@ class baconNet(nn.Module):
                     current_sparsity_weight = self.loss_weight_perm_sparsity
                     loss = self._compute_composite_loss(
                         outputs, y, setup.criterion, setup.pos_weight, epoch,
-                        sparsity_schedule, setup.use_temperature_annealing, current_sparsity_weight
+                        sparsity_schedule, setup.use_temperature_annealing, current_sparsity_weight,
+                        task_type=setup.task_type
                     )
                     
                     # Track loss and accuracy for smarter plateau detection
                     setup.loss_history.append(loss.item())
                     
-                    # Compute training accuracy every epoch for plateau detection
+                    # Track best overall state (across entire training, not just frozen phase)
+                    current_loss_val = loss.item()
+                    if current_loss_val < setup.best_overall_loss:
+                        setup.best_overall_loss = current_loss_val
+                        setup.best_overall_state = {k: v.clone() for k, v in self.assembler.state_dict().items()}
+                        setup.best_overall_epoch = epoch
+                    
+                    # Compute training metric every epoch for plateau detection
                     # This is cheap since we already have outputs
                     with torch.no_grad():
-                        train_predictions = (outputs > 0.5).float()
-                        train_accuracy = (train_predictions == y).float().mean().item()
-                        setup.accuracy_history.append(train_accuracy)
+                        if setup.task_type == "regression":
+                            # Use R² for regression
+                            ss_res = ((y - outputs) ** 2).sum()
+                            ss_tot = ((y - y.mean()) ** 2).sum()
+                            train_metric = (1 - ss_res / (ss_tot + 1e-8)).item()  # R²
+                            # Store R² for use in R²-modulated regularization
+                            self._current_r2 = train_metric
+                        else:
+                            train_predictions = (outputs > 0.5).float()
+                            train_metric = (train_predictions == y).float().mean().item()
+                            self._current_r2 = None  # Not applicable for classification
+                        setup.accuracy_history.append(train_metric)
                     
                     # CHECK CONVERGENCE: If frozen, count epochs. If converged before freeze, wait for freeze.
                     current_loss = loss.item()
@@ -1008,11 +1401,33 @@ class baconNet(nn.Module):
                         # Model is frozen - count epochs since freeze
                         if setup.epoch_when_frozen is None:
                             setup.epoch_when_frozen = epoch
-                            logging.info(f"   🐛 DEBUG: frozen_training_epochs={frozen_training_epochs}, epoch={epoch}")
+                            setup.best_frozen_loss = current_loss
+                            setup.best_frozen_state = {k: v.clone() for k, v in self.assembler.state_dict().items()}
+                            
+                            # Reduce learning rate significantly for stability during frozen training
+                            for param_group in setup.optimizer.param_groups:
+                                param_group['lr'] *= 0.01  # 1% of original LR
                             logging.info(f"   🎯 Model frozen at epoch {epoch + 1}, will train for {frozen_training_epochs} more epochs")
+                            logging.info(f"      📉 Reduced learning rates to 1% for stable weight refinement")
+                        else:
+                            # Track best loss and save state during frozen training
+                            if current_loss < setup.best_frozen_loss:
+                                setup.best_frozen_loss = current_loss
+                                setup.best_frozen_state = {k: v.clone() for k, v in self.assembler.state_dict().items()}
+                            
+                            # Check for divergence: loss > 10x best frozen loss
+                            if current_loss > setup.best_frozen_loss * 10 and setup.best_frozen_state is not None:
+                                logging.warning(f"   ⚠️  Loss exploded ({current_loss:.4f} > 10x best {setup.best_frozen_loss:.4f}), restoring best frozen state")
+                                self.assembler.load_state_dict(setup.best_frozen_state)
+                                logging.info(f"   ✅ Restored best frozen state and stopping frozen training")
+                                break
                         
                         epochs_since_freeze = epoch - setup.epoch_when_frozen
                         if epochs_since_freeze >= frozen_training_epochs:
+                            # Restore best frozen state at end of training
+                            if setup.best_frozen_state is not None and current_loss > setup.best_frozen_loss * 1.1:
+                                logging.info(f"   📈 Final loss ({current_loss:.4f}) worse than best ({setup.best_frozen_loss:.4f}), restoring best state")
+                                self.assembler.load_state_dict(setup.best_frozen_state)
                             logging.info(f"   ✅ Completed {frozen_training_epochs} epochs of frozen training, stopping")
                             break
                     else:
@@ -1030,14 +1445,15 @@ class baconNet(nn.Module):
                     
                     # Display epoch progress every 100 epochs
                     if (epoch + 1) % 100 == 0:
+                        # Build epoch log message with available temperature info
+                        log_parts = [f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}"]
+                        
+                        # Add permutation info if available
                         if setup.use_temperature_annealing and not self.assembler.is_frozen:
                             perm_temp = self.assembler.input_to_leaf.temperature
-                            
-                            # Calculate permutation confidence for monitoring convergence
                             perm_confidence = 0.0
                             if hasattr(self.assembler.input_to_leaf, 'logits'):
                                 with torch.no_grad():
-                                    # Use Sinkhorn normalization to get actual doubly stochastic matrix
                                     if hasattr(self.assembler.input_to_leaf, 'sinkhorn'):
                                         soft_perm = self.assembler.input_to_leaf.sinkhorn(
                                             self.assembler.input_to_leaf.logits,
@@ -1050,11 +1466,28 @@ class baconNet(nn.Module):
                             
                             if self.assembler.transformation_layer is not None:
                                 trans_temp = self.assembler.transformation_layer.temperature
-                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Perm: {perm_temp:.3f}, Trans: {trans_temp:.3f}, Conf: {perm_confidence:.3f}")
+                                log_parts.append(f"Perm: {perm_temp:.3f}, Trans: {trans_temp:.3f}, Conf: {perm_confidence:.3f}")
                             else:
-                                logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}, Temp: {perm_temp:.3f}, Conf: {perm_confidence:.3f}")
-                        else:
-                            logging.info(f"   Epoch {epoch + 1}/{max_epochs}, Loss: {loss.item():.4f}")
+                                log_parts.append(f"Temp: {perm_temp:.3f}, Conf: {perm_confidence:.3f}")
+                        
+                        # Add operator tau/confidence (always show if available)
+                        if hasattr(self.assembler, 'aggregator'):
+                            aggregator = self.assembler.aggregator
+                            if hasattr(aggregator, 'tau') and hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node is not None:
+                                op_tau = aggregator.tau
+                                with torch.no_grad():
+                                    confidences = []
+                                    for logits in aggregator.op_logits_per_node:
+                                        probs = torch.softmax(logits / op_tau, dim=0)
+                                        confidences.append(probs.max().item())
+                                    op_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+                                log_parts.append(f"OpTau: {op_tau:.2f}, OpConf: {op_confidence:.2f}")
+                        
+                        # Show best loss so far (helps track if we're passing good opportunities)
+                        if setup.best_overall_loss < float('inf'):
+                            log_parts.append(f"Best: {setup.best_overall_loss:.2f}@{setup.best_overall_epoch + 1}")
+                        
+                        logging.info(", ".join(log_parts))
                     
                     # ADAPTIVE TEMPERATURE ANNEALING: Track loss improvement
                     if setup.use_temperature_annealing and not self.assembler.is_frozen:
@@ -1098,12 +1531,6 @@ class baconNet(nn.Module):
                             # Cool transformation layer independently
                             if self.assembler.transformation_layer is not None and setup.trans_temp_decay_rate is not None:
                                 self.assembler.transformation_layer.temperature *= setup.trans_temp_decay_rate
-                            
-                            # Cool full tree temperature if using "full" layout
-                            if self.assembler.tree_layout == "full" and self.assembler.fully_connected_tree is not None:
-                                progress = min(1.0, epoch / setup.anneal_over_epochs)
-                                self.assembler.anneal_full_tree_temperature(progress)
-                                self.assembler.anneal_full_tree_gumbel(progress)
                         else:
                             # Pause temperature annealing - keep exploring at current temperature
                             # Only log if we haven't paused before AND temperatures aren't already at minimum
@@ -1131,7 +1558,10 @@ class baconNet(nn.Module):
                                     early_stop_threshold, self.permutation_final_temperature,
                                     setup.has_converged_before_freeze, setup.best_confidence,
                                     setup.epochs_without_confidence_improvement, confidence_plateau_patience,
-                                    setup.freeze_confidence_warning_shown, current_loss, binary_threshold
+                                    setup.freeze_confidence_warning_shown, current_loss, binary_threshold,
+                                    task_type=setup.task_type,
+                                    operator_freeze_min_confidence=operator_freeze_min_confidence,
+                                    skip_frozen_threshold=skip_frozen_threshold
                                 )
                             
                             # If freeze improved accuracy, stop training immediately
@@ -1139,9 +1569,36 @@ class baconNet(nn.Module):
                                 logging.info(f"   🛑 Skipping frozen training, model is optimal at freeze point")
                                 break
                     
+                    # Anneal operator tau independently - CONTINUES during frozen training
+                    # Operators need to commit even after permutation is frozen
+                    # Skip annealing during phase 1 (operator_freeze_epochs) - tau stays high for uniform blend
+                    if setup.operator_tau_decay_rate is not None and hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'tau'):
+                        within_annealing_period = epoch < setup.anneal_over_epochs
+                        past_operator_freeze = epoch >= operator_freeze_epochs
+                        if within_annealing_period and past_operator_freeze:
+                            self.assembler.aggregator.tau *= setup.operator_tau_decay_rate
+                    
+                    # Anneal full tree temperature independently (works even when permutation is disabled)
+                    if self.assembler.tree_layout == "full" and self.assembler.fully_connected_tree is not None:
+                        within_annealing_period = epoch < setup.anneal_over_epochs
+                        if within_annealing_period and not self.assembler.is_frozen:
+                            progress = min(1.0, epoch / setup.anneal_over_epochs)
+                            self.assembler.anneal_full_tree_temperature(progress)
+                            self.assembler.anneal_full_tree_gumbel(progress)
+                    
+                    # Anneal alternating tree temperature independently
+                    if self.assembler.tree_layout == "alternating" and self.assembler.alternating_tree is not None:
+                        within_annealing_period = epoch < setup.anneal_over_epochs
+                        if within_annealing_period and not self.assembler.is_frozen:
+                            progress = min(1.0, epoch / setup.anneal_over_epochs)
+                            self.assembler.anneal_alternating_tree_temperature(progress)
+                            self.assembler.anneal_alternating_tree_gumbel(progress)
+                    
                     # Perform backward pass and optimizer step (unless we just froze)
                     if not just_froze:
                         loss.backward()
+                        # Aggressive gradient clipping to prevent explosion from mul/div operators
+                        torch.nn.utils.clip_grad_norm_(self.assembler.parameters(), max_norm=0.5)
                         setup.optimizer.step()
                                         
                     # Check if transformation layer has converged
@@ -1204,6 +1661,29 @@ class baconNet(nn.Module):
                             # else: accuracy is 100% but temperature still high or not confident - keep training
                         # else: accuracy is high but loss is too high - likely unstable, keep training
 
+                # Restore best overall state if current is significantly worse
+                # BUT only if model structure hasn't changed (i.e., we haven't frozen yet)
+                # After freezing, input_to_leaf changes from logits to P_hard, causing state_dict mismatch
+                if setup.best_overall_state is not None:
+                    final_loss = setup.loss_history[-1] if setup.loss_history else float('inf')
+                    if final_loss > setup.best_overall_loss * 1.5:  # Final loss > 1.5x best
+                        logging.info(f"   📈 Final loss ({final_loss:.4f}) worse than best ({setup.best_overall_loss:.4f} at epoch {setup.best_overall_epoch + 1})")
+                        
+                        # Check if model structure matches saved state
+                        current_keys = set(self.assembler.state_dict().keys())
+                        saved_keys = set(setup.best_overall_state.keys())
+                        if current_keys == saved_keys:
+                            logging.info(f"      Restoring best overall state...")
+                            self.assembler.load_state_dict(setup.best_overall_state)
+                        else:
+                            # Model structure changed (e.g., frozen) - can't restore pre-freeze state
+                            # Use best_frozen_state instead if available
+                            if setup.best_frozen_state is not None:
+                                logging.info(f"      Model structure changed (frozen). Using best frozen state instead.")
+                                self.assembler.load_state_dict(setup.best_frozen_state)
+                            else:
+                                logging.info(f"      Model structure changed (frozen). Cannot restore pre-freeze state.")
+                
                 # Force freeze if not actually frozen (check locked_perm, not just flag)
                 # Early stopping may set is_frozen=True without creating locked_perm
                 actually_frozen = self.assembler.locked_perm is not None
@@ -1236,7 +1716,10 @@ class baconNet(nn.Module):
                         except Exception as e:
                             logging.warning(f"   ⚠️ Failed to force-freeze model: {e}")
                     else:
-                        logging.warning(f"   ⚠️ Cannot force-freeze: input_to_leaf has no 'logits' attribute")
+                        # No permutation layer to freeze (e.g., Identity when use_permutation_layer=False)
+                        # Just mark as frozen since there's nothing to permute
+                        self.assembler.is_frozen = True
+                        logging.info(f"   ✅ No permutation layer to freeze (already identity), marking as frozen")
                 else:
                     # Check if actually frozen (not just flag set)
                     actually_frozen = not hasattr(self.assembler.input_to_leaf, 'logits')
@@ -1247,26 +1730,34 @@ class baconNet(nn.Module):
 
                 # Always evaluate each attempt, regardless of freeze status
                 # This ensures we track the best permutation even if it didn't fully freeze
-                if binary_threshold >= 0:
-                    accuracy = self.evaluate(x_test, y_test, threshold=binary_threshold)
+                if task_type == "regression":
+                    output = self.inference_raw(x_test)
+                    ss_res = ((y_test - output) ** 2).sum()
+                    ss_tot = ((y_test - y_test.mean()) ** 2).sum()
+                    metric = (1 - ss_res / (ss_tot + 1e-8)).item()  # R²
+                    metric_name = "R²"
+                elif binary_threshold >= 0:
+                    metric = self.evaluate(x_test, y_test, threshold=binary_threshold)
+                    metric_name = "accuracy"
                 else:
                     output = self.inference_raw(x_test)
                     mae = (output - y_test).abs().mean().item()
-                    accuracy = 1.0 - min(mae, 1.0)
+                    metric = 1.0 - min(mae, 1.0)
+                    metric_name = "accuracy"
                 # Check actual frozen status, not just the flag
                 actually_frozen = not hasattr(self.assembler.input_to_leaf, 'logits')
                 frozen_status = "frozen" if actually_frozen else "unfrozen"
-                logging.info(f"✅ Attempt {attempt + 1} accuracy: {accuracy:.4f} ({frozen_status})")
+                logging.info(f"✅ Attempt {attempt + 1} {metric_name}: {metric:.4f} ({frozen_status})")
                 
-                if accuracy > best_accuracy:
-                    best_accuracy = accuracy
+                if metric > best_metric:
+                    best_metric = metric
                     best_model = self.assembler.state_dict()
                     best_is_frozen = self.assembler.is_frozen
                     best_locked_perm = self.assembler.locked_perm.clone() if self.assembler.locked_perm is not None else None
-                    logging.info(f"   🏆 New best model! Accuracy: {best_accuracy:.4f}")
+                    logging.info(f"   🏆 New best model! {metric_name}: {best_metric:.4f}")
                     
                     # Save intermediate best model after each improvement (only if better than loaded model)
-                    if save_model and save_path and best_accuracy > loaded_accuracy:
+                    if save_model and save_path and best_metric > loaded_metric:
                         # Temporarily store current state before loading best
                         temp_state = self.assembler.state_dict()
                         temp_is_frozen = self.assembler.is_frozen
@@ -1296,7 +1787,7 @@ class baconNet(nn.Module):
                         self.assembler.locked_perm = temp_locked_perm
                         self.assembler.input_to_leaf = temp_input_layer
                     
-                    if best_accuracy >= acceptance_threshold:
+                    if best_metric >= acceptance_threshold:
                         logging.info(f"   ✅ Acceptance threshold reached ({acceptance_threshold:.4f})")
                         break
                         
@@ -1310,12 +1801,19 @@ class baconNet(nn.Module):
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
         
+        # Determine metric name for logging
+        metric_name = "R²" if task_type == "regression" else "accuracy"
+        
+        # For regression, loaded_metric starts at -inf, so any real value is better
+        # For classification, loaded_metric starts at 0
+        has_loaded_model = loaded_metric > (-float('inf') if task_type == "regression" else 0)
+        
         # If new model is worse than loaded model, reload the original from disk
-        if loaded_accuracy > 0 and best_accuracy <= loaded_accuracy and os.path.exists(save_path):
-            logging.info(f"⚠️ New model accuracy {best_accuracy:.4f} <= loaded model accuracy {loaded_accuracy:.4f}")
+        if has_loaded_model and best_metric <= loaded_metric and os.path.exists(save_path):
+            logging.info(f"⚠️ New model {metric_name} {best_metric:.4f} <= loaded model {metric_name} {loaded_metric:.4f}")
             logging.info(f"   🔄 Reloading original model from {save_path}")
             self.load_model(save_path)
-            return self.assembler.state_dict(), loaded_accuracy
+            return self.assembler.state_dict(), loaded_metric
         
         # Load best model and restore its frozen state
         self.assembler.load_state_dict(best_model)
@@ -1330,12 +1828,12 @@ class baconNet(nn.Module):
             ).to(self.assembler.device)
         
         if save_model:
-            if best_accuracy > loaded_accuracy:
-                logging.info(f"✅ Saving the best model with accuracy {best_accuracy:.4f} to {save_path}")
+            if not has_loaded_model or best_metric > loaded_metric:
+                logging.info(f"✅ Saving the best model with {metric_name} {best_metric:.4f} to {save_path}")
                 self.save_model(save_path)
             else:
-                logging.info(f"⚠️ New model accuracy {best_accuracy:.4f} <= loaded model accuracy {loaded_accuracy:.4f}, not overwriting {save_path}")
-        return best_model, best_accuracy
+                logging.info(f"⚠️ New model {metric_name} {best_metric:.4f} <= loaded model {metric_name} {loaded_metric:.4f}, not overwriting {save_path}")
+        return best_model, best_metric
     
     def prune_features(self, features):        
         return self.assembler.prune_features(features=features)    
