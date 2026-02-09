@@ -12,6 +12,7 @@ from bacon.transformationLayer import (
     StepDownTransformation
 )
 from bacon.fullyConnectedTree import FullyConnectedTree
+from bacon.alternatingTree import AlternatingTree
 import torch.optim as optim
 import numpy as np
 import copy
@@ -36,7 +37,7 @@ class binaryTreeLogicNet(nn.Module):
         min_noise (float, optional): Minimum noise level. Defaults to 0.0.
         max_noise (float, optional): Maximum noise level. Defaults to 2.0.
         is_frozen (bool, optional): Whether to freeze the structure. Defaults to False.
-        tree_layout (str, optional): Layout of the tree. Defaults to "left". Options: "left", "balanced", "paired", "full".
+        tree_layout (str, optional): Layout of the tree. Defaults to "left". Options: "left", "balanced", "paired", "full", "alternating".
         weight_penalty_strength (float, optional): Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).
         aggregator (callable, optional): Aggregator to be used. Defaults to "lsp.full_weight".
         device (torch.device, optional): Device to run the model on. Defaults to None (uses CUDA if available).
@@ -45,6 +46,8 @@ class binaryTreeLogicNet(nn.Module):
         full_tree_temperature (float, optional): Initial temperature for sigmoid edge weights. Defaults to 3.0.
         full_tree_final_temperature (float, optional): Final temperature after annealing. Defaults to 0.1.
         full_tree_max_egress (int, optional): Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).
+        use_permutation_layer (bool, optional): Whether to use the permutation layer. Defaults to True.
+            Set to False for full tree layout to let the tree learn input routing directly.
     """
     def __init__(self, 
                  input_size, 
@@ -77,7 +80,17 @@ class binaryTreeLogicNet(nn.Module):
                  full_tree_shape: str = "triangle",
                  full_tree_temperature: float = 3.0,
                  full_tree_final_temperature: float = 0.1,
-                 full_tree_max_egress: int = None):
+                 full_tree_max_egress: int = None,
+                 full_tree_concentrate_ingress: bool = False,
+                 full_tree_use_sinkhorn: bool = False,
+                 # Alternating tree parameters
+                 alternating_learn_first_routing: bool = True,
+                 alternating_learn_subsequent_routing: bool = True,
+                 alternating_max_egress: int = 1,
+                 alternating_use_straight_through: bool = True,
+                 alternating_balance_weight: float = 50.0,
+                 alternating_egress_weight: float = 0.5,
+                 use_permutation_layer: bool = True):
         super(binaryTreeLogicNet, self).__init__()
         
         # Store full tree parameters
@@ -86,6 +99,17 @@ class binaryTreeLogicNet(nn.Module):
         self.full_tree_temperature = full_tree_temperature
         self.full_tree_final_temperature = full_tree_final_temperature
         self.full_tree_max_egress = full_tree_max_egress
+        self.full_tree_concentrate_ingress = full_tree_concentrate_ingress
+        self.full_tree_use_sinkhorn = full_tree_use_sinkhorn
+        self.use_permutation_layer = use_permutation_layer
+        
+        # Store alternating tree parameters
+        self.alternating_learn_first_routing = alternating_learn_first_routing
+        self.alternating_learn_subsequent_routing = alternating_learn_subsequent_routing
+        self.alternating_max_egress = alternating_max_egress
+        self.alternating_use_straight_through = alternating_use_straight_through
+        self.alternating_balance_weight = alternating_balance_weight
+        self.alternating_egress_weight = alternating_egress_weight
         
         self.original_input_size = input_size
         self.num_leaves = input_size  # 🔹 Each input gets its own leaf initially
@@ -150,6 +174,9 @@ class binaryTreeLogicNet(nn.Module):
             if self.tree_layout == "full" and self.fully_connected_tree is not None:
                 # Sum of all non-input layer widths = total aggregator nodes
                 num_agg_nodes = sum(self.fully_connected_tree.layer_widths[1:])
+            elif self.tree_layout == "alternating" and self.alternating_tree is not None:
+                # Use alternating tree's node count
+                num_agg_nodes = self.alternating_tree.num_agg_nodes
             else:
                 num_agg_nodes = self.num_layers
             self.aggregator.attach_to_tree(num_agg_nodes)      
@@ -210,7 +237,11 @@ class binaryTreeLogicNet(nn.Module):
             is_frozen (bool): Whether to freeze the structure.
         """
         self.is_frozen = is_frozen
-        if not self.is_frozen:
+        if not self.use_permutation_layer:
+            # No permutation - direct passthrough (useful for full tree where edge selection handles routing)
+            self.locked_perm = None
+            self.input_to_leaf = nn.Identity()
+        elif not self.is_frozen:
             self.locked_perm = None
             self.input_to_leaf = inputToLeafSinkhorn(
                 self.original_input_size,
@@ -222,8 +253,12 @@ class binaryTreeLogicNet(nn.Module):
             best_perm = torch.arange(self.num_leaves, dtype=torch.long)
             self.locked_perm = best_perm.clone().detach()
             self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size).to(self.device)
-        self.input_to_leaf.gumbel_noise_scale = 1.0
-        self.input_to_leaf.temperature = 1.0
+        
+        # Set temperature/noise only if the layer supports it
+        if hasattr(self.input_to_leaf, 'gumbel_noise_scale'):
+            self.input_to_leaf.gumbel_noise_scale = 1.0
+        if hasattr(self.input_to_leaf, 'temperature'):
+            self.input_to_leaf.temperature = 1.0
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
 
@@ -253,11 +288,31 @@ class binaryTreeLogicNet(nn.Module):
                 final_temperature=self.full_tree_final_temperature,
                 use_gumbel=True,
                 max_egress=self.full_tree_max_egress,
+                concentrate_ingress=self.full_tree_concentrate_ingress,
+                use_sinkhorn=self.full_tree_use_sinkhorn,
                 device=self.device
             )
             self.add_module("fully_connected_tree", self.fully_connected_tree)
         else:
             self.fully_connected_tree = None
+        
+        # Initialize AlternatingTree for "alternating" layout
+        if self.tree_layout == "alternating":
+            self.alternating_tree = AlternatingTree(
+                num_inputs=self.original_input_size,
+                learn_first_routing=self.alternating_learn_first_routing,
+                learn_subsequent_routing=self.alternating_learn_subsequent_routing,
+                max_egress=self.alternating_max_egress,
+                use_straight_through=self.alternating_use_straight_through,
+                temperature=self.full_tree_temperature,  # Reuse temperature params
+                final_temperature=self.full_tree_final_temperature,
+                use_gumbel=True,
+                gumbel_noise_scale=1.0,
+                device=self.device
+            )
+            self.add_module("alternating_tree", self.alternating_tree)
+        else:
+            self.alternating_tree = None
         
         self.apply(self._initialize_weights)
         self.to(self.device) 
@@ -327,15 +382,63 @@ class binaryTreeLogicNet(nn.Module):
             raise ValueError(f"Transformation count mismatch: Checkpoint has {saved_num_trans} transformations, current model has {current_num_trans}. Delete checkpoint and retrain.")
         
         if self.is_frozen:
-            # Frozen → use FrozenInputToLeaf
-            P_hard = state_dict['input_to_leaf.P_hard']
-            self.input_to_leaf = frozenInputToLeaf(
-                hard_assignment=torch.argmax(P_hard, dim=1),
-                num_inputs=self.original_input_size
-            )
-        # Now load weights (strict=False for backward compatibility with older models)
+            # Frozen → use FrozenInputToLeaf (only if P_hard exists in state dict)
+            if 'input_to_leaf.P_hard' in state_dict:
+                P_hard = state_dict['input_to_leaf.P_hard']
+                self.input_to_leaf = frozenInputToLeaf(
+                    hard_assignment=torch.argmax(P_hard, dim=1),
+                    num_inputs=self.original_input_size
+                )
+            elif 'input_to_leaf.logits' in state_dict:
+                # Model was marked frozen but never actually converted - use logits
+                import logging
+                logging.warning(f"   ⚠️ Model marked frozen but has logits, not P_hard. Keeping unfrozen input layer.")
+                self.is_frozen = False
+            # else: neither exists, let load_state_dict handle it
+        else:
+            # Not marked frozen, but check if state_dict has P_hard (flag may have been lost)
+            if 'input_to_leaf.P_hard' in state_dict and 'input_to_leaf.logits' not in state_dict:
+                import logging
+                logging.info(f"   📋 State dict has P_hard (frozen structure). Creating frozen input layer.")
+                P_hard = state_dict['input_to_leaf.P_hard']
+                self.input_to_leaf = frozenInputToLeaf(
+                    hard_assignment=torch.argmax(P_hard, dim=1),
+                    num_inputs=self.original_input_size
+                )
+                self.is_frozen = True
+        # Now load weights - check for mismatched keys
+        current_keys = set(self.state_dict().keys())
+        saved_keys = set(state_dict.keys())
+        missing_in_model = saved_keys - current_keys
+        missing_in_checkpoint = current_keys - saved_keys
+        
+        if missing_in_model:
+            logging.warning(f"   ⚠️ Keys in checkpoint but not in model (won't be loaded): {list(missing_in_model)[:10]}")
+        if missing_in_checkpoint:
+            logging.warning(f"   ⚠️ Keys in model but not in checkpoint (will keep random init): {list(missing_in_checkpoint)[:10]}")
+        
+        # Debug: Log specific important keys
+        alternating_keys = [k for k in saved_keys if 'alternating' in k]
+        operator_keys = [k for k in saved_keys if 'op_logits' in k]
+        current_operator_keys = [k for k in current_keys if 'op_logits' in k]
+        if alternating_keys:
+            logging.info(f"   📋 Alternating tree keys in checkpoint: {len(alternating_keys)}")
+        if operator_keys:
+            logging.info(f"   📋 Operator logits keys in checkpoint: {operator_keys}")
+            logging.info(f"   📋 Operator logits keys in model: {current_operator_keys}")
+        
+        # Load with strict=False for backward compatibility
         self.load_state_dict(state_dict, strict=False)
         self.to(self.device)
+        
+        # Verify critical values loaded correctly (wrapped in try/except to not break loading)
+        try:
+            if hasattr(self, 'alternating_tree') and self.alternating_tree is not None:
+                if hasattr(self.alternating_tree, 'coeff_layers') and len(self.alternating_tree.coeff_layers) > 0:
+                    first_coeff = self.alternating_tree.coeff_layers[0].get_coefficients()
+                    logging.info(f"   📋 Loaded alternating tree first coeffs: {first_coeff.data[:3].tolist()}")
+        except Exception as e:
+            logging.warning(f"   ⚠️ Error verifying loaded values: {e}")
         
         # Clamp bias parameters to valid range when normalize_andness is False
         # This fixes models saved with out-of-bounds bias values
@@ -490,6 +593,15 @@ class binaryTreeLogicNet(nn.Module):
                                                  normalize_andness=self.normalize_andness)
                 # FullyConnectedTree already returns (batch, 1) shape
                 # Only clamp for classification (LSP-style), not for arithmetic regression
+                from bacon.aggregators.math import ArithmeticOperatorSet
+                if not isinstance(self.aggregator, ArithmeticOperatorSet):
+                    epsilon = 1e-7
+                    out = torch.clamp(out, min=epsilon, max=1.0-epsilon)
+                return out
+            elif self.tree_layout == "alternating":
+                # Use AlternatingTree for forward pass (separates coefficients from routing)
+                out = self.alternating_tree(leaf_values, aggregator=self.aggregator)
+                # AlternatingTree returns (batch, 1) shape
                 from bacon.aggregators.math import ArithmeticOperatorSet
                 if not isinstance(self.aggregator, ArithmeticOperatorSet):
                     epsilon = 1e-7
@@ -722,6 +834,38 @@ class binaryTreeLogicNet(nn.Module):
             return torch.tensor(0.0, device=self.device)
         return self.fully_connected_tree.get_egress_constraint_loss()
     
+    def get_full_tree_ingress_loss(self) -> torch.Tensor:
+        """Get ingress constraint loss for fully connected tree.
+        
+        Discourages each destination node from receiving more than 2 inputs.
+        Binary operators (add, mul) work best with exactly 2 inputs.
+        Returns 0 if not using "full" layout.
+        """
+        if self.tree_layout != "full" or self.fully_connected_tree is None:
+            return torch.tensor(0.0, device=self.device)
+        return self.fully_connected_tree.get_ingress_constraint_loss()
+    
+    def get_full_tree_ingress_balance_loss(self) -> torch.Tensor:
+        """Get ingress balance loss for fully connected tree.
+        
+        Encourages balanced distribution of inputs across destinations.
+        Prevents all sources from routing to the same destination.
+        Returns 0 if not using "full" layout.
+        """
+        if self.tree_layout != "full" or self.fully_connected_tree is None:
+            return torch.tensor(0.0, device=self.device)
+        return self.fully_connected_tree.get_ingress_balance_loss()
+    
+    def get_full_tree_scale_regularization_loss(self) -> torch.Tensor:
+        """Get scale regularization loss for fully connected tree.
+        
+        Penalizes extreme scale coefficients to prevent coefficient hacking.
+        Returns 0 if not using "full" layout.
+        """
+        if self.tree_layout != "full" or self.fully_connected_tree is None:
+            return torch.tensor(0.0, device=self.device)
+        return self.fully_connected_tree.get_scale_regularization_loss()
+
     def anneal_full_tree_temperature(self, progress: float) -> None:
         """Anneal the temperature of the fully connected tree.
         
@@ -778,3 +922,82 @@ class binaryTreeLogicNet(nn.Module):
         if self.tree_layout != "full" or self.fully_connected_tree is None:
             return {}
         return self.fully_connected_tree.get_tree_structure()        
+    
+    # =========================================================================
+    # Alternating Tree Methods (for tree_layout="alternating")
+    # =========================================================================
+    
+    def get_alternating_tree_balance_loss(self) -> torch.Tensor:
+        """Get balance loss for alternating tree routing.
+        
+        Encourages balanced distribution of inputs across destinations.
+        Returns 0 if not using "alternating" layout.
+        """
+        if self.tree_layout != "alternating" or self.alternating_tree is None:
+            return torch.tensor(0.0, device=self.device)
+        return self.alternating_tree.get_balance_loss()
+    
+    def get_alternating_tree_egress_loss(self) -> torch.Tensor:
+        """Get egress loss for alternating tree routing.
+        
+        Encourages peaked row distributions (clear winner per source).
+        Returns 0 if not using "alternating" layout.
+        """
+        if self.tree_layout != "alternating" or self.alternating_tree is None:
+            return torch.tensor(0.0, device=self.device)
+        return self.alternating_tree.get_egress_loss()
+    
+    def anneal_alternating_tree_temperature(self, progress: float) -> None:
+        """Anneal the temperature of the alternating tree.
+        
+        Args:
+            progress: Training progress from 0.0 to 1.0
+        """
+        if self.tree_layout == "alternating" and self.alternating_tree is not None:
+            self.alternating_tree.anneal_temperature(progress)
+    
+    def anneal_alternating_tree_gumbel(self, progress: float, initial: float = 1.0, final: float = 0.0) -> None:
+        """Anneal the Gumbel noise scale of the alternating tree.
+        
+        Args:
+            progress: Training progress from 0.0 to 1.0
+            initial: Initial noise scale
+            final: Final noise scale
+        """
+        if self.tree_layout == "alternating" and self.alternating_tree is not None:
+            self.alternating_tree.anneal_gumbel(progress, initial, final)
+    
+    def harden_alternating_tree(self) -> None:
+        """Harden the alternating tree to discrete edge selections."""
+        if self.tree_layout == "alternating" and self.alternating_tree is not None:
+            self.alternating_tree.harden()
+            self.is_frozen = True
+            logging.info("🔒 Alternating tree hardened")
+    
+    def unharden_alternating_tree(self) -> None:
+        """Revert alternating tree hardening to allow continued training."""
+        if self.tree_layout == "alternating" and self.alternating_tree is not None:
+            self.alternating_tree.is_frozen = False
+            for agg_layer in self.alternating_tree.agg_layers:
+                if hasattr(agg_layer, 'is_hardened'):
+                    agg_layer.is_hardened = False
+                    agg_layer.hard_edges = None
+            self.is_frozen = False
+    
+    def get_alternating_tree_structure_description(self) -> str:
+        """Get human-readable structure description for alternating tree.
+        
+        Returns empty string if not using "alternating" layout.
+        """
+        if self.tree_layout != "alternating" or self.alternating_tree is None:
+            return ""
+        return self.alternating_tree.get_structure_description()
+    
+    def get_alternating_tree_num_nodes(self) -> int:
+        """Get number of aggregation nodes in alternating tree.
+        
+        Returns 0 if not using "alternating" layout.
+        """
+        if self.tree_layout != "alternating" or self.alternating_tree is None:
+            return 0
+        return self.alternating_tree.num_agg_nodes

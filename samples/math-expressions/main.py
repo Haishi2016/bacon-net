@@ -17,7 +17,6 @@ import sys
 sys.path.insert(0, '../../')
 
 import re
-import copy
 import torch
 import torch.nn as nn
 import numpy as np
@@ -25,8 +24,9 @@ import logging
 from typing import Tuple, List, Dict, Any
 
 from bacon.baconNet import baconNet
-from bacon.visualization import print_tree_structure
+from bacon.visualization import print_tree_structure, visualize_alternating_tree, print_alternating_tree_structure
 from bacon.tools import reconstruct_expression, print_reconstructed_expression
+from samples.common import train_bacon_model
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # Mathematical expression to approximate
 # Examples: "a+b+c", "a*b+c", "3*a+2*b-c", "(a+b)*c", "sqrt(a)+b"
-EXPRESSION = "3.1415926*a * 2* b * 10*c"
+EXPRESSION = "3.14*b+10*c-3*a"
 
 # Dataset configuration
 NUM_SAMPLES = 2000           # Number of training samples
@@ -46,42 +46,25 @@ OUTPUT_NOISE_PERCENT = 0.0 # Noise level for outputs (0-100)
 
 # Training configuration
 EPOCHS = 8000               # Number of training epochs
-LEARNING_RATE = 0.5         # Learning rate
-TREE_LAYOUT = "full"        # Tree structure: "left", "balanced", "full"
-
-# Learning rate restore/rollback - when loss bounces, restore best state and reduce LR
-LR_RESTORE_PATIENCE = 500     # Wait this many epochs before considering restore
-LR_RESTORE_THRESHOLD = 1.5    # Restore if MSE > threshold * best_mse
-LR_DECAY_FACTOR = 0.8         # Multiply LR by this on restore
-MIN_LEARNING_RATE = 0.001     # Stop reducing LR below this
-MAX_RESTORES = 10              # Maximum number of restores (prevents infinite loops)
-
-# Early stopping - stop training when MSE is low enough
-EARLY_STOP_MSE = 0.01         # Stop if MSE drops below this threshold (None = disabled)
-EARLY_STOP_PATIENCE = 0       # Epochs to wait after reaching threshold (0 = immediate)
+LEARNING_RATE = 0.01         # Learning rate
+TREE_LAYOUT = "alternating"        # Tree structure: "left", "balanced", "full", "alternating"
 
 # Operators to use. None = all operators ["add", "sub", "mul", "div"]
-OPERATOR_NAMES = None 
+# Full operator set - the system should learn to select the right ones
+OPERATOR_NAMES = ["add", "mul", "identity"]  # Simpler set for alternating tree
 
-# Edge weight annealing - start high temp for exploration, anneal down for commitment
-# Set lower than EPOCHS to complete annealing early and commit to structure
-EDGE_INITIAL_TEMPERATURE = 5.0  # High = softer/uniform edge selection
-EDGE_FINAL_TEMPERATURE = 0.5    # Low = sharper/peaked edge selection
-EDGE_ANNEAL_EPOCHS = 8000       # Number of epochs to anneal edge temperature (None = use all epochs)
+# Temperature settings
+EDGE_INITIAL_TEMPERATURE = 10.0  # Higher = more exploration early on
+EDGE_FINAL_TEMPERATURE = 0.1    # Lower = sharper final edge selection
 
-# Operator temperature annealing - start high for exploration, anneal down for commitment
-OPERATOR_INITIAL_TAU = 5.0    # High = nearly uniform operator weights (~25% each)
-OPERATOR_FINAL_TAU = 0.5      # Low = peaked selection (winner takes most)
-OPERATOR_ANNEAL_EPOCHS = 8000 # Number of epochs to anneal tau (None = use all epochs)
-
-# Operator auto-hardening threshold (0.5-1.0, or None to disable)
-# When the max operator probability exceeds this threshold, use hard selection
-OPERATOR_AUTO_HARDEN_THRESHOLD = None
-
-# Use Gumbel noise for operator selection exploration
+# Operator configuration
+# Start with moderate tau - outputs are now clamped so soft blend is stable
+OPERATOR_INITIAL_TAU = 3.0   # Moderate tau = some differentiation from start
+OPERATOR_FINAL_TAU = 0.1      # Very low = sharp selection at end
 OPERATOR_USE_GUMBEL = True
 
-FULL_TREE_DEPTH  = 2
+FULL_TREE_DEPTH = 2
+
 # Random seed for reproducibility
 SEED = 42
 
@@ -267,7 +250,7 @@ def create_regression_model(
     
     Args:
         num_inputs: Number of input features
-        tree_layout: Tree structure ("left", "balanced", "full")
+        tree_layout: Tree structure ("left", "balanced", "full", "alternating")
         loss_amplifier: Loss amplification factor
         device: PyTorch device
         
@@ -287,227 +270,62 @@ def create_regression_model(
         use_class_weighting=False,  # Regression mode
         permutation_initial_temperature=5.0,
         permutation_final_temperature=0.5,
-        # Full tree settings
+        # Lower LR for stability with mul operators (prevents gradient explosion)
+        lr_aggregator=0.01,  # Much lower than default 0.1
+        lr_other=0.01,
+        # Regular MSE loss with normalized outputs (data normalized to [0,1])
+        regression_loss_type="mse",
+        # Operator regularization: balance exploration vs commitment
+        # Outputs are now clamped so soft blend is stable
+        loss_weight_operator_sparsity=0.1,  # Light pressure to commit
+        loss_weight_operator_l2=0.0,  # Disabled - clamping handles stability
+        # Full tree settings - triangular tree with balance penalty
         full_tree_temperature=EDGE_INITIAL_TEMPERATURE,
         full_tree_final_temperature=EDGE_FINAL_TEMPERATURE,
-        full_tree_max_egress=None,  # None = sigmoid selection (no sum constraint)
-        loss_weight_full_tree_egress=0.5,
+        full_tree_shape="triangle",  # Triangular: [3, 2, 1] - forces natural aggregation
+        full_tree_max_egress=1,  # Row-softmax: each input routes to exactly 1 node
+        loss_weight_full_tree_egress=0.5,  # Encourage peaked distributions
+        loss_weight_full_tree_ingress=0.0,  # No hard cap (allow 2+ inputs)
+        loss_weight_full_tree_ingress_balance=50.0,  # Strong penalty to prevent all→same dest
+        loss_weight_full_tree_scale_reg=0.5,  # R²-modulated: penalizes extreme scales more when R² is high
+        full_tree_concentrate_ingress=False,  # Don't use column-softmax
+        full_tree_use_sinkhorn=False,  # Don't use Sinkhorn (triangular tree)
+        # Alternating tree settings
+        alternating_learn_first_routing=False,  # Learn routing in first layer (Input → Agg0)
+        alternating_learn_subsequent_routing=False,  # Learn routing in all layers after first
+        alternating_max_egress=1,  # Each input routes to exactly 1 node
+        alternating_use_straight_through=False,  # HARD routing (no splits). False = soft (like operators)
+        loss_weight_alternating_balance=0.1,  # Light starvation protection
+        loss_weight_alternating_egress=0.5,  # Encourage peaked routing (only used if soft routing)
+        use_permutation_layer=False,  # Let the tree learn routing directly
     )
     
-    # Configure operator selection hardening to eliminate gradient leakage
-    # from asymmetric operators (sub, mul)
+    # Configure operator selection
     if OPERATOR_NAMES is not None:
         model.assembler.aggregator.op_names = OPERATOR_NAMES
         model.assembler.aggregator.num_ops = len(OPERATOR_NAMES)
-        # Reinitialize op_logits with new operator count
+        
+        # Get correct number of aggregator nodes based on tree layout
+        if tree_layout == "alternating" and model.assembler.alternating_tree is not None:
+            num_agg_nodes = model.assembler.alternating_tree.num_agg_nodes
+        elif tree_layout == "full" and model.assembler.fully_connected_tree is not None:
+            num_agg_nodes = sum(model.assembler.fully_connected_tree.layer_widths[1:])
+        else:
+            num_agg_nodes = model.assembler.aggregator.num_layers
+        
+        # Uniform initialization - no bias toward any operator
         model.assembler.aggregator.op_logits_per_node = nn.ParameterList(
             [nn.Parameter(torch.zeros(len(OPERATOR_NAMES), device=device)) 
-             for _ in range(model.assembler.aggregator.num_layers)]
+             for _ in range(num_agg_nodes)]
         )
+        model.assembler.aggregator.num_layers = num_agg_nodes
     model.assembler.aggregator.use_gumbel = OPERATOR_USE_GUMBEL
-    if OPERATOR_AUTO_HARDEN_THRESHOLD is not None:
-        model.assembler.aggregator.auto_harden_threshold = OPERATOR_AUTO_HARDEN_THRESHOLD
+    
+    # Auto-harden when operators become confident - uses hard selection (no gradient leakage)
+    # Set moderate threshold: 0.9 = 90% confidence required to lock
+    model.assembler.aggregator.auto_harden_threshold = 0.9
     
     return model
-
-
-def train_regression_model(
-    model: baconNet,
-    X_train: torch.Tensor,
-    y_train: torch.Tensor,
-    epochs: int = 3000,
-    learning_rate: float = 0.01,
-    print_every: int = 500,
-    egress_weight: float = 0.5,  # Weight for egress constraint loss (top-K concentration)
-    harden_after_training: bool = False  # Disabled for arithmetic - hardening loses scaling info
-) -> Tuple[float, List[float]]:
-    """
-    Train the BACON model in regression mode using MSE loss with regularization.
-    
-    Args:
-        model: BACON model
-        X_train: Training inputs
-        y_train: Training targets
-        epochs: Number of training epochs
-        learning_rate: Learning rate
-        print_every: Print progress every N epochs
-        egress_weight: Weight for egress constraint loss (top-K concentration)
-        harden_after_training: Whether to harden the tree after training
-        
-    Returns:
-        Tuple of (final MSE, loss history)
-    """
-    model.train()
-    
-    # Use MSE loss for regression
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    
-    loss_history = []
-    is_full_tree = model.assembler.tree_layout == "full"
-    
-    logging.info(f"\n🏋️ Training for {epochs} epochs...")
-    if is_full_tree:
-        max_egress = model.assembler.full_tree_max_egress
-        logging.info(f"   Egress constraint: max_egress={max_egress}, weight={egress_weight}")
-        edge_anneal = EDGE_ANNEAL_EPOCHS if EDGE_ANNEAL_EPOCHS is not None else epochs
-        logging.info(f"   Edge temp annealing: {EDGE_INITIAL_TEMPERATURE} → {EDGE_FINAL_TEMPERATURE} over {edge_anneal} epochs")
-    aggregator = model.assembler.aggregator
-    if hasattr(aggregator, 'tau'):
-        op_anneal = OPERATOR_ANNEAL_EPOCHS if OPERATOR_ANNEAL_EPOCHS is not None else epochs
-        logging.info(f"   Operator tau annealing: {OPERATOR_INITIAL_TAU} → {OPERATOR_FINAL_TAU} over {op_anneal} epochs")
-        aggregator.tau = OPERATOR_INITIAL_TAU
-    
-    # LR restore tracking
-    logging.info(f"   LR restore: patience={LR_RESTORE_PATIENCE}, threshold={LR_RESTORE_THRESHOLD}x, decay={LR_DECAY_FACTOR}")
-    best_mse = float('inf')
-    best_state = None
-    best_epoch = 0
-    epochs_since_best = 0
-    num_restores = 0
-    current_lr = learning_rate
-    temp_epoch = 0  # Separate counter for temperature annealing (can be restored)
-    
-    # Early stopping tracking
-    early_stop_epoch = None  # When we first reached threshold
-    
-    # Warmup phase: first 30% of training with reduced regularization
-    warmup_epochs = int(epochs * 0.3)
-    
-    for epoch in range(epochs):
-        optimizer.zero_grad()
-        
-        # Anneal temperature for full tree (sharper edges as training progresses)
-        # Use temp_epoch for annealing (restored on rollback)
-        edge_anneal_epochs = EDGE_ANNEAL_EPOCHS if EDGE_ANNEAL_EPOCHS is not None else epochs
-        edge_progress = min(1.0, temp_epoch / max(1, edge_anneal_epochs - 1))
-        if is_full_tree:
-            model.assembler.anneal_full_tree_temperature(edge_progress)
-            model.assembler.anneal_full_tree_gumbel(edge_progress)
-        
-        # Anneal operator temperature (high early = exploration, low later = commitment)
-        if hasattr(aggregator, 'tau'):
-            anneal_epochs = OPERATOR_ANNEAL_EPOCHS if OPERATOR_ANNEAL_EPOCHS is not None else epochs
-            op_progress = min(1.0, temp_epoch / max(1, anneal_epochs - 1))
-            aggregator.tau = OPERATOR_INITIAL_TAU + op_progress * (OPERATOR_FINAL_TAU - OPERATOR_INITIAL_TAU)
-        
-        outputs = model(X_train)
-        mse_loss = criterion(outputs, y_train)
-        
-        # Total loss with regularization
-        loss = mse_loss * model.assembler.loss_amplifier
-        
-        # Add full tree regularization (ramped up after warmup)
-        if is_full_tree:
-            # Ramp factor: 0 during warmup, then linearly increases to 1
-            if epoch < warmup_epochs:
-                ramp_factor = 0.0
-            else:
-                ramp_factor = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs - 1)
-            
-            # Egress loss: encourage each source to concentrate to top-K destinations
-            if egress_weight > 0:
-                egress_loss = model.assembler.get_full_tree_egress_loss()
-                loss = loss + ramp_factor * egress_weight * egress_loss * model.assembler.loss_amplifier
-        
-        loss.backward()
-        optimizer.step()
-        
-        loss_value = mse_loss.item()
-        loss_history.append(loss_value)
-        
-        # Track best state and handle LR restore
-        if loss_value < best_mse:
-            best_mse = loss_value
-            best_state = copy.deepcopy(model.state_dict())
-            best_epoch = epoch
-            epochs_since_best = 0
-        else:
-            epochs_since_best += 1
-        
-        # Check if we should restore to best state and reduce LR
-        should_restore = (
-            epochs_since_best >= LR_RESTORE_PATIENCE and
-            loss_value > best_mse * LR_RESTORE_THRESHOLD and
-            num_restores < MAX_RESTORES and
-            current_lr > MIN_LEARNING_RATE and
-            best_state is not None
-        )
-        
-        if should_restore:
-            # Restore best state
-            model.load_state_dict(best_state)
-            
-            # NOTE: We do NOT restore temp_epoch. Let temperature continue annealing
-            # even after restore. This forces eventual commitment to structure.
-            # The reduced LR compensates for the temperature mismatch.
-            
-            # Reduce learning rate
-            current_lr = max(current_lr * LR_DECAY_FACTOR, MIN_LEARNING_RATE)
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = current_lr
-            
-            num_restores += 1
-            epochs_since_best = 0
-            logging.info(f"   🔄 Epoch {epoch + 1}: Restored to epoch {best_epoch + 1} (MSE={best_mse:.4f}), LR → {current_lr:.6f} (restore {num_restores}/{MAX_RESTORES})")
-        
-        if (epoch + 1) % print_every == 0 or epoch == 0:
-            # Compute R² score
-            with torch.no_grad():
-                predictions = model(X_train)
-                ss_res = ((y_train - predictions) ** 2).sum()
-                ss_tot = ((y_train - y_train.mean()) ** 2).sum()
-                r2 = 1 - (ss_res / ss_tot)
-            
-            extra_info = ""
-            if is_full_tree:
-                with torch.no_grad():
-                    if egress_weight > 0:
-                        eg = model.assembler.get_full_tree_egress_loss().item()
-                        extra_info += f", egress={eg:.3f}"
-                
-            logging.info(f"   Epoch {epoch + 1:5d}: MSE = {loss_value:.6f}, R² = {r2.item():.4f}{extra_info}")
-        
-        # Check early stopping condition
-        if EARLY_STOP_MSE is not None and loss_value <= EARLY_STOP_MSE:
-            if EARLY_STOP_PATIENCE == 0:
-                logging.info(f"\n🎯 Early stopping: MSE {loss_value:.6f} <= {EARLY_STOP_MSE}")
-                break
-            elif early_stop_epoch is None:
-                early_stop_epoch = epoch
-            elif epoch - early_stop_epoch >= EARLY_STOP_PATIENCE:
-                logging.info(f"\n🎯 Early stopping: MSE {loss_value:.6f} <= {EARLY_STOP_MSE} for {EARLY_STOP_PATIENCE} epochs")
-                break
-        else:
-            early_stop_epoch = None  # Reset if MSE goes back up
-        
-        # Increment temperature epoch (for annealing schedule)
-        temp_epoch += 1
-    
-    # Restore best state at end of training
-    if best_state is not None and loss_value > best_mse * 1.01:  # If not already at best
-        model.load_state_dict(best_state)
-        logging.info(f"\n🏆 Restored to best state from epoch {best_epoch + 1} (MSE={best_mse:.6f})")
-    
-    # Harden the tree to discrete selections
-    if is_full_tree and harden_after_training:
-        logging.info("\n🔨 Hardening tree to discrete edges...")
-        model.assembler.harden_full_tree(mode="smart")
-    
-    # Final evaluation
-    model.eval()
-    with torch.no_grad():
-        predictions = model(X_train)
-        final_mse = criterion(predictions, y_train).item()
-        ss_res = ((y_train - predictions) ** 2).sum()
-        ss_tot = ((y_train - y_train.mean()) ** 2).sum()
-        final_r2 = 1 - (ss_res / ss_tot)
-    
-    logging.info(f"\n📊 Final Results:")
-    logging.info(f"   MSE: {final_mse:.6f}")
-    logging.info(f"   R²:  {final_r2.item():.4f}")
-    
-    return final_mse, loss_history
 
 
 def print_operator_selections(model: baconNet, variables: List[str]):
@@ -539,13 +357,18 @@ def main():
         input_noise_percent=INPUT_NOISE_PERCENT,
         output_noise_percent=OUTPUT_NOISE_PERCENT,
         input_range=INPUT_RANGE,
-        normalize_output=False,  # Use raw values for arithmetic regression
+        normalize_output=False,  # Keep raw values - model needs to learn actual arithmetic
         seed=SEED,
         device=device
     )
     
     variables = metadata['variables']
     num_vars = len(variables)
+    
+    # Split into train/test sets
+    split_idx = int(0.8 * len(X))
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
     
     # Create model
     logging.info(f"\n🧠 Creating BACON model with {num_vars} inputs...")
@@ -555,24 +378,34 @@ def main():
         device=device
     )
     
-    # Train model
-    final_mse, loss_history = train_regression_model(
+    # Train model using standard train_bacon_model with regression mode
+    best_model, best_r2 = train_bacon_model(
         model=model,
-        X_train=X,
-        y_train=y,
-        epochs=EPOCHS,
-        learning_rate=LEARNING_RATE,
+        X_train=X_train,
+        Y_train=y_train,
+        X_test=X_test,
+        Y_test=y_test,
+        attempts=1,  # Single attempt
+        max_epochs=EPOCHS,
+        acceptance_threshold=1.0,  # R² threshold - high for regression
+        task_type="regression",
+        use_hierarchical_permutation=False,  # Simple permutation for math
+        operator_initial_tau=OPERATOR_INITIAL_TAU,
+        operator_final_tau=OPERATOR_FINAL_TAU,
+        operator_freeze_min_confidence=0.85,  # Require 85% operator commitment before freeze
+        operator_freeze_epochs=0,  # Disable two-phase - operators and edges must co-evolve
+        frozen_training_epochs=2000,  # Train longer after freezing to refine weights
     )
     
     # Print results
-    print_operator_selections(model, variables)
+    print_operator_selections(best_model, variables)
     
     # Print reconstructed expression
-    print_reconstructed_expression(model, variables, precision=4)
+    print_reconstructed_expression(best_model, variables, precision=4)
     
     # Print tree structure
     logging.info("\n📋 Learned Tree Structure:")
-    print_tree_structure(model.assembler, variables)
+    print_tree_structure(best_model.assembler, variables)
     
     # Summary
     logging.info(f"\n✅ Summary:")
@@ -580,12 +413,12 @@ def main():
     logging.info(f"   Variables: {variables}")
     logging.info(f"   Samples: {NUM_SAMPLES}")
     logging.info(f"   Noise: input={INPUT_NOISE_PERCENT}%, output={OUTPUT_NOISE_PERCENT}%")
-    logging.info(f"   Final MSE: {final_mse:.6f}")
+    logging.info(f"   Best R²: {best_r2:.4f}")
     
     # Debug: Check actual vs predicted for a few samples
     logging.info(f"\n🔍 Debug: Sample predictions vs targets:")
     _, eval_fn = parse_expression(EXPRESSION)
-    model.eval()
+    best_model.eval()
     with torch.no_grad():
         # Test with simple known inputs
         test_inputs = torch.tensor([
@@ -595,37 +428,38 @@ def main():
             [5.0, 5.0, 5.0],
         ], device=device)
         
-        predictions = model(test_inputs)
+        predictions = best_model(test_inputs)
         for i, (inp, pred) in enumerate(zip(test_inputs, predictions)):
             # Compute actual target using the expression
             values = {var: inp[j].item() for j, var in enumerate(variables)}
             target = eval_fn(values)
             logging.info(f"   Input: {inp.tolist()} -> Pred: {pred.item():.4f}, Target: {target:.1f}")
+    
+    # Visualize alternating tree structure
+    if TREE_LAYOUT == "alternating" and best_model.assembler.alternating_tree is not None:
         
-        # Check what input_to_leaf does
-        logging.info(f"\n🔍 Debug: input_to_leaf permutation check:")
-        leaf_values = model.assembler.input_to_leaf(test_inputs)
-        logging.info(f"   Input shape: {test_inputs.shape}, Leaf shape: {leaf_values.shape}")
-        logging.info(f"   First input: {test_inputs[0].tolist()}")
-        logging.info(f"   After input_to_leaf: {leaf_values[0].tolist()}")
+        logging.info("\n🎨 Opening interactive visualization...")
         
-        # Show the actual soft permutation matrix
-        if hasattr(model.assembler.input_to_leaf, 'weights'):
-            with torch.no_grad():
-                perm_weights = model.assembler.input_to_leaf.weights
-                perm_matrix = torch.softmax(perm_weights, dim=1)
-                logging.info(f"\n🔍 Debug: Soft permutation matrix (input → leaf):")
-                logging.info(f"   Shape: {perm_matrix.shape}")
-                for i in range(perm_matrix.shape[0]):
-                    row = perm_matrix[i].tolist()
-                    max_idx = perm_matrix[i].argmax().item()
-                    logging.info(f"   Leaf {i} ← Input {max_idx} (probs: {[f'{p:.3f}' for p in row]})")
+        # Get reconstructed expression for display
+        try:
+            expr_str = reconstruct_expression(best_model, variables)
+        except:
+            expr_str = "(reconstruction failed)"
         
-        # Check with distinct inputs to see permutation effect
-        logging.info(f"\n🔍 Debug: Permutation with distinct inputs [1, 2, 3]:")
-        distinct_input = torch.tensor([[1.0, 2.0, 3.0]], device=device)
-        distinct_leaf = model.assembler.input_to_leaf(distinct_input)
-        logging.info(f"   Input [a=1, b=2, c=3] → Leaves {distinct_leaf[0].tolist()}")
+        visualize_alternating_tree(
+            best_model.assembler,
+            variable_names=variables,
+            title=f"Learned Tree for: {EXPRESSION}",
+            expression=expr_str,
+            r2=best_r2,
+            show=True,
+            save_path="alternating_tree_viz.html"
+        )
+        
+        # Also print ASCII structure
+        print_alternating_tree_structure(best_model.assembler, variables)
+    else:
+        logging.info(f"\n⚠️ SKIPPED VISUALIZATION: TREE_LAYOUT={TREE_LAYOUT}, alternating_tree is None={best_model.assembler.alternating_tree is None}")
 
 
 if __name__ == "__main__":

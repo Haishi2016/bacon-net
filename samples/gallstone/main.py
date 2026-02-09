@@ -65,7 +65,7 @@ trans = [
 # Create model with custom configuration
 bacon = create_bacon_model(
     input_size=num_features,
-    tree_layout="full",
+    tree_layout="alternating",
     aggregator=aggregator_type,
     weight_mode='trainable',
     transformations=trans,
@@ -82,8 +82,9 @@ bacon = create_bacon_model(
      # Full tree settings
     full_tree_temperature=5.0,
     full_tree_final_temperature=5.0,
-    full_tree_max_egress=None,  # No egress constraint for simple test
+    full_tree_max_egress=1,  # No egress constraint for simple test
     loss_weight_full_tree_egress=0.1,
+    use_permutation_layer=False,  # Disable permutation for full tree - it learns routing directly
 )
 
 # Train model
