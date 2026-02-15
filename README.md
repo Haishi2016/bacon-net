@@ -45,3 +45,36 @@ from bacon.utils import generate_classic_boolean_data
 * [**Hello, World!**](./samples/hello-world/README.md)
 
   Discover classic Boolean expression from synthetic data.
+
+## Testing
+
+This repository now uses a structured `pytest` layout for maintainable growth:
+
+- `tests/unit/` for fast, isolated tests
+- `tests/integration/` for multi-component or end-to-end tests
+
+Install test dependencies:
+
+```bash
+pip install -e .[test]
+```
+
+Run unit tests only:
+
+```bash
+pytest -m "unit"
+```
+
+Run integration tests only:
+
+```bash
+pytest -m "integration"
+```
+
+Run all structured tests:
+
+```bash
+pytest
+```
+
+GitHub Actions runs both unit and integration suites on pull requests to `main`.
