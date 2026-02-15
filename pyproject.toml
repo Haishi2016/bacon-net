@@ -35,6 +35,11 @@ dependencies = [
   "seaborn>=0.12",
 ]
 
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+]
+
 [project.urls]
 "Homepage" = "https://example.com/bacon-net"
 
@@ -50,5 +55,17 @@ exclude = ["docs/build", "docs/build/**"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["bacon"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+markers = [
+  "unit: fast isolated tests",
+  "integration: end-to-end and multi-component tests",
+]
+addopts = [
+  "-ra",
+  "--strict-markers",
+]
 
 
