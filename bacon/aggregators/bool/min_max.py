@@ -30,35 +30,9 @@ class MinMaxAggregator(AggregatorBase):
         if len(values) == 0:
             raise ValueError("aggregate_tensor: values must be non-empty")
         X = torch.stack(values, dim=0)  # [N, ...]
-        return self._MinMax_many(X, andness)
-    
-    def _MinMax(self, x, y, a):
-        import torch
-        try:
-            epsilon = 1e-6  # To prevent division by zero
+        return self._MinMax(X, andness)
 
-            x = torch.where(torch.isnan(x), torch.tensor(epsilon, device=x.device), x)
-            y = torch.where(torch.isnan(y), torch.tensor(epsilon, device=y.device), y)
-
-            x = torch.clamp(x, min=epsilon, max=1-epsilon)
-            y = torch.clamp(y, min=epsilon, max=1-epsilon)
-
-            if not isinstance(a, torch.Tensor):
-                a = torch.tensor(a, dtype=torch.float32)
-            
-            # STE trick
-            a_cont = torch.sigmoid(a * 10)
-            a_hard = torch.round(a_cont)
-            a = a_hard.detach() + (a_cont - a_cont.detach())
-
-            result = a * torch.minimum(x, y) + (1 - a) * torch.maximum(x, y)
-            return result
-
-        except Exception as e:
-            print(f"[ERROR] Exception in MinMax: {e}")
-            raise e
-
-    def _MinMax_many(self, X, a):
+    def _MinMax(self, X, a):
         import torch
         try:
             epsilon = 1e-6
