@@ -260,7 +260,19 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.aggregators.lsp.half_weight.HalfWeightAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.aggregators.lsp.half_weight.</span></span><span class="sig-name descname"><span class="pre">HalfWeightAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.lsp.half_weight.HalfWeightAggregator" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_float">
+<span class="sig-name descname"><span class="pre">aggregate_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_float" title="Link to this definition">¶</a></dt>
+<dd><p>Aggregate N scalar values with scalar andness a and N weights.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_tensor">
+<span class="sig-name descname"><span class="pre">aggregate_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">andness</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_tensor" title="Link to this definition">¶</a></dt>
+<dd><p>Aggregate N tensors with andness a and N weights.</p>
+</dd></dl>
+
+</dd></dl>
 
 </section>
 
@@ -320,7 +332,11 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Half-Weight Aggregator</a><ul>
-<li><a class="reference internal" href="#bacon.aggregators.lsp.half_weight.HalfWeightAggregator"><code class="docutils literal notranslate"><span class="pre">HalfWeightAggregator</span></code></a></li>
+<li><a class="reference internal" href="#bacon.aggregators.lsp.half_weight.HalfWeightAggregator"><code class="docutils literal notranslate"><span class="pre">HalfWeightAggregator</span></code></a><ul>
+<li><a class="reference internal" href="#bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_float"><code class="docutils literal notranslate"><span class="pre">HalfWeightAggregator.aggregate_float()</span></code></a></li>
+<li><a class="reference internal" href="#bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_tensor"><code class="docutils literal notranslate"><span class="pre">HalfWeightAggregator.aggregate_tensor()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
