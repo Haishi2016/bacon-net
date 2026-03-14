@@ -100,19 +100,18 @@ def generate_classic_boolean_data(num_vars=5, repeat_factor=100, randomize=False
     
     # Evaluation function that avoids deeply nested eval() for large inputs
     def evaluate_expression(x):
-        """Evaluate boolean expression iteratively to avoid stack overflow.
-        
-        Matches the eval() behavior with nested parentheses: ((((A and B) or C) and D)...)
-        This means RIGHTMOST variables have HIGHEST priority (evaluated first conceptually).
-        We build from right to left to match the original parentheses structure.
+        """Evaluate the same left-associative expression shown in expression_text.
+
+        expression_text is built as:
+            ((A op1 B) op2 C) op3 D ...
+        so we fold left-to-right here to keep labels and displayed expression aligned.
         """
-        # Start from the rightmost variable and work backwards
-        result = bool(x[num_vars - 1])
-        for i in range(num_vars - 2, -1, -1):  # Go backwards from second-to-last to first
-            if ops[i] == "and":
-                result = bool(x[i]) and result
+        result = bool(x[0])
+        for i in range(1, num_vars):
+            if ops[i - 1] == "and":
+                result = result and bool(x[i])
             else:  # "or"
-                result = bool(x[i]) or result
+                result = result or bool(x[i])
         return int(result)
 
     if randomize:

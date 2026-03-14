@@ -131,3 +131,6 @@ dmypy.json
 
 **/*.csv
 **/*.xls
+
+# Ignore local lab files
+local-lab/

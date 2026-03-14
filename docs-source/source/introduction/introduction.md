@@ -24,7 +24,7 @@ In addition, a trained BACON network can be distilled into a compact set of symb
 
 To install the published [BACON package](https://pypi.org/project/bacon-net/):
 ```bash
-python -m pip install bacon-net==0.3.0
+python -m pip install bacon-net==0.3.2
 ```
 
 Then, check out our sample apps:
