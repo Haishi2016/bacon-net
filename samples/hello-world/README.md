@@ -30,7 +30,7 @@ And then re-run the program.
 ⚠️ If the accuracy is less than 100%, it means that BACON has discovered an expression that closely approximates the target logic, but does not exactly replicate it. ⚠️
 
 ## Additional notes
-* To get less tracing information on how BACON works, change logging level to `logging.ERROR`.
+* To get more tracing information on how BACON works, change logging level to `logging.INFO`.
 * This sample trains the BACON model with a `loss_amplifier=1000` parameter, which scales the loss function by a factor of 1000. When multiple terms are combined using Boolean operators like `AND`, the resulting value can become very small—especially in complex expressions. This amplifier exaggerates the loss, helping the model continue learning effectively.
 
 * The `randomize=False` parameter instructs the utility program to generate all possible permutations of input values. This becomes infeasible for complex expressions. Therefore, by default, this parameter is set to `True` to use randomly generated samples instead.

@@ -1,6 +1,35 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import torch
+
+
+def _resolve_leaf_indices(model):
+    """Resolve leaf->input index mapping from actual model state.
+
+    Prefer frozen matrix (P_hard) because it reflects runtime behavior even if
+    locked_perm is stale during training-state transitions.
+    """
+    if hasattr(model, 'input_to_leaf') and hasattr(model.input_to_leaf, 'P_hard'):
+        p_hard = model.input_to_leaf.P_hard.detach().cpu()
+        if p_hard.ndim == 2 and p_hard.shape[0] == model.num_leaves:
+            return p_hard.argmax(dim=1).tolist()
+
+    if getattr(model, 'locked_perm', None) is not None:
+        return model.locked_perm.tolist()
+
+    return list(range(model.num_leaves))
+
+
+def _format_boolean_operator(model, a_value):
+    """Format AND/OR using aggregator-specific semantics.
+
+    For MinMaxAggregator, the effective hard gate is round(sigmoid(a*10)),
+    which switches around a=0.
+    """
+    if getattr(model, 'aggregator', None) is not None and model.aggregator.__class__.__name__ == 'MinMaxAggregator':
+        return "[ AND ]" if a_value > 0 else "[ O R ]"
+
+    return "[ AND ]" if a_value >= 0.5 else "[ O R ]"
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, average_precision_score
 import pandas as pd
@@ -49,12 +78,11 @@ def visualize_tree_structure(model, labels=None, layout=None):
         raise ValueError("Label count does not match number of leaves")
 
     if labels:
-        if model.locked_perm is not None:
-            leaf_names = [labels[i] for i in model.locked_perm.tolist()]
-        else:
-            leaf_names = labels
+        leaf_indices = _resolve_leaf_indices(model)
+        leaf_names = [labels[i] for i in leaf_indices]
     else:
-        leaf_names = [f"Leaf {i+1}" for i in range(model.num_leaves)]
+        leaf_indices = _resolve_leaf_indices(model)
+        leaf_names = [f"Leaf {i+1}" for i in leaf_indices]
     
     # Check for transformation layer and apply transformations to labels
     if hasattr(model, 'transformation_layer') and model.transformation_layer is not None:
@@ -293,12 +321,11 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
         raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {model.num_leaves}")
 
     if labels:
-        if model.locked_perm is not None:
-            leaf_names = [labels[i] for i in model.locked_perm.tolist()]
-        else:
-            leaf_names = labels
+        leaf_indices = _resolve_leaf_indices(model)
+        leaf_names = [labels[i] for i in leaf_indices]
     else:
-        leaf_names = [f"feature{i+1}" for i in range(model.num_leaves)]
+        leaf_indices = _resolve_leaf_indices(model)
+        leaf_names = [f"feature{i+1}" for i in leaf_indices]
     
     # Check for transformation layer and apply transformations to labels
     if hasattr(model, 'transformation_layer') and model.transformation_layer is not None:
@@ -371,7 +398,10 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
         weights = [w.detach().cpu() if hasattr(w, 'detach') else w for w in model.weights]
     else:
         weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
-    a_vals = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
+    a_vals = [
+        (torch.sigmoid(b) * 3 - 1).item() if model.normalize_andness else b.item()
+        for b in model.biases
+    ]
 
     if effective_layout == 'balanced':
         # Build a balanced parenthesized expression using the same node indexing order
@@ -382,7 +412,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
             left_expr, idx = build_expr(start, mid, idx)
             right_expr, idx = build_expr(mid + 1, end, idx)
             a = a_vals[idx]
-            op = ("AND" if a >= 0.5 else "OR") if classic_boolean else f"a={a:.3f}"
+            op = ("AND" if _format_boolean_operator(model, a) == "[ AND ]" else "OR") if classic_boolean else f"a={a:.3f}"
             # weights per internal node
             w = weights[idx]
             if hasattr(w, 'tolist'):
@@ -403,7 +433,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
         while j < model.num_leaves:
             if j + 1 < model.num_leaves:
                 a = a_vals[idx]
-                op = ("AND" if a >= 0.5 else "OR") if classic_boolean else f"a={a:.3f}"
+                op = ("AND" if _format_boolean_operator(model, a) == "[ AND ]" else "OR") if classic_boolean else f"a={a:.3f}"
                 w = weights[idx]
                 if hasattr(w, 'tolist'):
                     wl, wr = float(w[0]), float(w[1])
@@ -420,7 +450,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
         current = parts[0]
         for k in range(1, len(parts)):
             a = a_vals[idx]
-            op = ("AND" if a >= 0.5 else "OR") if classic_boolean else f"a={a:.3f}"
+            op = ("AND" if _format_boolean_operator(model, a) == "[ AND ]" else "OR") if classic_boolean else f"a={a:.3f}"
             w = weights[idx]
             if hasattr(w, 'tolist'):
                 wl, wr = float(w[0]), float(w[1])
@@ -496,7 +526,7 @@ def print_tree_structure(model, labels=None, classic_boolean=False, layout=None)
             else:
                 new_leaf = leaf_names[i + 1]
             if classic_boolean:
-                operator = "[ AND ]" if a >= 0.5 else "[ O R ]"
+                operator = _format_boolean_operator(model, a)
             else:
                 operator = f"[a={a:.8f}]"
             if i < model.num_layers - 1:
@@ -525,12 +555,11 @@ def print_table_structure(model, labels=None):
         raise ValueError(f"Label count {len(labels)} doesn't match number of leaves {model.num_leaves}")
 
     if labels:
-        if model.locked_perm is not None:
-            leaf_names = [labels[i] for i in model.locked_perm.tolist()]
-        else:
-            leaf_names = labels
+        leaf_indices = _resolve_leaf_indices(model)
+        leaf_names = [labels[i] for i in leaf_indices]
     else:
-        leaf_names = [f"feature{i+1}" for i in range(model.num_leaves)]
+        leaf_indices = _resolve_leaf_indices(model)
+        leaf_names = [f"feature{i+1}" for i in leaf_indices]
 
     print("\n📋 Logical Aggregation Table (Left-Associative):\n")
     print(f"{'Layer':<6} {'Left Feature':<20} {'Right Feature':<20} {'w (left)':<10} {'a (bias)':<10} {'1-w (right)':<12}")
@@ -540,7 +569,10 @@ def print_table_structure(model, labels=None):
         weights = model.weights
     else:
         weights = [F.softmax(w.detach().cpu(), dim=0) for w in model.weights]
-    biases = [(torch.sigmoid(b) * 3 - 1).item() for b in model.biases]
+    biases = [
+        (torch.sigmoid(b) * 3 - 1).item() if model.normalize_andness else b.item()
+        for b in model.biases
+    ]
 
     for i in range(model.num_layers):
         if i == 0:

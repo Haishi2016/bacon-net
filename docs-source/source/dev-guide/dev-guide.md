@@ -2,12 +2,12 @@
 
 ## Rebuild Docs
 
-The `docs/source` folder contains the source code of the documentation site. To rebuild:
+The `docs-source` folder contains the source code of the documentation site. To rebuild:
 ```bash
-# under docs/source folder
-sphinx-build -b html . ../build/html
+# under docs-source/source folder
+sphinx-build -b html . ../../docs
 # to build without cache, add "-E" switch
-sphinx-build -E -b html . ../build/html
+sphinx-build -E -b html . ../../docs
 ```
 
 ## Build & Publish the Python Package
