@@ -2,29 +2,24 @@
 
 ⚠️ Visit HTML-based documentation [here](https://haishi2016.github.io/bacon-net/), or clone this repository and open `docs/index.html` ⚠️
 
-BACON is a neural-symbolic network designed to produce transparent, logically grounded decision models. Unlike black-box systems, BACON explicitly constructs interpretable aggregation trees using [Graded Logic]((https://link.springer.com/book/9783031885570)), a formalism that captures nuanced reasoning with degrees of truth. These trees reveal how individual inputs contribute to the final output, offering step-by-step insight into the decision-making process. BACON has been applied to diverse, high-stakes domains such as housing decisions, vendor evaluation, clinical diagnosis, and robotic control, where clarity, trust, and human-alignment are critical.
+BACON is a structural reinforcement mechanism that constrains autonomous agents to reason through coherent, human-aligned logical aggregation patterns. By regulating how information can be combined, BACON ensures that learned decision processes remain structurally transparent, semantically stable, and diagnostically interpretable.
 
-The goal of BACON is to provide a machine decision model that is aligned with human reasoning process, particularly in mission-critical, life-threatening contexts. Gaining the understanding of how machines (like autonomous agents and robotics) reason is essential for the safe and responsible deployment of AI, and forms the foundation for building trust in AI systems as they become integrated into everyday life.
+This structural discipline is applicable to high-stakes decision domains where interpretability and logical coherence are essential. For instance, in medical diagnosis, BACON can discover cost-efficient and transparent diagnostic pathways by explicitly modeling mandatory and compensatory clinical features. In AI code generation systems, BACON can regulate architectural impact patterns, ensuring that generated changes respect established structural constraints. In human–robot interaction scenarios, BACON can constrain how social cues, contextual factors, and normative rules are integrated, promoting humanoid decisions that follow coherent commonsense reasoning patterns rather than arbitrary latent correlations.
 
-BACON takes as input the degrees of truth associated with various feature-based statements, and uses graded logic to systematically aggregate them into a single global truth value, which then guides the final decision. The BACON architecture is built from the ground up to support explainability. It includes a permutation layer that explores possible input orderings (since commutativity is not assumed), and an aggregation layer that merges inputs based on a logical model such as the [Logic Scoring of Preference (LSP) method](https://books.google.com/books/about/Soft_Computing_Evaluation_Logic.html?id=PgtuDwAAQBAJ). The resulting model is fully explainable, highly precise, and efficient for inference.
+By enforcing a shared structural reasoning framework, BACON establishes common ground between humans and autonomous agents. Such structural transparency forms a foundation for trust, reliability, and effective human–AI collaboration.
 
-![bacon](./docs-source/images/bacon.png)
+## Demonstrated Results
 
-## Benefits
+- Identified a minimal sufficient subset of 8 out of 30 clinical features while preserving diagnostic accuracy in breast cancer prediction (see Paper I).
+- Reduced projected gallstone screening costs by over 62% through structurally optimized diagnostic pathways (see Paper II).
+- Discovered stable and interpretable aggregation patterns across 10 heterogeneous disease datasets (see Paper III).
 
-BACON is designed for decision-making problems where multiple factors must be logically integrated to reach a final outcome. In modern AI-integrated environments, such decisions are often the result of human-AI collaboration. BACON emphasizes alignment with human reasoning to ensure that experts can examine, review, and refine the model in detail, allowing them to infuse their expertise into the decision process and provide essential guidance and governance. Its key benefits include:
+## How BACON Works
 
-* **End-to-End Explainability**
 
-  BACON delivers full transparency across the decision-making pipeline. It not only identifies which features influenced the outcome (feature attribution) but also how they were logically combined using graded logic. With tunable parameters, practitioners can adapt the model’s behavior to align with human judgment, ethical constraints, or policy requirements.
-
-* **Human-AI Collaboration**
-
-  Designed for interpretability at every stage, BACON allows human experts to inspect internal logic, validate reasoning, and inject domain expertise during training. This fosters trust, enables precise refinements, and is especially valuable in domains requiring human oversight, such as healthcare, law, and mission-critical operations.
-
-* **Lightweight and Deployable** 
-  
-  BACON can be trimmed and distilled into compact, interpretable functions that require no deep learning frameworks. This makes it ideal for resource-constrained applications, including edge devices, real-time systems, drones, and robotics, where speed, cost, and reliability are paramount.
+-------------------------
+TTT
+-------------------------
 
 ## Getting Started
 To begin, try the [Hello, World sample](./samples/hello-world/README.md), which uses BACON to approximate a randomly generated classic Boolean expression (e.g., A and B or C) from synthetic data.
