@@ -8,10 +8,19 @@ trained BACON models with OperatorSetAggregator.
 import torch
 import numpy as np
 import logging
+import re
 from typing import List, TYPE_CHECKING
+
+try:
+    import sympy
+except ImportError:
+    sympy = None
 
 if TYPE_CHECKING:
     from bacon.baconNet import baconNet
+
+
+_SYMBOL_PATTERN = re.compile(r"\b[a-zA-Z]\w*\b")
 
 
 def reconstruct_expression(
@@ -158,12 +167,37 @@ def print_reconstructed_expression(model: "baconNet", variables: List[str], prec
         variables: List of variable names (e.g., ['a', 'b', 'c'])
         precision: Number of decimal places for weights (default: 2)
     """
-    expr = reconstruct_expression(model, variables, show_weights=True, precision=precision)
-    expr_no_weights = reconstruct_expression(model, variables, show_weights=False, precision=precision)
+    expr = simplify_expression(
+        reconstruct_expression(model, variables, show_weights=True, precision=precision),
+        variables=variables,
+    )
+    expr_no_weights = simplify_expression(
+        reconstruct_expression(model, variables, show_weights=False, precision=precision),
+        variables=variables,
+    )
     
     logging.info("\n📐 Reconstructed Expression:")
     logging.info(f"   With weights:    {expr}")
     logging.info(f"   Structure only:  {expr_no_weights}")
+
+
+def simplify_expression(expression: str, variables: List[str] | None = None) -> str:
+    """Simplify a reconstructed arithmetic expression for display.
+
+    Falls back to the original expression if SymPy is unavailable or the expression
+    is not valid SymPy syntax, which keeps boolean/operator-set displays safe.
+    """
+    if not expression or sympy is None:
+        return expression
+
+    try:
+        symbol_names = variables or sorted(set(_SYMBOL_PATTERN.findall(expression)))
+        local_symbols = {name: sympy.Symbol(name) for name in symbol_names}
+        sym_expr = sympy.sympify(expression, locals=local_symbols)
+        simplified = sympy.simplify(sym_expr)
+        return str(simplified)
+    except Exception:
+        return expression
 
 
 # =============================================================================

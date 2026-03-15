@@ -8,7 +8,7 @@
             
         
 <center>
-<h1>BACON Full Tree (Interactive)</h1>
+<h1>Learned Tree for: 3.14*b+10*c-3*a</h1>
 </center>
 
 <!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
@@ -27,7 +27,7 @@
 
 
         <center>
-          <h1>BACON Full Tree (Interactive)</h1>
+          <h1>Learned Tree for: 3.14*b+10*c-3*a</h1>
         </center>
         <style type="text/css">
 
@@ -50,6 +50,12 @@
 
 
     <body>
+
+    <div style="text-align: center; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: Arial, sans-serif; margin-bottom: 10px; border-radius: 8px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 24px;">Learned Tree for: 3.14*b+10*c-3*a</h2>
+        <div style="font-size: 14px; opacity: 0.95;"><b>Expression:</b> <code style="color: #f8fafc; background: rgba(15, 23, 42, 0.28); padding: 2px 6px; border-radius: 4px; font-family: Consolas, 'Courier New', monospace;">-2.99536326*a + 3.13846002*b + 9.9974358*c</code> &nbsp;|&nbsp; <b>R²:</b> 1.0000</div>
+    </div>
+    
         <div class="card" style="width: 100%">
             
             
@@ -88,8 +94,8 @@
                   
 
                   // parsing and collecting nodes and edges from the python
-                  nodes = new vis.DataSet([{"color": "#4CAF50", "font": {"color": "#1f2937"}, "id": "L0_0", "label": "A", "level": 0, "shape": "ellipse", "size": 28, "title": "Input: A"}, {"color": "#4CAF50", "font": {"color": "#1f2937"}, "id": "L0_1", "label": "B", "level": 0, "shape": "ellipse", "size": 28, "title": "Input: B"}, {"color": "#4CAF50", "font": {"color": "#1f2937"}, "id": "L0_2", "label": "C", "level": 0, "shape": "ellipse", "size": 28, "title": "Input: C"}, {"color": "#2196F3", "font": {"color": "#1f2937"}, "id": "L1_0", "label": "or", "level": 1, "shape": "ellipse", "size": 32, "title": "Layer 1 Node 0\u003cbr\u003eOperator: or\u003cbr\u003eConfidence: 0.9925\u003cbr\u003eAndness: 0.2802"}, {"color": "#2196F3", "font": {"color": "#1f2937"}, "id": "L1_1", "label": "and", "level": 1, "shape": "ellipse", "size": 32, "title": "Layer 1 Node 1\u003cbr\u003eOperator: and\u003cbr\u003eConfidence: 0.8752\u003cbr\u003eAndness: 1.6324"}, {"color": "#9C27B0", "font": {"color": "#1f2937"}, "id": "L2_0", "label": "and", "level": 2, "shape": "ellipse", "size": 32, "title": "Layer 2 Node 0\u003cbr\u003eOperator: and\u003cbr\u003eConfidence: 0.9939\u003cbr\u003eAndness: -0.3326"}]);
-                  edges = new vis.DataSet([{"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L0_0", "title": "Select: 1.0000\u003cbr\u003eScale: 1.0000", "to": "L1_0", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L0_1", "title": "Select: 1.0000\u003cbr\u003eScale: 1.0000", "to": "L1_0", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L0_2", "title": "Select: 1.0000\u003cbr\u003eScale: 1.0000", "to": "L1_1", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L1_0", "title": "Select: 1.0000\u003cbr\u003eScale: 1.0000", "to": "L2_0", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L1_1", "title": "Select: 1.0000\u003cbr\u003eScale: 1.0000", "to": "L2_0", "width": 6.0}]);
+                  nodes = new vis.DataSet([{"color": "#4CAF50", "font": {"color": "#1f2937"}, "id": "L0_0", "label": "a", "level": 0, "shape": "ellipse", "size": 28, "title": "Input: a"}, {"color": "#4CAF50", "font": {"color": "#1f2937"}, "id": "L0_1", "label": "b", "level": 0, "shape": "ellipse", "size": 28, "title": "Input: b"}, {"color": "#4CAF50", "font": {"color": "#1f2937"}, "id": "L0_2", "label": "c", "level": 0, "shape": "ellipse", "size": 28, "title": "Input: c"}, {"color": "#2196F3", "font": {"color": "#1f2937"}, "id": "L1_0", "label": "add", "level": 1, "shape": "ellipse", "size": 32, "title": "Layer 1 Node 0\u003cbr\u003eOperator: add\u003cbr\u003eConfidence: 0.9997\u003cbr\u003eAndness: 1.2819"}, {"color": "#2196F3", "font": {"color": "#1f2937"}, "id": "L1_1", "label": "add", "level": 1, "shape": "ellipse", "size": 32, "title": "Layer 1 Node 1\u003cbr\u003eOperator: add\u003cbr\u003eConfidence: 0.9991\u003cbr\u003eAndness: 0.7935"}, {"color": "#9C27B0", "font": {"color": "#1f2937"}, "id": "L2_0", "label": "add", "level": 2, "shape": "ellipse", "size": 32, "title": "Layer 2 Node 0\u003cbr\u003eOperator: add\u003cbr\u003eConfidence: 0.9985\u003cbr\u003eAndness: -0.7652"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L0_0", "title": "Select: 1.0000\u003cbr\u003eScale: -1.3941", "to": "L1_0", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L0_1", "title": "Select: 1.0000\u003cbr\u003eScale: 1.4607", "to": "L1_0", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L0_2", "title": "Select: 1.0000\u003cbr\u003eScale: 4.6530", "to": "L1_0", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L1_0", "title": "Select: 1.0000\u003cbr\u003eScale: 2.1486", "to": "L2_0", "width": 6.0}, {"arrows": "to", "color": "rgba(33,150,243,1.000)", "from": "L1_1", "title": "Select: 1.0000\u003cbr\u003eScale: 1.0000", "to": "L2_0", "width": 6.0}]);
 
                   nodeColors = {};
                   allNodes = nodes.get({ returnType: "Object" });

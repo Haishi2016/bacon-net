@@ -1,6 +1,7 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import torch
+from html import escape
 
 
 def _resolve_leaf_indices(model):
@@ -1350,6 +1351,9 @@ def visualize_full_tree_interactive(
     assembler_or_tree,
     labels=None,
     title: str = "BACON Full Tree (Interactive)",
+    expression=None,
+    mse=None,
+    r2=None,
     show: bool = True,
     save_path=None,
 ):
@@ -1359,6 +1363,9 @@ def visualize_full_tree_interactive(
         assembler_or_tree: binaryTreeLogicNet with .fully_connected_tree, or FullyConnectedTree directly.
         labels: Optional input feature labels.
         title: Visualization title.
+        expression: The learned/reconstructed expression string.
+        mse: Final MSE value.
+        r2: Final R² value.
         show: Whether to open the generated HTML in browser.
         save_path: Optional output HTML path.
 
@@ -1528,6 +1535,7 @@ def visualize_full_tree_interactive(
 
     output_path = save_path or "full_tree_viz.html"
     net.save_graph(output_path)
+    _inject_visualization_header(output_path, title, expression, mse, r2)
     print(f"💾 Saved visualization to: {output_path}")
 
     if show:
@@ -1809,7 +1817,7 @@ def visualize_alternating_tree(
     net.save_graph(output_path)
     
     # Inject custom header with stats into the HTML
-    _inject_alternating_tree_header(output_path, title, expression, mse, r2)
+    _inject_visualization_header(output_path, title, expression, mse, r2)
     
     print(f"💾 Saved visualization to: {output_path}")
     
@@ -1821,7 +1829,7 @@ def visualize_alternating_tree(
     return net
 
 
-def _inject_alternating_tree_header(filepath: str, title: str, expression=None, mse=None, r2=None):
+def _inject_visualization_header(filepath: str, title: str, expression=None, mse=None, r2=None):
     """Inject a custom header with stats into the saved HTML file."""
     with open(filepath, 'r', encoding='utf-8') as f:
         html = f.read()
@@ -1829,7 +1837,10 @@ def _inject_alternating_tree_header(filepath: str, title: str, expression=None, 
     # Build stats line
     stats_parts = []
     if expression:
-        stats_parts.append(f"<b>Expression:</b> <code>{expression}</code>")
+        stats_parts.append(
+            "<b>Expression:</b> "
+            f"<code style=\"color: #f8fafc; background: rgba(15, 23, 42, 0.28); padding: 2px 6px; border-radius: 4px; font-family: Consolas, 'Courier New', monospace;\">{escape(expression)}</code>"
+        )
     if r2 is not None:
         stats_parts.append(f"<b>R²:</b> {r2:.4f}")
     if mse is not None:
@@ -1840,7 +1851,7 @@ def _inject_alternating_tree_header(filepath: str, title: str, expression=None, 
     # Create header HTML
     header_html = f'''
     <div style="text-align: center; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: Arial, sans-serif; margin-bottom: 10px; border-radius: 8px;">
-        <h2 style="margin: 0 0 8px 0; font-size: 24px;">{title}</h2>
+        <h2 style="margin: 0 0 8px 0; font-size: 24px;">{escape(title)}</h2>
         <div style="font-size: 14px; opacity: 0.95;">{stats_html}</div>
     </div>
     '''
@@ -1850,6 +1861,11 @@ def _inject_alternating_tree_header(filepath: str, title: str, expression=None, 
     
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(html)
+
+
+def _inject_alternating_tree_header(filepath: str, title: str, expression=None, mse=None, r2=None):
+    """Backward-compatible wrapper for older alternating-tree call sites."""
+    _inject_visualization_header(filepath, title, expression, mse, r2)
 
 
 def print_alternating_tree_structure(assembler_or_model, aggregator=None, variable_names=None):
