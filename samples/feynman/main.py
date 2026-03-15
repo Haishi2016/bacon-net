@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import logging
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,20 @@ OFFICIAL_METADATA_URLS = {
 
 FUNCTION_NAME_MAP = {
     "arccos": "acos",
+    "arcsin": "asin",
+    "arctan": "atan",
+    "ln": "log",
+}
+
+SYMBOL_PATTERN = re.compile(r"\b[a-zA-Z_]\w*\b")
+FUNCTION_NAMES = {
+    "exp", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan",
+    "sinh", "cosh", "tanh", "asinh", "acosh", "atanh", "log",
+}
+CONSTANT_SYMBOLS = {
+    "pi": sympy.pi,
+    "e": sympy.E,
+    "E": sympy.E,
 }
 
 
@@ -51,10 +66,13 @@ class ProblemSpec:
 @dataclass
 class BenchmarkResult:
     problem_id: str
+    name: str
     validation_r2: float
     test_r2: float
     operator_set: list[str]
     alternating_axb: bool
+    success: bool
+    error: str | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,9 +89,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--operator-mode", choices=["auto", "basic", "expanded"], default="auto")
     parser.add_argument("--alternating-axb", action="store_true", help="Enable alternating coefficient layers of the form a*x^b with b constrained to [1, 2]")
     parser.add_argument("--axb-reg-weight", type=float, default=0.0, help="Optional regularization weight that encourages b to snap toward the allowed endpoints")
+    parser.add_argument("--use-constant-input", action="store_true", help="Append a learned constant leaf with value 1 after routing/transforms so the tree can form offsets like 1+x")
     parser.add_argument("--success-threshold", type=float, default=0.999)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-problems", type=int, default=None)
+    parser.add_argument("--stop-on-error", action="store_true", help="Stop the sweep immediately if one problem fails instead of recording the failure and continuing")
     parser.add_argument("--output-json", type=Path, default=None)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     return parser.parse_args()
@@ -122,6 +142,28 @@ def normalize_formula(formula: str) -> str:
     for source_name, target_name in FUNCTION_NAME_MAP.items():
         normalized = normalized.replace(source_name, target_name)
     return normalized
+
+
+def build_formula_locals(formula: str, variable_names: list[str] | None = None) -> dict[str, sympy.Basic]:
+    local_symbols: dict[str, sympy.Basic] = dict(CONSTANT_SYMBOLS)
+    if variable_names is not None:
+        for name in variable_names:
+            local_symbols[name] = sympy.Symbol(name)
+
+    for name in SYMBOL_PATTERN.findall(formula):
+        if name in local_symbols:
+            continue
+        if name.lower() in FUNCTION_NAMES:
+            continue
+        local_symbols[name] = sympy.Symbol(name)
+
+    return local_symbols
+
+
+def parse_formula_expression(formula: str, variable_names: list[str] | None = None) -> sympy.Expr:
+    normalized = normalize_formula(formula)
+    local_symbols = build_formula_locals(normalized, variable_names=variable_names)
+    return sympy.sympify(normalized, locals=local_symbols)
 
 
 def load_problem_specs(dataset: str) -> list[ProblemSpec]:
@@ -180,13 +222,12 @@ def select_problems(problem_specs: list[ProblemSpec], requested: list[str] | Non
 
 def build_numpy_evaluator(problem: ProblemSpec) -> Callable[..., np.ndarray]:
     symbols = sympy.symbols(problem.variable_names)
-    local_symbols = {name: symbol for name, symbol in zip(problem.variable_names, symbols)}
-    expression = sympy.sympify(problem.formula, locals=local_symbols)
+    expression = parse_formula_expression(problem.formula, variable_names=problem.variable_names)
     return sympy.lambdify(symbols, expression, modules=["numpy"])
 
 
 def formula_requires_div_operator(formula: str) -> bool:
-    expression = sympy.sympify(formula)
+    expression = parse_formula_expression(formula)
     _, denominator = sympy.fraction(sympy.together(expression))
     return bool(denominator.free_symbols)
 
@@ -214,8 +255,6 @@ def infer_operator_names(formula: str, mode: str, alternating_axb: bool, tree_la
         if name not in deduped:
             deduped.append(name)
 
-    if alternating_axb and tree_layout == "alternating":
-        deduped = [name for name in deduped if name != "square"]
     return deduped or ["add", "identity"]
 
 
@@ -297,6 +336,7 @@ def create_regression_model(
     tree_layout: str,
     alternating_axb: bool,
     axb_reg_weight: float,
+    use_constant_input: bool,
     device: torch.device,
 ) -> baconNet:
     model = baconNet(
@@ -337,6 +377,7 @@ def create_regression_model(
         loss_weight_alternating_balance=0.1,
         loss_weight_alternating_egress=0.5,
         loss_weight_alternating_exponent_reg=axb_reg_weight,
+        use_constant_input=use_constant_input,
         use_permutation_layer=False,
     )
     configure_operator_set(model, operator_names, device)
@@ -376,6 +417,7 @@ def run_problem(problem: ProblemSpec, args: argparse.Namespace, device: torch.de
     logging.info(f"   Operators: {operator_names}")
     logging.info(f"   Layout: {args.tree_layout}")
     logging.info(f"   Alternating a*x^b: {'on' if args.alternating_axb else 'off'}")
+    logging.info(f"   Constant leaf: {'on' if args.use_constant_input else 'off'}")
 
     x_train, y_train, x_val, y_val, x_test, y_test = sample_problem_data(
         problem,
@@ -392,6 +434,7 @@ def run_problem(problem: ProblemSpec, args: argparse.Namespace, device: torch.de
         tree_layout=args.tree_layout,
         alternating_axb=args.alternating_axb,
         axb_reg_weight=args.axb_reg_weight,
+        use_constant_input=args.use_constant_input,
         device=device,
     )
 
@@ -436,10 +479,12 @@ def run_problem(problem: ProblemSpec, args: argparse.Namespace, device: torch.de
 
     return BenchmarkResult(
         problem_id=problem.problem_id,
+        name=problem.name,
         validation_r2=float(best_val_r2),
         test_r2=float(test_r2),
         operator_set=operator_names,
         alternating_axb=args.alternating_axb,
+        success=success,
     )
 
 
@@ -451,14 +496,46 @@ def main() -> None:
     selected_specs = select_problems(all_specs, args.problems, args.all, args.max_problems)
     logging.info(f"📚 Running {len(selected_specs)} problem(s) from {args.dataset}")
 
-    results = [run_problem(problem, args, device) for problem in selected_specs]
+    results: list[BenchmarkResult] = []
+    failures = 0
+    for index, problem in enumerate(selected_specs, start=1):
+        logging.info(f"\n===== [{index}/{len(selected_specs)}] {problem.problem_id} =====")
+        try:
+            results.append(run_problem(problem, args, device))
+        except Exception as exc:
+            failures += 1
+            logging.exception(f"   ❌ Failed: {problem.problem_id}")
+            results.append(
+                BenchmarkResult(
+                    problem_id=problem.problem_id,
+                    name=problem.name,
+                    validation_r2=float("nan"),
+                    test_r2=float("nan"),
+                    operator_set=[],
+                    alternating_axb=args.alternating_axb,
+                    success=False,
+                    error=str(exc),
+                )
+            )
+            if args.stop_on_error:
+                raise
 
     logging.info("\n📊 Summary")
     if results:
-        mean_test_r2 = sum(item.test_r2 for item in results) / len(results)
-        successes = sum(1 for item in results if item.test_r2 >= args.success_threshold)
-        logging.info(f"   Recovered: {successes}/{len(results)}")
-        logging.info(f"   Mean test R²: {mean_test_r2:.4f}")
+        completed = [item for item in results if item.error is None]
+        mean_test_r2 = sum(item.test_r2 for item in completed) / len(completed) if completed else float("nan")
+        successes = sum(1 for item in completed if item.success)
+        logging.info(f"   Recovered: {successes}/{len(completed)} completed")
+        logging.info(f"   Failures:  {failures}")
+        if completed:
+            logging.info(f"   Mean test R²: {mean_test_r2:.4f}")
+
+        for item in results:
+            if item.error is not None:
+                logging.info(f"   FAIL {item.problem_id}: {item.error}")
+            else:
+                status = "PASS" if item.success else "MISS"
+                logging.info(f"   {status:4s} {item.problem_id:12s} val={item.validation_r2:.4f} test={item.test_r2:.4f}")
 
     if args.output_json is not None:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)

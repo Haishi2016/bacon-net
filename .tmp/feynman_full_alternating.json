@@ -1,0 +1,1404 @@
+{
+  "dataset": "feynman",
+  "success_threshold": 0.999,
+  "results": [
+    {
+      "problem_id": "I.6.2a",
+      "name": "I.6.2a",
+      "validation_r2": NaN,
+      "test_r2": NaN,
+      "operator_set": [],
+      "alternating_axb": false,
+      "success": false,
+      "error": "optimizer got an empty parameter list"
+    },
+    {
+      "problem_id": "I.6.2",
+      "name": "I.6.2",
+      "validation_r2": -0.07497894763946533,
+      "test_r2": 0.173781156539917,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.6.2b",
+      "name": "I.6.2b",
+      "validation_r2": -10.421828269958496,
+      "test_r2": -9.434141159057617,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.8.14",
+      "name": "I.8.14",
+      "validation_r2": -0.15874731540679932,
+      "test_r2": -0.21011996269226074,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.9.18",
+      "name": "I.9.18",
+      "validation_r2": -4.660049915313721,
+      "test_r2": -5.747673034667969,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.10.7",
+      "name": "I.10.7",
+      "validation_r2": 0.9848074913024902,
+      "test_r2": 0.9832684993743896,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.11.19",
+      "name": "I.11.19",
+      "validation_r2": -556.3079223632812,
+      "test_r2": -477.10113525390625,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.1",
+      "name": "I.12.1",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.2",
+      "name": "I.12.2",
+      "validation_r2": -0.6869937181472778,
+      "test_r2": -0.29994821548461914,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.4",
+      "name": "I.12.4",
+      "validation_r2": -0.6536204814910889,
+      "test_r2": -0.6103266477584839,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.5",
+      "name": "I.12.5",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.11",
+      "name": "I.12.11",
+      "validation_r2": 0.042610108852386475,
+      "test_r2": 0.0008138418197631836,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.13.4",
+      "name": "I.13.4",
+      "validation_r2": 0.4415561556816101,
+      "test_r2": 0.508857250213623,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.13.12",
+      "name": "I.13.12",
+      "validation_r2": -0.0029691457748413086,
+      "test_r2": -0.005651116371154785,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.14.3",
+      "name": "I.14.3",
+      "validation_r2": -1.8252618312835693,
+      "test_r2": -1.9564859867095947,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.14.4",
+      "name": "I.14.4",
+      "validation_r2": 0.8463661074638367,
+      "test_r2": 0.8638445734977722,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.15.3x",
+      "name": "I.15.3x",
+      "validation_r2": 0.7145766615867615,
+      "test_r2": 0.6628109812736511,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.15.3t",
+      "name": "I.15.3t",
+      "validation_r2": -0.14886081218719482,
+      "test_r2": -0.21789801120758057,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.15.1",
+      "name": "I.15.1",
+      "validation_r2": 0.7030831575393677,
+      "test_r2": 0.7601485848426819,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.16.6",
+      "name": "I.16.6",
+      "validation_r2": 0.8550381660461426,
+      "test_r2": 0.8904123306274414,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.18.4",
+      "name": "I.18.4",
+      "validation_r2": -0.20467817783355713,
+      "test_r2": -0.1787506341934204,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.18.12",
+      "name": "I.18.12",
+      "validation_r2": -0.006185412406921387,
+      "test_r2": 0.005748629570007324,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.18.14",
+      "name": "I.18.14",
+      "validation_r2": -0.007600307464599609,
+      "test_r2": -0.030304312705993652,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.24.6",
+      "name": "I.24.6",
+      "validation_r2": -0.9958330392837524,
+      "test_r2": -0.5669440031051636,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.25.13",
+      "name": "I.25.13",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "I.26.2",
+      "name": "I.26.2",
+      "validation_r2": 0.01141124963760376,
+      "test_r2": -0.016171574592590332,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.27.6",
+      "name": "I.27.6",
+      "validation_r2": 0.5227413177490234,
+      "test_r2": 0.6259469985961914,
+      "operator_set": [
+        "add",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.29.4",
+      "name": "I.29.4",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "I.29.16",
+      "name": "I.29.16",
+      "validation_r2": 0.20144784450531006,
+      "test_r2": 0.23865807056427002,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.30.3",
+      "name": "I.30.3",
+      "validation_r2": 0.10804092884063721,
+      "test_r2": 0.04939448833465576,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.30.5",
+      "name": "I.30.5",
+      "validation_r2": -2.7521536350250244,
+      "test_r2": -2.6919610500335693,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.32.5",
+      "name": "I.32.5",
+      "validation_r2": -0.20348751544952393,
+      "test_r2": -0.06658029556274414,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.32.17",
+      "name": "I.32.17",
+      "validation_r2": -0.3980109691619873,
+      "test_r2": -0.4270491600036621,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.34.8",
+      "name": "I.34.8",
+      "validation_r2": 0.10843873023986816,
+      "test_r2": 0.18578600883483887,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.34.1",
+      "name": "I.34.1",
+      "validation_r2": -4.250633716583252,
+      "test_r2": -3.8181591033935547,
+      "operator_set": [
+        "sub",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.34.14",
+      "name": "I.34.14",
+      "validation_r2": 0.8626143932342529,
+      "test_r2": 0.8588813543319702,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.34.27",
+      "name": "I.34.27",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "I.37.4",
+      "name": "I.37.4",
+      "validation_r2": 0.12555772066116333,
+      "test_r2": 0.09901702404022217,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.38.12",
+      "name": "I.38.12",
+      "validation_r2": -0.39128947257995605,
+      "test_r2": -0.34345006942749023,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.39.1",
+      "name": "I.39.1",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "I.39.11",
+      "name": "I.39.11",
+      "validation_r2": NaN,
+      "test_r2": NaN,
+      "operator_set": [],
+      "alternating_axb": false,
+      "success": false,
+      "error": "unsupported operand type(s) for -: 'FunctionClass' and 'One'"
+    },
+    {
+      "problem_id": "I.39.22",
+      "name": "I.39.22",
+      "validation_r2": 0.1549425721168518,
+      "test_r2": 0.18418461084365845,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.40.1",
+      "name": "I.40.1",
+      "validation_r2": -0.556257963180542,
+      "test_r2": -0.641810417175293,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.41.16",
+      "name": "I.41.16",
+      "validation_r2": -0.27135396003723145,
+      "test_r2": -0.43828094005584717,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.43.16",
+      "name": "I.43.16",
+      "validation_r2": 0.10843873023986816,
+      "test_r2": 0.18578600883483887,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.43.31",
+      "name": "I.43.31",
+      "validation_r2": -1.8252618312835693,
+      "test_r2": -1.9564859867095947,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.43.43",
+      "name": "I.43.43",
+      "validation_r2": NaN,
+      "test_r2": NaN,
+      "operator_set": [],
+      "alternating_axb": false,
+      "success": false,
+      "error": "unsupported operand type(s) for -: 'FunctionClass' and 'One'"
+    },
+    {
+      "problem_id": "I.44.4",
+      "name": "I.44.4",
+      "validation_r2": -0.0025000572204589844,
+      "test_r2": -0.001498579978942871,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.47.23",
+      "name": "I.47.23",
+      "validation_r2": NaN,
+      "test_r2": NaN,
+      "operator_set": [],
+      "alternating_axb": false,
+      "success": false,
+      "error": "unsupported operand type(s) for *: 'FunctionClass' and 'Symbol'"
+    },
+    {
+      "problem_id": "I.48.2",
+      "name": "I.48.2",
+      "validation_r2": 0.7793986797332764,
+      "test_r2": 0.7504882216453552,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.50.26",
+      "name": "I.50.26",
+      "validation_r2": 0.12581878900527954,
+      "test_r2": 0.11808240413665771,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.2.42",
+      "name": "II.2.42",
+      "validation_r2": -0.006380558013916016,
+      "test_r2": -0.00020265579223632812,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.3.24",
+      "name": "II.3.24",
+      "validation_r2": 0.7698164582252502,
+      "test_r2": 0.7254446744918823,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.4.23",
+      "name": "II.4.23",
+      "validation_r2": -1.4821186065673828,
+      "test_r2": -1.6691648960113525,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.6.11",
+      "name": "II.6.11",
+      "validation_r2": -0.29543817043304443,
+      "test_r2": -0.2138460874557495,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.6.15a",
+      "name": "II.6.15a",
+      "validation_r2": -0.26871955394744873,
+      "test_r2": -0.34680044651031494,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.6.15b",
+      "name": "II.6.15b",
+      "validation_r2": -0.15306544303894043,
+      "test_r2": -0.12152683734893799,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.8.7",
+      "name": "II.8.7",
+      "validation_r2": -0.864689826965332,
+      "test_r2": -1.1373658180236816,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.8.31",
+      "name": "II.8.31",
+      "validation_r2": 0.8463661074638367,
+      "test_r2": 0.8638445734977722,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.10.9",
+      "name": "II.10.9",
+      "validation_r2": -1.880417823791504,
+      "test_r2": -2.2486519813537598,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.11.3",
+      "name": "II.11.3",
+      "validation_r2": -2.4172043800354004,
+      "test_r2": -2.0117809772491455,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.11.17",
+      "name": "II.11.17",
+      "validation_r2": -0.4118140935897827,
+      "test_r2": -0.4364309310913086,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.11.20",
+      "name": "II.11.20",
+      "validation_r2": -0.6017211675643921,
+      "test_r2": -0.6430871486663818,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.11.27",
+      "name": "II.11.27",
+      "validation_r2": 0.3161137104034424,
+      "test_r2": 0.4075920581817627,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.11.28",
+      "name": "II.11.28",
+      "validation_r2": 0.1438823938369751,
+      "test_r2": -0.04896974563598633,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.13.17",
+      "name": "II.13.17",
+      "validation_r2": -0.45541131496429443,
+      "test_r2": -0.6230295896530151,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.13.23",
+      "name": "II.13.23",
+      "validation_r2": 0.9848074913024902,
+      "test_r2": 0.9832684993743896,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.13.34",
+      "name": "II.13.34",
+      "validation_r2": 0.7030831575393677,
+      "test_r2": 0.7601485848426819,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.15.4",
+      "name": "II.15.4",
+      "validation_r2": 0.02868497371673584,
+      "test_r2": 0.06412118673324585,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.15.5",
+      "name": "II.15.5",
+      "validation_r2": 0.02868497371673584,
+      "test_r2": 0.06412118673324585,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.21.32",
+      "name": "II.21.32",
+      "validation_r2": -1.4669816493988037,
+      "test_r2": -1.7429304122924805,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.24.17",
+      "name": "II.24.17",
+      "validation_r2": 0.25575828552246094,
+      "test_r2": 0.20534169673919678,
+      "operator_set": [
+        "sub",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.27.16",
+      "name": "II.27.16",
+      "validation_r2": -0.9805943965911865,
+      "test_r2": -1.083503007888794,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.27.18",
+      "name": "II.27.18",
+      "validation_r2": 0.8464243412017822,
+      "test_r2": 0.8638322353363037,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.34.2a",
+      "name": "II.34.2a",
+      "validation_r2": 0.19934147596359253,
+      "test_r2": 0.2542000412940979,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.34.2",
+      "name": "II.34.2",
+      "validation_r2": -0.07126975059509277,
+      "test_r2": -0.060298800468444824,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.34.11",
+      "name": "II.34.11",
+      "validation_r2": 0.1113463044166565,
+      "test_r2": 0.1896909475326538,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.34.29a",
+      "name": "II.34.29a",
+      "validation_r2": -1.4837987422943115,
+      "test_r2": -1.3002121448516846,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.34.29b",
+      "name": "II.34.29b",
+      "validation_r2": -0.004945516586303711,
+      "test_r2": -0.013322949409484863,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.35.18",
+      "name": "II.35.18",
+      "validation_r2": -3.4646496772766113,
+      "test_r2": -3.0927796363830566,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.35.21",
+      "name": "II.35.21",
+      "validation_r2": -48.46363830566406,
+      "test_r2": -47.1497917175293,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.36.38",
+      "name": "II.36.38",
+      "validation_r2": -2.424473762512207,
+      "test_r2": -2.0808417797088623,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.37.1",
+      "name": "II.37.1",
+      "validation_r2": -2.2179887294769287,
+      "test_r2": -2.337852716445923,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.38.3",
+      "name": "II.38.3",
+      "validation_r2": 0.1549425721168518,
+      "test_r2": 0.18418461084365845,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "II.38.14",
+      "name": "II.38.14",
+      "validation_r2": 0.9157667756080627,
+      "test_r2": 0.8899809122085571,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.4.32",
+      "name": "III.4.32",
+      "validation_r2": -1.1085312366485596,
+      "test_r2": -1.2043964862823486,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.4.33",
+      "name": "III.4.33",
+      "validation_r2": -2.8422300815582275,
+      "test_r2": -2.7905685901641846,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.7.38",
+      "name": "III.7.38",
+      "validation_r2": 0.5057706832885742,
+      "test_r2": 0.5379889011383057,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.8.54",
+      "name": "III.8.54",
+      "validation_r2": -0.13428664207458496,
+      "test_r2": -0.04860186576843262,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.9.52",
+      "name": "III.9.52",
+      "validation_r2": -1.062727928161621,
+      "test_r2": -1.0804767608642578,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.10.19",
+      "name": "III.10.19",
+      "validation_r2": -3.396806240081787,
+      "test_r2": -3.3135933876037598,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.12.43",
+      "name": "III.12.43",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "III.13.18",
+      "name": "III.13.18",
+      "validation_r2": -0.0003294944763183594,
+      "test_r2": -0.008062481880187988,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.14.14",
+      "name": "III.14.14",
+      "validation_r2": 0.1912134289741516,
+      "test_r2": 0.20946645736694336,
+      "operator_set": [
+        "sub",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.15.12",
+      "name": "III.15.12",
+      "validation_r2": 0.1636505126953125,
+      "test_r2": 0.11562478542327881,
+      "operator_set": [
+        "sub",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.15.14",
+      "name": "III.15.14",
+      "validation_r2": -0.4424530267715454,
+      "test_r2": -0.5481784343719482,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.15.27",
+      "name": "III.15.27",
+      "validation_r2": 0.25457829236984253,
+      "test_r2": 0.09896743297576904,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.17.37",
+      "name": "III.17.37",
+      "validation_r2": -0.029690265655517578,
+      "test_r2": -0.022701263427734375,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.19.51",
+      "name": "III.19.51",
+      "validation_r2": -0.11211395263671875,
+      "test_r2": -0.03464305400848389,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "III.21.20",
+      "name": "III.21.20",
+      "validation_r2": -1.023118257522583,
+      "test_r2": -1.1503527164459229,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    }
+  ]
+}

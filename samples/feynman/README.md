@@ -27,6 +27,8 @@ Run the full bonus set:
 python samples/feynman/main.py --dataset bonus --all
 ```
 
+For longer sweeps, the runner now continues past per-problem failures by default and reports them in the final summary. Use `--stop-on-error` if you want it to abort immediately on the first failure.
+
 This folder hosts locally prepared datasets based on the canonical Feynman-I collection (100 equations) that is widely used in recent symbolic regression papers and in SRBench. Each equation is stored in its own subfolder, and within it, multiple noise-level variants are provided with a standardized 75/25 train/test split for comparability.
 
 Folder layout (created by the script):
@@ -53,6 +55,8 @@ python samples/feynman/download_prepare.py --auto-download --output-root /absolu
 ```
 
 If automatic download fails, the script will print instructions for manual download and how to point `--data-zip` or `--data-dir` to the archive/location.
+
+If a prepared local copy already exists at the selected output location, `download_prepare.py` now reuses it and exits early unless you pass `--overwrite`.
 
 Note: The common `Feynman_without_units` archive contains files without extensions (e.g., `I.10.7`). The script detects these and will create sanitized subfolder names like `I_10_7`.
 

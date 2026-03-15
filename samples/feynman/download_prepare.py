@@ -96,6 +96,21 @@ def ensure_output_dirs(root: Path, dataset_name: str) -> Path:
     return dataset_dir
 
 
+def has_prepared_dataset(dataset_dir: Path, noise_levels: List[float]) -> bool:
+    if not dataset_dir.exists():
+        return False
+    equation_dirs = [path for path in dataset_dir.iterdir() if path.is_dir()]
+    if not equation_dirs:
+        return False
+
+    for eq_dir in equation_dirs:
+        for level in noise_levels:
+            noise_dir = eq_dir / f"noise_{level:.2f}"
+            if not (noise_dir / "train.csv").exists() or not (noise_dir / "test.csv").exists():
+                return False
+    return True
+
+
 def try_auto_download(tmp_dir: Path) -> Optional[Path]:
     if urllib_request is None or not POTENTIAL_DATA_URLS:
         return None
@@ -319,6 +334,11 @@ def main() -> None:
 
     output_root = resolve_output_root(args.output_root, args.dataset_name)
     dataset_root = ensure_output_dirs(output_root, args.dataset_name)
+
+    if not args.overwrite and has_prepared_dataset(dataset_root, args.noise_levels):
+        print(f"Prepared dataset already present at: {dataset_root}")
+        print("Nothing to do. Use --overwrite to regenerate or point --data-dir/--data-zip to a different raw source.")
+        return
 
     # Acquire raw files
     raw_dir: Optional[Path] = None

@@ -93,6 +93,7 @@ class binaryTreeLogicNet(nn.Module):
                  alternating_use_straight_through: bool = True,
                  alternating_balance_weight: float = 50.0,
                  alternating_egress_weight: float = 0.5,
+                 use_constant_input: bool = False,
                  use_permutation_layer: bool = True):
         super(binaryTreeLogicNet, self).__init__()
         
@@ -116,9 +117,11 @@ class binaryTreeLogicNet(nn.Module):
         self.alternating_use_straight_through = alternating_use_straight_through
         self.alternating_balance_weight = alternating_balance_weight
         self.alternating_egress_weight = alternating_egress_weight
+        self.use_constant_input = use_constant_input
         
         self.original_input_size = input_size
-        self.num_leaves = input_size  # 🔹 Each input gets its own leaf initially
+        self.routed_input_size = input_size
+        self.num_leaves = input_size + (1 if self.use_constant_input else 0)
         self.weight_mode = weight_mode
         self.weight_value = weight_value
         self.weight_range = weight_range
@@ -231,7 +234,8 @@ class binaryTreeLogicNet(nn.Module):
         Args:
             learning_rate (float, optional): Learning rate for the optimizer. Defaults to 0.2.
         """
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate, weight_decay=0.0)
+        params = list(self.parameters())
+        self.optimizer = optim.Adam(params, lr=learning_rate, weight_decay=0.0) if params else None
     def _reinitialize(self, weight_mode, weight_value, weight_range, weight_choices, is_frozen=False):
         """Reinitialize the model with new parameters.
 
@@ -250,15 +254,15 @@ class binaryTreeLogicNet(nn.Module):
         elif not self.is_frozen:
             self.locked_perm = None
             self.input_to_leaf = inputToLeafSinkhorn(
-                self.original_input_size,
-                self.num_leaves,
+                self.routed_input_size,
+                self.routed_input_size,
                 use_gumbel=True,
                 sinkhorn_iters=self.sinkhorn_iters
             ).to(self.device)           
         else:
-            best_perm = torch.arange(self.num_leaves, dtype=torch.long)
+            best_perm = torch.arange(self.routed_input_size, dtype=torch.long)
             self.locked_perm = best_perm.clone().detach()
-            self.input_to_leaf = frozenInputToLeaf(best_perm, self.original_input_size).to(self.device)
+            self.input_to_leaf = frozenInputToLeaf(best_perm, self.routed_input_size).to(self.device)
         
         # Set temperature/noise only if the layer supports it
         if hasattr(self.input_to_leaf, 'gumbel_noise_scale'):
@@ -287,7 +291,7 @@ class binaryTreeLogicNet(nn.Module):
         # Initialize FullyConnectedTree for "full" layout
         if self.tree_layout == "full":
             self.fully_connected_tree = FullyConnectedTree(
-                num_inputs=self.original_input_size,
+                num_inputs=self.num_leaves,
                 depth=self.full_tree_depth,
                 shape=self.full_tree_shape,
                 temperature=self.full_tree_temperature,
@@ -305,7 +309,7 @@ class binaryTreeLogicNet(nn.Module):
         # Initialize AlternatingTree for "alternating" layout
         if self.tree_layout == "alternating":
             self.alternating_tree = AlternatingTree(
-                num_inputs=self.original_input_size,
+                num_inputs=self.num_leaves,
                 learn_coefficients=self.weight_mode != "fixed",
                 learn_first_routing=self.alternating_learn_first_routing,
                 learn_subsequent_routing=self.alternating_learn_subsequent_routing,
@@ -326,6 +330,15 @@ class binaryTreeLogicNet(nn.Module):
         
         self.apply(self._initialize_weights)
         self.to(self.device) 
+
+    def get_input_labels(self, variable_names=None):
+        if variable_names is None:
+            labels = [f"x{i}" for i in range(self.original_input_size)]
+        else:
+            labels = list(variable_names)
+        if self.use_constant_input:
+            labels.append("1")
+        return labels
 
     def _initialize_weights(self, m):
         """Initialize weights of the model.
@@ -348,7 +361,7 @@ class binaryTreeLogicNet(nn.Module):
         
         checkpoint = {
             'model_state_dict': self.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict() if self.optimizer is not None else None,
             'is_frozen': self.is_frozen,
             'locked_perm': self.locked_perm,
             'tree_layout': self.tree_layout,
@@ -588,6 +601,10 @@ class binaryTreeLogicNet(nn.Module):
                 
                 if torch.isnan(leaf_values).any():
                     raise ValueError("[DEBUG] NaNs detected after transformation layer!")
+
+            if self.use_constant_input:
+                constant_leaf = torch.ones((leaf_values.shape[0], 1), device=leaf_values.device, dtype=leaf_values.dtype)
+                leaf_values = torch.cat([leaf_values, constant_leaf], dim=1)
             
             if hasattr(self.aggregator, "start_forward"):
                 self.aggregator.start_forward()

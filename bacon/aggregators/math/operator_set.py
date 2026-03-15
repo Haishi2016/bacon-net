@@ -434,7 +434,7 @@ class ArithmeticOperatorSet(OperatorSetAggregator):
             if self.output_clamp is not None:
                 result = torch.clamp(result, -self.output_clamp, self.output_clamp)
             return result
-        
+
         elif name == "identity":
             # Pass through the highest-weighted input, ignore others
             # Allows nodes to "select" one input from many in deeper trees

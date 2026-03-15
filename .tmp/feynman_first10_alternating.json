@@ -1,0 +1,147 @@
+{
+  "dataset": "feynman",
+  "success_threshold": 0.999,
+  "results": [
+    {
+      "problem_id": "I.6.2a",
+      "name": "I.6.2a",
+      "validation_r2": NaN,
+      "test_r2": NaN,
+      "operator_set": [],
+      "alternating_axb": false,
+      "success": false,
+      "error": "optimizer got an empty parameter list"
+    },
+    {
+      "problem_id": "I.6.2",
+      "name": "I.6.2",
+      "validation_r2": -0.1384568214416504,
+      "test_r2": 0.15920591354370117,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.6.2b",
+      "name": "I.6.2b",
+      "validation_r2": -10.421828269958496,
+      "test_r2": -9.434141159057617,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.8.14",
+      "name": "I.8.14",
+      "validation_r2": -0.13987433910369873,
+      "test_r2": -0.1721348762512207,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.9.18",
+      "name": "I.9.18",
+      "validation_r2": -4.660049915313721,
+      "test_r2": -5.747673034667969,
+      "operator_set": [
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.10.7",
+      "name": "I.10.7",
+      "validation_r2": 0.9847120046615601,
+      "test_r2": 0.9830501675605774,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.11.19",
+      "name": "I.11.19",
+      "validation_r2": -19.82381820678711,
+      "test_r2": -17.15397071838379,
+      "operator_set": [
+        "add",
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.1",
+      "name": "I.12.1",
+      "validation_r2": 1.0,
+      "test_r2": 1.0,
+      "operator_set": [
+        "mul",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": true,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.2",
+      "name": "I.12.2",
+      "validation_r2": -0.6869937181472778,
+      "test_r2": -0.29994821548461914,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    },
+    {
+      "problem_id": "I.12.4",
+      "name": "I.12.4",
+      "validation_r2": -0.6536204814910889,
+      "test_r2": -0.6103266477584839,
+      "operator_set": [
+        "mul",
+        "div",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "error": null
+    }
+  ]
+}

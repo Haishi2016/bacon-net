@@ -161,6 +161,7 @@ class baconNet(nn.Module):
                  loss_weight_alternating_balance: float = 50.0,
                  loss_weight_alternating_egress: float = 0.5,
                  loss_weight_alternating_exponent_reg: float = 0.0,
+                 use_constant_input: bool = False,
                  use_permutation_layer: bool = True,
                  regression_loss_type: str = "mse"):
         super(baconNet, self).__init__()        
@@ -207,6 +208,7 @@ class baconNet(nn.Module):
         self.loss_weight_alternating_balance = loss_weight_alternating_balance
         self.loss_weight_alternating_egress = loss_weight_alternating_egress
         self.loss_weight_alternating_exponent_reg = loss_weight_alternating_exponent_reg
+        self.use_constant_input = use_constant_input
         
         # Full tree parameters (stored for reference)
         self.full_tree_depth = full_tree_depth
@@ -280,6 +282,7 @@ class baconNet(nn.Module):
                                             alternating_use_straight_through=alternating_use_straight_through,
                                             alternating_balance_weight=loss_weight_alternating_balance,
                                             alternating_egress_weight=loss_weight_alternating_egress,
+                                            use_constant_input=use_constant_input,
                                             use_permutation_layer=use_permutation_layer)
         
         if self.assembler.transformation_layer:
@@ -436,6 +439,7 @@ class baconNet(nn.Module):
             full_tree_max_egress=cfg.full_tree_max_egress,
             full_tree_concentrate_ingress=cfg.full_tree_concentrate_ingress,
             full_tree_use_sinkhorn=cfg.full_tree_use_sinkhorn,
+            use_constant_input=cfg.use_constant_input,
             use_permutation_layer=cfg.use_permutation_layer,
             # Alternating tree parameters
             alternating_learn_first_routing=cfg.alternating_learn_first_routing,
