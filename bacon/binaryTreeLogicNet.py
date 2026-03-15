@@ -890,12 +890,22 @@ class binaryTreeLogicNet(nn.Module):
         """Harden the fully connected tree to discrete edge selections.
         
         Args:
-            mode: Hardening mode ("argmax", "threshold", "hungarian")
+            mode: Hardening mode.
+                - "argmax": destination-wise argmax by default; if max_egress==1, uses row-wise argmax.
+                - "auto": row-wise argmax when max_egress==1, otherwise "smart".
+                - Other modes are forwarded to FullyConnectedTree.harden(...).
         """
         if self.tree_layout == "full" and self.fully_connected_tree is not None:
-            self.fully_connected_tree.harden(mode)
+            effective_mode = mode
+            if mode == "auto":
+                effective_mode = "argmax_row" if self.full_tree_max_egress == 1 else "smart"
+            elif mode == "argmax" and self.full_tree_max_egress == 1:
+                # Respect explicit egress=1 intent: one outgoing edge per source.
+                effective_mode = "argmax_row"
+
+            self.fully_connected_tree.harden(effective_mode)
             self.is_frozen = True
-            logging.info(f"🔒 Full tree hardened with mode='{mode}'")
+            logging.info(f"🔒 Full tree hardened with mode='{effective_mode}' (requested='{mode}')")
     
     def unharden_full_tree(self) -> None:
         """Revert full tree hardening to allow continued training."""

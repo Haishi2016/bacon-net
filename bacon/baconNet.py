@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Optional
 from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator, LspSoftmaxAggregator
 from bacon.aggregators.bool import MinMaxAggregator
-from bacon.aggregators.math import OperatorSetAggregator, BoolOperatorSet, ArithmeticOperatorSet
+from bacon.aggregators.math import OperatorSetAggregator, BoolOperatorSet, BoolOperatorSetWithIdentity, ArithmeticOperatorSet
 
 _aggregator_registry = {
     "lsp.full_weight": FullWeightAggregator,
@@ -16,6 +16,7 @@ _aggregator_registry = {
     "lsp.softmax": LspSoftmaxAggregator,
     "bool.min_max": MinMaxAggregator,
     "math.operator_set.logic": BoolOperatorSet,
+    "math.operator_set.logic_identity": BoolOperatorSetWithIdentity,
     "math.operator_set.arith": ArithmeticOperatorSet,
 }
 
@@ -283,6 +284,7 @@ class baconNet(nn.Module):
                 # We'll raise the error now as there's only one binaryTreeLogicNet
             raise e
         return output
+
     def inference(self, x, threshold=0.5):        
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
@@ -808,9 +810,10 @@ class baconNet(nn.Module):
                 r2_factor = 1.0 + 2.0 * max(0.0, self._current_r2)
             
             # Egress constraint loss: encourage each source to concentrate outgoing edges to top-K
-            if self.loss_weight_full_tree_egress > 0:
+            egress_weight = getattr(self, '_dynamic_full_tree_egress_weight', self.loss_weight_full_tree_egress)
+            if egress_weight > 0:
                 full_tree_egress = self.assembler.get_full_tree_egress_loss()
-                loss = loss + self.loss_weight_full_tree_egress * full_tree_egress
+                loss = loss + egress_weight * full_tree_egress
             
             # Ingress constraint loss: discourage more than 2 inputs per aggregator node
             if self.loss_weight_full_tree_ingress > 0:
@@ -1180,7 +1183,12 @@ class baconNet(nn.Module):
                         operator_final_tau=0.5,
                         operator_freeze_min_confidence=0.7,
                         operator_freeze_epochs=0,
-                        skip_frozen_threshold=0.99):
+                        skip_frozen_threshold=0.99,
+                        full_tree_egress_warmup_epochs=0,
+                        full_tree_egress_ramp_epochs=0,
+                        full_tree_egress_start_metric=0.99,
+                        full_tree_egress_drop_tolerance=0.02,
+                        full_tree_egress_adapt_rate=0.2):
         """ Find the best model by training multiple times and evaluating accuracy.
 
         Args:
@@ -1218,6 +1226,17 @@ class baconNet(nn.Module):
                 Only skips frozen training if freeze improves metric AND we're above this threshold.
                 For regression tasks, this should be very high (e.g., 0.99) to ensure weights fully converge.
                 Defaults to 0.99.
+            full_tree_egress_warmup_epochs (int, optional): In full-tree mode, keep egress concentration disabled
+                for the first N epochs so structure can be learned first. Defaults to 0.
+            full_tree_egress_ramp_epochs (int, optional): Number of epochs to ramp egress loss weight from 0
+                to target after warmup. Defaults to 0 (immediate application after warmup).
+            full_tree_egress_start_metric (float, optional): Minimum training metric required before egress
+                concentration begins. This lets the full tree learn the task first before sparsifying
+                edges. Defaults to 0.99.
+            full_tree_egress_drop_tolerance (float, optional): Maximum allowed training-metric drop from warmup
+                baseline before reducing egress pressure. Defaults to 0.02.
+            full_tree_egress_adapt_rate (float, optional): Fractional backoff/adjustment rate for dynamic egress
+                weight when metric drop exceeds tolerance. Defaults to 0.2.
         Returns:
             tuple: Best model state dictionary and its metric (accuracy or R²).
         """
@@ -1225,7 +1244,7 @@ class baconNet(nn.Module):
         best_model = None
         loaded_metric = -float('inf') if task_type == "regression" else 0.0
 
-        if os.path.exists(save_path):
+        if save_model and save_path and os.path.exists(save_path):
             try:
                 logging.info(f"📂 Found saved model at {save_path}, loading...")
                 self.load_model(save_path)
@@ -1278,6 +1297,8 @@ class baconNet(nn.Module):
         # Track best frozen state across all attempts
         best_is_frozen = False
         best_locked_perm = None
+        best_full_tree_hardened = False
+        best_operator_hardened = False
 
         for attempt in range(total_attempts):
             if use_hierarchical_permutation and coarse_perms[attempt] is not None:
@@ -1320,11 +1341,68 @@ class baconNet(nn.Module):
                 improvement_window = 100  # Check improvement over this many epochs (larger = more stable)
                 min_improvement_delta = 0.005  # Minimum loss decrease over window (0.5% improvement required)
                 confidence_plateau_patience = 1000  # Freeze if confidence doesn't improve for this many epochs after loss convergence
+
+                # Dynamic full-tree egress schedule state (per attempt)
+                dynamic_egress_weight = self.loss_weight_full_tree_egress
+                egress_baseline_metric = None
+                egress_start_epoch = None
+                schedule_egress = (
+                    self.assembler.tree_layout == "full"
+                    and self.loss_weight_full_tree_egress > 0
+                    and (full_tree_egress_warmup_epochs > 0 or full_tree_egress_ramp_epochs > 0)
+                )
                 
                 # Initialize R² tracking for R²-modulated regularization
                 self._current_r2 = None
                 
                 for epoch in range(setup.actual_max_epochs):
+                    # Curriculum for full-tree concentration:
+                    # first learn unconstrained structure, then ramp concentration,
+                    # backing off when accuracy degrades.
+                    if schedule_egress:
+                        latest_metric = setup.accuracy_history[-1] if setup.accuracy_history else None
+                        ready_by_metric = latest_metric is not None and latest_metric >= full_tree_egress_start_metric
+
+                        if egress_start_epoch is None and epoch >= full_tree_egress_warmup_epochs and ready_by_metric:
+                            egress_start_epoch = epoch
+
+                        if egress_start_epoch is None:
+                            dynamic_egress_weight = 0.0
+                        else:
+                            if egress_baseline_metric is None and setup.accuracy_history:
+                                egress_baseline_metric = max(setup.accuracy_history)
+
+                            target_weight = self.loss_weight_full_tree_egress
+                            if full_tree_egress_ramp_epochs > 0:
+                                ramp_progress = min(
+                                    1.0,
+                                    (epoch - egress_start_epoch + 1) / max(1, full_tree_egress_ramp_epochs),
+                                )
+                                planned_weight = target_weight * ramp_progress
+                            else:
+                                planned_weight = target_weight
+
+                            if egress_baseline_metric is not None and setup.accuracy_history:
+                                current_metric = setup.accuracy_history[-1]
+                                metric_drop = max(0.0, egress_baseline_metric - current_metric)
+                                if metric_drop > full_tree_egress_drop_tolerance:
+                                    dynamic_egress_weight = max(
+                                        0.0,
+                                        dynamic_egress_weight * (1.0 - full_tree_egress_adapt_rate),
+                                    )
+                                else:
+                                    ramp_step = target_weight / max(1, full_tree_egress_ramp_epochs or 100)
+                                    dynamic_egress_weight = min(
+                                        target_weight,
+                                        max(dynamic_egress_weight + ramp_step, planned_weight),
+                                    )
+                            else:
+                                dynamic_egress_weight = planned_weight
+
+                        self._dynamic_full_tree_egress_weight = dynamic_egress_weight
+                    else:
+                        self._dynamic_full_tree_egress_weight = self.loss_weight_full_tree_egress
+
                     # Apply training policy (e.g., fixed andness) at start of each epoch
                     if self.training_policy is not None:
                         if hasattr(self.training_policy, 'on_epoch_start'):
@@ -1486,6 +1564,11 @@ class baconNet(nn.Module):
                         # Show best loss so far (helps track if we're passing good opportunities)
                         if setup.best_overall_loss < float('inf'):
                             log_parts.append(f"Best: {setup.best_overall_loss:.2f}@{setup.best_overall_epoch + 1}")
+
+                        # Show current dynamic full-tree concentration weight when applicable.
+                        if self.assembler.tree_layout == "full" and self.loss_weight_full_tree_egress > 0:
+                            egr_w = getattr(self, '_dynamic_full_tree_egress_weight', self.loss_weight_full_tree_egress)
+                            log_parts.append(f"EgrW: {egr_w:.2f}")
                         
                         logging.info(", ".join(log_parts))
                     
@@ -1717,9 +1800,16 @@ class baconNet(nn.Module):
                             logging.warning(f"   ⚠️ Failed to force-freeze model: {e}")
                     else:
                         # No permutation layer to freeze (e.g., Identity when use_permutation_layer=False)
-                        # Just mark as frozen since there's nothing to permute
-                        self.assembler.is_frozen = True
-                        logging.info(f"   ✅ No permutation layer to freeze (already identity), marking as frozen")
+                        # For full-tree mode, harden the learned discrete structure before scoring.
+                        if self.assembler.tree_layout == "full" and self.assembler.fully_connected_tree is not None:
+                            self.assembler.harden_full_tree(mode="auto")
+                            if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
+                                self.assembler.aggregator.harden_operators()
+                            logging.info(f"   ✅ No permutation layer to freeze; hardened full-tree structure for evaluation")
+                        else:
+                            # Just mark as frozen since there's nothing to permute
+                            self.assembler.is_frozen = True
+                            logging.info(f"   ✅ No permutation layer to freeze (already identity), marking as frozen")
                 else:
                     # Check if actually frozen (not just flag set)
                     actually_frozen = not hasattr(self.assembler.input_to_leaf, 'logits')
@@ -1751,15 +1841,21 @@ class baconNet(nn.Module):
                 
                 if metric > best_metric:
                     best_metric = metric
-                    best_model = self.assembler.state_dict()
+                    best_model = {k: v.clone() for k, v in self.assembler.state_dict().items()}
                     best_is_frozen = self.assembler.is_frozen
                     best_locked_perm = self.assembler.locked_perm.clone() if self.assembler.locked_perm is not None else None
+                    best_full_tree_hardened = (
+                        self.assembler.tree_layout == "full"
+                        and self.assembler.fully_connected_tree is not None
+                        and self.assembler.fully_connected_tree.hardened_edges is not None
+                    )
+                    best_operator_hardened = hasattr(self.assembler, 'aggregator') and getattr(self.assembler.aggregator, 'force_hard_selection', False)
                     logging.info(f"   🏆 New best model! {metric_name}: {best_metric:.4f}")
                     
                     # Save intermediate best model after each improvement (only if better than loaded model)
                     if save_model and save_path and best_metric > loaded_metric:
                         # Temporarily store current state before loading best
-                        temp_state = self.assembler.state_dict()
+                        temp_state = {k: v.clone() for k, v in self.assembler.state_dict().items()}
                         temp_is_frozen = self.assembler.is_frozen
                         temp_locked_perm = self.assembler.locked_perm.clone() if self.assembler.locked_perm is not None else None
                         temp_input_layer = self.assembler.input_to_leaf
@@ -1777,6 +1873,10 @@ class baconNet(nn.Module):
                             ).to(self.assembler.device)
                             # CRITICAL: Load the weights into the frozen layer
                             self.assembler.load_state_dict(best_model)
+                        elif best_full_tree_hardened:
+                            self.assembler.harden_full_tree(mode="auto")
+                            if best_operator_hardened and hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
+                                self.assembler.aggregator.harden_operators()
                         
                         logging.info(f"   💾 Saving intermediate best model to {save_path}")
                         self.save_model(save_path)
@@ -1797,6 +1897,8 @@ class baconNet(nn.Module):
                 # Restore original sparsity weight if it was overridden
                 if setup.original_sparsity_weight is not None:
                     self.loss_weight_perm_sparsity = setup.original_sparsity_weight
+                if hasattr(self, '_dynamic_full_tree_egress_weight'):
+                    delattr(self, '_dynamic_full_tree_egress_weight')
         
         if best_model is None:
             raise ValueError("No model met the acceptance threshold.")
@@ -1809,7 +1911,7 @@ class baconNet(nn.Module):
         has_loaded_model = loaded_metric > (-float('inf') if task_type == "regression" else 0)
         
         # If new model is worse than loaded model, reload the original from disk
-        if has_loaded_model and best_metric <= loaded_metric and os.path.exists(save_path):
+        if has_loaded_model and best_metric <= loaded_metric and save_path and os.path.exists(save_path):
             logging.info(f"⚠️ New model {metric_name} {best_metric:.4f} <= loaded model {metric_name} {loaded_metric:.4f}")
             logging.info(f"   🔄 Reloading original model from {save_path}")
             self.load_model(save_path)
