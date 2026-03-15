@@ -1298,6 +1298,7 @@ class baconNet(nn.Module):
         best_is_frozen = False
         best_locked_perm = None
         best_full_tree_hardened = False
+        best_alternating_hardened = False
         best_operator_hardened = False
 
         for attempt in range(total_attempts):
@@ -1806,6 +1807,11 @@ class baconNet(nn.Module):
                             if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
                                 self.assembler.aggregator.harden_operators()
                             logging.info(f"   ✅ No permutation layer to freeze; hardened full-tree structure for evaluation")
+                        elif self.assembler.tree_layout == "alternating" and self.assembler.alternating_tree is not None:
+                            self.assembler.harden_alternating_tree()
+                            if hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
+                                self.assembler.aggregator.harden_operators()
+                            logging.info(f"   ✅ No permutation layer to freeze; hardened alternating-tree structure for evaluation")
                         else:
                             # Just mark as frozen since there's nothing to permute
                             self.assembler.is_frozen = True
@@ -1849,6 +1855,14 @@ class baconNet(nn.Module):
                         and self.assembler.fully_connected_tree is not None
                         and self.assembler.fully_connected_tree.hardened_edges is not None
                     )
+                    best_alternating_hardened = (
+                        self.assembler.tree_layout == "alternating"
+                        and self.assembler.alternating_tree is not None
+                        and all(
+                            not getattr(layer, 'learn_routing', False) or getattr(layer, 'hard_edges', None) is not None
+                            for layer in self.assembler.alternating_tree.agg_layers
+                        )
+                    )
                     best_operator_hardened = hasattr(self.assembler, 'aggregator') and getattr(self.assembler.aggregator, 'force_hard_selection', False)
                     logging.info(f"   🏆 New best model! {metric_name}: {best_metric:.4f}")
                     
@@ -1875,6 +1889,10 @@ class baconNet(nn.Module):
                             self.assembler.load_state_dict(best_model)
                         elif best_full_tree_hardened:
                             self.assembler.harden_full_tree(mode="auto")
+                            if best_operator_hardened and hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
+                                self.assembler.aggregator.harden_operators()
+                        elif best_alternating_hardened:
+                            self.assembler.harden_alternating_tree()
                             if best_operator_hardened and hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
                                 self.assembler.aggregator.harden_operators()
                         
@@ -1928,6 +1946,14 @@ class baconNet(nn.Module):
                 best_locked_perm,
                 self.assembler.original_input_size
             ).to(self.assembler.device)
+        elif best_full_tree_hardened:
+            self.assembler.harden_full_tree(mode="auto")
+            if best_operator_hardened and hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
+                self.assembler.aggregator.harden_operators()
+        elif best_alternating_hardened:
+            self.assembler.harden_alternating_tree()
+            if best_operator_hardened and hasattr(self.assembler, 'aggregator') and hasattr(self.assembler.aggregator, 'harden_operators'):
+                self.assembler.aggregator.harden_operators()
         
         if save_model:
             if not has_loaded_model or best_metric > loaded_metric:

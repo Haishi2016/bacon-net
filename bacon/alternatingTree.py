@@ -26,13 +26,14 @@ from typing import Optional, List, Tuple
 class CoefficientLayer(nn.Module):
     """Layer that applies learnable scalar coefficients to inputs (1:1 mapping)."""
     
-    def __init__(self, width: int, device: torch.device):
+    def __init__(self, width: int, device: torch.device, trainable: bool = True):
         super().__init__()
         self.width = width
         self.device = device
+        self.trainable = trainable
         # Learnable coefficients in LOG space - initialized to 0 (exp(0) = 1)
         # Using log-space prevents coefficients from going negative
-        self.log_coefficients = nn.Parameter(torch.zeros(width))
+        self.log_coefficients = nn.Parameter(torch.zeros(width), requires_grad=trainable)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply coefficients: output[i] = exp(log_coeff[i]) * x[i]"""
@@ -266,6 +267,7 @@ class AlternatingTree(nn.Module):
     def __init__(
         self,
         num_inputs: int,
+        learn_coefficients: bool = True,
         learn_first_routing: bool = True,
         learn_subsequent_routing: bool = True,
         max_egress: int = 1,
@@ -279,6 +281,7 @@ class AlternatingTree(nn.Module):
         super().__init__()
         
         self.num_inputs = num_inputs
+        self.learn_coefficients = learn_coefficients
         self.learn_first_routing = learn_first_routing
         self.learn_subsequent_routing = learn_subsequent_routing
         self.max_egress = max_egress
@@ -295,7 +298,7 @@ class AlternatingTree(nn.Module):
         layer_idx = 0
         while current_width > 1:
             # Coefficient layer
-            self.coeff_layers.append(CoefficientLayer(current_width, self.device))
+            self.coeff_layers.append(CoefficientLayer(current_width, self.device, trainable=learn_coefficients))
             
             # Determine if this layer should learn routing
             if layer_idx == 0:
@@ -326,11 +329,12 @@ class AlternatingTree(nn.Module):
         # Build routing description
         first_str = "learned" if learn_first_routing else "fixed"
         subseq_str = "learned" if learn_subsequent_routing else "fixed"
+        coeff_str = "learned" if learn_coefficients else "fixed"
         if learn_first_routing == learn_subsequent_routing:
             routing_str = f"all {first_str}"
         else:
             routing_str = f"first={first_str}, rest={subseq_str}"
-        logging.info(f"AlternatingTree: {num_inputs} inputs, routing: {routing_str}, {len(self.agg_layers)} layers, {self.num_agg_nodes} total nodes")
+        logging.info(f"AlternatingTree: {num_inputs} inputs, coeffs: {coeff_str}, routing: {routing_str}, {len(self.agg_layers)} layers, {self.num_agg_nodes} total nodes")
     
     def forward(self, x: torch.Tensor, aggregator=None) -> torch.Tensor:
         if aggregator is None:

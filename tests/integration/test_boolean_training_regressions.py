@@ -125,6 +125,59 @@ def test_full_tree_logic_learns_boolean_truth_tables(expr_name, expr_fn):
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize(
+    ("expr_name", "expr_fn"),
+    [
+        ("or_and", lambda a, b, c: (a or b) and c),
+        ("and_or", lambda a, b, c: (a and b) or c),
+    ],
+)
+def test_alternating_tree_logic_with_fixed_coefficients_learns_truth_tables(expr_name, expr_fn):
+    x, y = _truth_table_from_expr(expr_fn)
+
+    _set_deterministic_seed(7)
+    model = baconNet(
+        3,
+        tree_layout="alternating",
+        aggregator="math.operator_set.logic",
+        weight_mode="fixed",
+        loss_amplifier=200,
+        normalize_andness=False,
+        loss_weight_operator_sparsity=3.0,
+        loss_weight_operator_l2=0.01,
+        lr_aggregator=0.03,
+        lr_other=0.03,
+        use_class_weighting=False,
+        alternating_max_egress=1,
+        loss_weight_alternating_egress=0.2,
+        use_permutation_layer=False,
+    )
+    _, best_metric = model.find_best_model(
+        x,
+        y,
+        x,
+        y,
+        attempts=5,
+        max_epochs=2400,
+        acceptance_threshold=0.95,
+        save_path=None,
+        operator_initial_tau=2.0,
+        operator_final_tau=0.2,
+        operator_freeze_epochs=0,
+        save_model=False,
+    )
+
+    final_metric = (model.inference(x, threshold=0.5).eq(y)).float().mean().item()
+
+    assert best_metric == pytest.approx(1.0, abs=1e-6), expr_name
+    assert final_metric == pytest.approx(1.0, abs=1e-6), expr_name
+
+    for coeff_layer in model.assembler.alternating_tree.coeff_layers:
+        coeffs = coeff_layer.get_coefficients().cpu()
+        assert torch.allclose(coeffs, torch.ones_like(coeffs), atol=1e-6), expr_name
+
+
+@pytest.mark.integration
 def test_left_tree_min_max_learns_or_and_truth_table():
     x, y = _truth_table_from_expr(lambda a, b, c: (a or b) and c)
 
