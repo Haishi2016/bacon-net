@@ -1685,19 +1685,26 @@ def visualize_alternating_tree(
         if coeff_idx < len(model.coeff_layers):
             coeff_layer = model.coeff_layers[coeff_idx]
             coeffs = coeff_layer.get_coefficients().cpu().numpy()
+            exponents = coeff_layer.get_exponents().cpu().numpy() if hasattr(coeff_layer, 'get_exponents') else None
             
             coeff_ids = []
             for i in range(len(coeffs)):
                 nid = f"coeff_{coeff_idx}_{i}"
                 coeff_ids.append(nid)
                 coeff_val = float(coeffs[i])
+                exponent_val = float(exponents[i]) if exponents is not None else None
+                coeff_label = f"×{coeff_val:.2f}"
+                coeff_title = f"Coefficient: {coeff_val:.4f}"
+                if exponent_val is not None:
+                    coeff_label = f"×{coeff_val:.2f}\nb^{exponent_val:.2f}"
+                    coeff_title += f"<br>Exponent: {exponent_val:.4f}"
                 net.add_node(
                     nid,
-                    label=f"×{coeff_val:.2f}",
+                    label=coeff_label,
                     color="#FF9800",  # Orange
                     size=25,
                     shape="circle",
-                    title=f"Coefficient: {coeff_val:.4f}",
+                    title=coeff_title,
                     level=level,
                     font={"color": "white", "size": 12}
                 )
@@ -1909,7 +1916,11 @@ def print_alternating_tree_structure(assembler_or_model, aggregator=None, variab
         if coeff_idx < len(model.coeff_layers):
             coeff_layer = model.coeff_layers[coeff_idx]
             coeffs = coeff_layer.get_coefficients().cpu().numpy()
-            coeff_str = " ".join([f"×{c:.2f}" for c in coeffs])
+            if hasattr(coeff_layer, 'get_exponents'):
+                exponents = coeff_layer.get_exponents().cpu().numpy()
+                coeff_str = " ".join([f"×{c:.2f}·x^{e:.2f}" for c, e in zip(coeffs, exponents)])
+            else:
+                coeff_str = " ".join([f"×{c:.2f}" for c in coeffs])
             print(f"   ↓")
             print(f"📊 Coefficients [{coeff_idx}]: {coeff_str}")
             coeff_idx += 1

@@ -86,6 +86,9 @@ class binaryTreeLogicNet(nn.Module):
                  # Alternating tree parameters
                  alternating_learn_first_routing: bool = True,
                  alternating_learn_subsequent_routing: bool = True,
+                 alternating_learn_exponents: bool = False,
+                 alternating_min_exponent: float = 1.0,
+                 alternating_max_exponent: float = 2.0,
                  alternating_max_egress: int = 1,
                  alternating_use_straight_through: bool = True,
                  alternating_balance_weight: float = 50.0,
@@ -106,6 +109,9 @@ class binaryTreeLogicNet(nn.Module):
         # Store alternating tree parameters
         self.alternating_learn_first_routing = alternating_learn_first_routing
         self.alternating_learn_subsequent_routing = alternating_learn_subsequent_routing
+        self.alternating_learn_exponents = alternating_learn_exponents
+        self.alternating_min_exponent = alternating_min_exponent
+        self.alternating_max_exponent = alternating_max_exponent
         self.alternating_max_egress = alternating_max_egress
         self.alternating_use_straight_through = alternating_use_straight_through
         self.alternating_balance_weight = alternating_balance_weight
@@ -303,6 +309,9 @@ class binaryTreeLogicNet(nn.Module):
                 learn_coefficients=self.weight_mode != "fixed",
                 learn_first_routing=self.alternating_learn_first_routing,
                 learn_subsequent_routing=self.alternating_learn_subsequent_routing,
+                learn_exponents=self.alternating_learn_exponents,
+                min_exponent=self.alternating_min_exponent,
+                max_exponent=self.alternating_max_exponent,
                 max_egress=self.alternating_max_egress,
                 use_straight_through=self.alternating_use_straight_through,
                 temperature=self.full_tree_temperature,  # Reuse temperature params
@@ -957,6 +966,12 @@ class binaryTreeLogicNet(nn.Module):
         if self.tree_layout != "alternating" or self.alternating_tree is None:
             return torch.tensor(0.0, device=self.device)
         return self.alternating_tree.get_egress_loss()
+
+    def get_alternating_tree_exponent_regularization_loss(self) -> torch.Tensor:
+        """Get exponent regularization loss for alternating coefficient layers."""
+        if self.tree_layout != "alternating" or self.alternating_tree is None:
+            return torch.tensor(0.0, device=self.device)
+        return self.alternating_tree.get_exponent_regularization_loss()
     
     def anneal_alternating_tree_temperature(self, progress: float) -> None:
         """Anneal the temperature of the alternating tree.
