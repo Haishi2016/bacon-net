@@ -14,7 +14,8 @@ Supports expressions with:
 """
 
 import sys
-sys.path.insert(0, '../../')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import re
 import torch
@@ -24,8 +25,13 @@ import logging
 from typing import Tuple, List, Dict, Any
 
 from bacon.baconNet import baconNet
-from bacon.visualization import print_tree_structure, visualize_alternating_tree, print_alternating_tree_structure
-from bacon.tools import reconstruct_expression, print_reconstructed_expression
+from bacon.visualization import (
+    print_tree_structure,
+    visualize_alternating_tree,
+    print_alternating_tree_structure,
+    visualize_full_tree_interactive,
+)
+from bacon.tools import reconstruct_expression, simplify_expression, print_reconstructed_expression
 from samples.common import train_bacon_model
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -47,11 +53,10 @@ OUTPUT_NOISE_PERCENT = 0.0 # Noise level for outputs (0-100)
 # Training configuration
 EPOCHS = 8000               # Number of training epochs
 LEARNING_RATE = 0.01         # Learning rate
-TREE_LAYOUT = "alternating"        # Tree structure: "left", "balanced", "full", "alternating"
+TREE_LAYOUT = "full"        # Tree structure: "left", "balanced", "full", "alternating"
 
-# Operators to use. None = all operators ["add", "sub", "mul", "div"]
-# Full operator set - the system should learn to select the right ones
-OPERATOR_NAMES = ["add", "mul", "identity"]  # Simpler set for alternating tree
+# Operators to use. None = infer from expression.
+OPERATOR_NAMES = None
 
 # Temperature settings
 EDGE_INITIAL_TEMPERATURE = 10.0  # Higher = more exploration early on
@@ -239,6 +244,38 @@ def generate_dataset(
     return X, y, metadata
 
 
+def infer_operator_names(expression: str, variables: List[str]) -> List[str]:
+    """Infer a minimal arithmetic operator set from the expression text.
+
+    Coefficients are learned by BACON weights/scales, so constant*variable terms do not
+    require the explicit `mul` operator. We only include `mul` when the expression appears
+    to multiply two symbolic terms, and similarly include `div` only when division appears.
+    """
+    compact = expression.replace(" ", "")
+    ops: List[str] = []
+
+    if "+" in compact:
+        ops.append("add")
+    if "-" in compact[1:]:
+        ops.append("sub")
+
+    for left in variables:
+        for right in variables:
+            if left == right:
+                continue
+            if f"{left}*{right}" in compact or f"{right}*{left}" in compact:
+                if "mul" not in ops:
+                    ops.append("mul")
+            if f"{left}/{right}" in compact or f"{right}/{left}" in compact:
+                if "div" not in ops:
+                    ops.append("div")
+
+    if not ops:
+        ops.append("add")
+
+    return ops
+
+
 def create_regression_model(
     num_inputs: int,
     tree_layout: str = "left",
@@ -291,12 +328,12 @@ def create_regression_model(
         full_tree_concentrate_ingress=False,  # Don't use column-softmax
         full_tree_use_sinkhorn=False,  # Don't use Sinkhorn (triangular tree)
         # Alternating tree settings
-        alternating_learn_first_routing=False,  # Learn routing in first layer (Input → Agg0)
-        alternating_learn_subsequent_routing=False,  # Learn routing in all layers after first
+        alternating_learn_first_routing=False,
+        alternating_learn_subsequent_routing=False,
         alternating_max_egress=1,  # Each input routes to exactly 1 node
-        alternating_use_straight_through=False,  # HARD routing (no splits). False = soft (like operators)
+        alternating_use_straight_through=True,
         loss_weight_alternating_balance=0.1,  # Light starvation protection
-        loss_weight_alternating_egress=0.5,  # Encourage peaked routing (only used if soft routing)
+        loss_weight_alternating_egress=0.5,
         use_permutation_layer=False,  # Let the tree learn routing directly
     )
     
@@ -364,6 +401,8 @@ def main():
     
     variables = metadata['variables']
     num_vars = len(variables)
+    selected_operator_names = OPERATOR_NAMES or infer_operator_names(EXPRESSION, variables)
+    logging.info(f"🧮 Operator set: {selected_operator_names}")
     
     # Split into train/test sets
     split_idx = int(0.8 * len(X))
@@ -377,6 +416,20 @@ def main():
         tree_layout=TREE_LAYOUT,
         device=device
     )
+    model.assembler.aggregator.op_names = selected_operator_names
+    model.assembler.aggregator.num_ops = len(selected_operator_names)
+
+    if TREE_LAYOUT == "alternating" and model.assembler.alternating_tree is not None:
+        num_agg_nodes = model.assembler.alternating_tree.num_agg_nodes
+    elif TREE_LAYOUT == "full" and model.assembler.fully_connected_tree is not None:
+        num_agg_nodes = sum(model.assembler.fully_connected_tree.layer_widths[1:])
+    else:
+        num_agg_nodes = model.assembler.aggregator.num_layers
+
+    model.assembler.aggregator.op_logits_per_node = nn.ParameterList(
+        [nn.Parameter(torch.zeros(len(selected_operator_names), device=device)) for _ in range(num_agg_nodes)]
+    )
+    model.assembler.aggregator.num_layers = num_agg_nodes
     
     # Train model using standard train_bacon_model with regression mode
     best_model, best_r2 = train_bacon_model(
@@ -395,17 +448,35 @@ def main():
         operator_freeze_min_confidence=0.85,  # Require 85% operator commitment before freeze
         operator_freeze_epochs=0,  # Disable two-phase - operators and edges must co-evolve
         frozen_training_epochs=2000,  # Train longer after freezing to refine weights
+        save_model=False,
+        save_path=None,
+        full_tree_egress_warmup_epochs=150,
+        full_tree_egress_ramp_epochs=300,
+        full_tree_egress_start_metric=0.99,
+        full_tree_egress_drop_tolerance=0.02,
+        full_tree_egress_adapt_rate=0.2,
     )
+
+    if TREE_LAYOUT == "full" and best_model.assembler.fully_connected_tree is not None:
+        best_model.assembler.harden_full_tree(mode="auto")
+    elif TREE_LAYOUT == "alternating" and best_model.assembler.alternating_tree is not None:
+        best_model.assembler.harden_alternating_tree()
+    if hasattr(best_model.assembler.aggregator, 'harden_operators'):
+        best_model.assembler.aggregator.harden_operators()
     
     # Print results
     print_operator_selections(best_model, variables)
     
     # Print reconstructed expression
     print_reconstructed_expression(best_model, variables, precision=4)
+    expr_str = simplify_expression(
+        reconstruct_expression(best_model, variables, precision=4),
+        variables=variables,
+    )
     
     # Print tree structure
     logging.info("\n📋 Learned Tree Structure:")
-    print_tree_structure(best_model.assembler, variables)
+    print_tree_structure(best_model.assembler, variables, layout=TREE_LAYOUT)
     
     # Summary
     logging.info(f"\n✅ Summary:")
@@ -435,16 +506,9 @@ def main():
             target = eval_fn(values)
             logging.info(f"   Input: {inp.tolist()} -> Pred: {pred.item():.4f}, Target: {target:.1f}")
     
-    # Visualize alternating tree structure
     if TREE_LAYOUT == "alternating" and best_model.assembler.alternating_tree is not None:
         
         logging.info("\n🎨 Opening interactive visualization...")
-        
-        # Get reconstructed expression for display
-        try:
-            expr_str = reconstruct_expression(best_model, variables)
-        except:
-            expr_str = "(reconstruction failed)"
         
         visualize_alternating_tree(
             best_model.assembler,
@@ -457,9 +521,20 @@ def main():
         )
         
         # Also print ASCII structure
-        print_alternating_tree_structure(best_model.assembler, variables)
+        print_alternating_tree_structure(best_model.assembler, variable_names=variables)
+    elif TREE_LAYOUT == "full" and best_model.assembler.fully_connected_tree is not None:
+        logging.info("\n🎨 Opening interactive visualization...")
+        visualize_full_tree_interactive(
+            best_model.assembler,
+            labels=variables,
+            title=f"Learned Tree for: {EXPRESSION}",
+            expression=expr_str,
+            r2=best_r2,
+            save_path="full_tree_viz.html",
+            show=True,
+        )
     else:
-        logging.info(f"\n⚠️ SKIPPED VISUALIZATION: TREE_LAYOUT={TREE_LAYOUT}, alternating_tree is None={best_model.assembler.alternating_tree is None}")
+        logging.info(f"\n⚠️ SKIPPED VISUALIZATION: TREE_LAYOUT={TREE_LAYOUT}")
 
 
 if __name__ == "__main__":
