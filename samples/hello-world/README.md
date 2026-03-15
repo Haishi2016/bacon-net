@@ -36,3 +36,5 @@ And then re-run the program.
 * The `randomize=False` parameter instructs the utility program to generate all possible permutations of input values. This becomes infeasible for complex expressions. Therefore, by default, this parameter is set to `True` to use randomly generated samples instead.
 
 * The `bool.min_max` aggregator swings between the min and max functions to approximate classic Boolean `AND` and `OR` behavior. It uses a parameterized gate to control this behavior, and during training, the Straight-Through Estimator (STE) trick is applied to allow gradients to flow through the non-differentiable switching operation. When the gate value is near 0, the aggregator behaves like min (logical `AND`); when near 1, it behaves like max (logical `OR`). This enables smooth optimization while preserving interpretable logical behavior.
+
+* Input permutation search is disabled by setting `use_permutation_layer` to `False`. This is safe here because expression generation always follows a fixed input order. In general use cases, this parameter is typically set to `True` (default) to allow the model to search for optimal input permutations.

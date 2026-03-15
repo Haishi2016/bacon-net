@@ -3,7 +3,8 @@ from typing import Sequence, Any
 
 class MinMaxAggregator(AggregatorBase):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)     
+        super().__init__(*args, **kwargs)
+        self.uses_edge_scales = False
     
     def aggregate_float(self, values: Sequence[float], a: float, weights: Sequence[float]) -> float:
         import torch
@@ -29,6 +30,22 @@ class MinMaxAggregator(AggregatorBase):
         import torch
         if len(values) == 0:
             raise ValueError("aggregate_tensor: values must be non-empty")
+
+        if weights is not None:
+            if not isinstance(andness, torch.Tensor):
+                andness = torch.tensor(andness, dtype=values[0].dtype, device=values[0].device)
+            # Map AND-like behavior to neutral 1 and OR-like behavior to neutral 0.
+            neutral = torch.sigmoid(andness * 10).to(dtype=values[0].dtype, device=values[0].device)
+            gated_values = []
+            for value, weight in zip(values, weights):
+                if isinstance(weight, torch.Tensor):
+                    gate = weight.to(device=value.device, dtype=value.dtype)
+                else:
+                    gate = torch.tensor(weight, device=value.device, dtype=value.dtype)
+                gate = torch.clamp(torch.abs(gate), 0.0, 1.0)
+                gated_values.append(gate * value + (1 - gate) * neutral)
+            values = gated_values
+
         X = torch.stack(values, dim=0)  # [N, ...]
         return self._MinMax(X, andness)
 

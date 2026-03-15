@@ -65,6 +65,12 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
         # Internal pointer used during a single forward pass
         self._node_ptr: int = 0
 
+        # When enabled, operator selection becomes deterministic argmax at inference/training time.
+        self.force_hard_selection: bool = False
+
+        # Arithmetic operator sets use full edge coefficients; boolean sets override this.
+        self.uses_edge_scales: bool = True
+
     # ------------------------------------------------------------------
     # Abstract methods for subclasses
     # ------------------------------------------------------------------
@@ -128,6 +134,14 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
         Called at the start of each forward() of the tree to reset node pointer.
         """
         self._node_ptr = 0
+
+    def harden_operators(self):
+        """Force deterministic argmax operator selection for every node."""
+        self.force_hard_selection = True
+
+    def soften_operators(self):
+        """Return to soft/stochastic operator selection behavior."""
+        self.force_hard_selection = False
 
     # ------------------------------------------------------------------
     # AggregatorBase interface implementation
@@ -210,8 +224,8 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
 
         # Determine if we should use hard selection
         # auto_harden_threshold: if max prob exceeds threshold, use hard=True
-        use_hard = False
-        if self.auto_harden_threshold is not None:
+        use_hard = self.force_hard_selection
+        if not use_hard and self.auto_harden_threshold is not None:
             with torch.no_grad():
                 # Use temperature-adjusted softmax to match gumbel_softmax behavior
                 if self.use_gumbel:
@@ -221,7 +235,15 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
                 max_prob = probs.max().item()
                 use_hard = max_prob >= self.auto_harden_threshold
 
-        if self.use_gumbel:
+        if self.force_hard_selection:
+            # Deterministic argmax selection (no sampling noise).
+            if self.use_gumbel:
+                probs = F.softmax(logits / self.tau, dim=0)
+            else:
+                probs = F.softmax(logits, dim=0)
+            hard_sel = F.one_hot(probs.argmax(dim=0), self.num_ops).float()
+            op_w = hard_sel - probs.detach() + probs
+        elif self.use_gumbel:
             op_w = F.gumbel_softmax(logits, tau=self.tau, hard=use_hard, dim=0)  # [K]
         else:
             if use_hard:
@@ -270,30 +292,70 @@ class BoolOperatorSet(OperatorSetAggregator):
     ):
         super().__init__(op_names=op_names, use_gumbel=use_gumbel, tau=tau, eps=eps, 
                          auto_harden_threshold=auto_harden_threshold)
+        self.uses_edge_scales = False
 
     def get_default_op_names(self) -> list:
         return ["and", "or"]
 
+    def _get_gate_weights(self, values: Sequence[torch.Tensor], weights: Sequence[torch.Tensor]) -> list[torch.Tensor]:
+        """Convert raw weights into stable [0,1] gates for boolean routing.
+
+        Full-tree routing uses edge-selection strengths to decide whether an input should
+        participate in a boolean op. For boolean semantics, an omitted input should move
+        toward the operator's neutral element rather than continue influencing the min/max.
+        """
+        gate_weights = []
+        for i, weight in enumerate(weights):
+            if isinstance(weight, torch.Tensor):
+                gate = weight.to(device=values[i].device, dtype=values[i].dtype)
+            else:
+                gate = torch.tensor(weight, device=values[i].device, dtype=values[i].dtype)
+            gate_weights.append(torch.clamp(torch.abs(gate), 0.0, 1.0))
+        return gate_weights
+
     def _apply_op(self, name: str, values: Sequence[torch.Tensor], a: torch.Tensor, weights: Sequence[torch.Tensor]) -> torch.Tensor:
         """Apply boolean operation."""
         name = name.lower()
+        gate_weights = self._get_gate_weights(values, weights)
         
         if name == "and":
-            # AND: minimum of all values
-            result = values[0]
-            for v in values[1:]:
-                result = torch.min(result, v)
+            # AND: move deselected inputs toward the neutral element 1.
+            result = 1 - gate_weights[0] * (1 - values[0])
+            for v, gate in zip(values[1:], gate_weights[1:]):
+                v_eff = 1 - gate * (1 - v)
+                result = torch.min(result, v_eff)
             return result
             
         elif name == "or":
-            # OR: maximum of all values
-            result = values[0]
-            for v in values[1:]:
-                result = torch.max(result, v)
+            # OR: move deselected inputs toward the neutral element 0.
+            result = gate_weights[0] * values[0]
+            for v, gate in zip(values[1:], gate_weights[1:]):
+                v_eff = gate * v
+                result = torch.max(result, v_eff)
             return result
+
+        elif name == "identity":
+            # Identity: route the strongest input through unchanged.
+            # Uses weight magnitude only to choose which input to pass.
+            weight_stack = torch.stack([
+                gate if isinstance(gate, torch.Tensor) else torch.tensor(abs(gate), device=values[0].device)
+                for gate in gate_weights
+            ])
+            max_idx = weight_stack.argmax().item()
+            return values[max_idx]
             
         else:
             raise ValueError(f"Unknown boolean op: {name}")
+
+
+class BoolOperatorSetWithIdentity(BoolOperatorSet):
+    """Boolean operator set with explicit passthrough operator.
+
+    Default operators: ["and", "or", "identity"]
+    """
+
+    def get_default_op_names(self) -> list:
+        return ["and", "or", "identity"]
 
 
 # =============================================================================

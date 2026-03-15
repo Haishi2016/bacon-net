@@ -1346,6 +1346,198 @@ def plot_roc_curve(model, X, Y, threshold=0.5, title="ROC Curve", filename=None)
     return roc_auc
 
 
+def visualize_full_tree_interactive(
+    assembler_or_tree,
+    labels=None,
+    title: str = "BACON Full Tree (Interactive)",
+    show: bool = True,
+    save_path=None,
+):
+    """Create an interactive HTML visualization for full tree layout using Pyvis.
+
+    Args:
+        assembler_or_tree: binaryTreeLogicNet with .fully_connected_tree, or FullyConnectedTree directly.
+        labels: Optional input feature labels.
+        title: Visualization title.
+        show: Whether to open the generated HTML in browser.
+        save_path: Optional output HTML path.
+
+    Returns:
+        Pyvis Network object, or None if unavailable.
+    """
+    # Support both: assembler with .fully_connected_tree or direct FullyConnectedTree
+    if hasattr(assembler_or_tree, 'fully_connected_tree'):
+        assembler = assembler_or_tree
+        tree = assembler_or_tree.fully_connected_tree
+    else:
+        assembler = None
+        tree = assembler_or_tree
+
+    if tree is None:
+        print("❌ No full tree found")
+        return None
+
+    try:
+        from pyvis.network import Network
+    except ImportError:
+        print("❌ Pyvis not installed. Run: pip install pyvis")
+        return None
+
+    structure = tree.get_tree_structure()
+    layer_widths = structure['layer_widths']
+
+    # Resolve labels in the same order used by model forward routing when assembler is provided.
+    if labels is not None and len(labels) >= layer_widths[0]:
+        if assembler is not None:
+            leaf_indices = _resolve_leaf_indices(assembler)
+            leaf_names = [labels[i] for i in leaf_indices]
+        else:
+            leaf_names = labels[:layer_widths[0]]
+    else:
+        leaf_names = [f"x{i}" for i in range(layer_widths[0])]
+
+    # Build quick lookup for node andness values.
+    andness_by_node = {
+        (b['layer'], b['node']): b['andness']
+        for b in structure.get('biases', [])
+    }
+
+    # Build operator lookup when using an operator-set aggregator.
+    op_by_node = {}
+    if assembler is not None and hasattr(assembler, 'aggregator'):
+        aggregator = assembler.aggregator
+        if hasattr(aggregator, 'op_logits_per_node') and aggregator.op_logits_per_node is not None:
+            op_names = getattr(aggregator, 'op_names', None)
+            node_counter = 0
+            for layer_idx in range(1, len(layer_widths)):
+                for node_idx in range(layer_widths[layer_idx]):
+                    if node_counter < len(aggregator.op_logits_per_node):
+                        logits = aggregator.op_logits_per_node[node_counter]
+                        probs = torch.softmax(logits, dim=0)
+                        best_idx = torch.argmax(probs).item()
+                        confidence = probs[best_idx].item()
+                        op_name = op_names[best_idx] if op_names and best_idx < len(op_names) else f"op{best_idx}"
+                        op_by_node[(layer_idx, node_idx)] = (op_name, confidence)
+                    node_counter += 1
+
+    net = Network(
+        height="860px",
+        width="100%",
+        bgcolor="#fafafa",
+        font_color="#1f2937",
+        directed=True,
+        heading=title,
+    )
+
+    net.set_options("""
+    {
+        "physics": {
+            "enabled": true,
+            "hierarchicalRepulsion": {
+                "centralGravity": 0.0,
+                "springLength": 170,
+                "springConstant": 0.01,
+                "nodeDistance": 130
+            },
+            "solver": "hierarchicalRepulsion"
+        },
+        "layout": {
+            "hierarchical": {
+                "enabled": true,
+                "direction": "UD",
+                "sortMethod": "directed",
+                "levelSeparation": 130,
+                "nodeSpacing": 110
+            }
+        },
+        "interaction": {
+            "dragNodes": true,
+            "dragView": true,
+            "zoomView": true,
+            "hover": true
+        },
+        "edges": {
+            "smooth": {
+                "enabled": true,
+                "type": "cubicBezier"
+            }
+        }
+    }
+    """)
+
+    # Add nodes layer by layer.
+    for layer_idx, width in enumerate(layer_widths):
+        for node_idx in range(width):
+            node_id = f"L{layer_idx}_{node_idx}"
+            if layer_idx == 0:
+                label = leaf_names[node_idx] if node_idx < len(leaf_names) else f"x{node_idx}"
+                color = "#4CAF50"
+                title_text = f"Input: {label}"
+                size = 28
+            else:
+                andness = andness_by_node.get((layer_idx, node_idx), None)
+                op_info = op_by_node.get((layer_idx, node_idx), None)
+                if op_info is not None:
+                    op_name, confidence = op_info
+                    label = op_name
+                    if andness is None:
+                        title_text = f"Layer {layer_idx} Node {node_idx}<br>Operator: {op_name}<br>Confidence: {confidence:.4f}"
+                    else:
+                        title_text = (
+                            f"Layer {layer_idx} Node {node_idx}<br>"
+                            f"Operator: {op_name}<br>"
+                            f"Confidence: {confidence:.4f}<br>"
+                            f"Andness: {andness:.4f}"
+                        )
+                elif andness is None:
+                    label = f"N{layer_idx}.{node_idx}"
+                    title_text = "Internal node"
+                else:
+                    label = f"a={andness:.2f}"
+                    title_text = f"Layer {layer_idx} Node {node_idx}<br>Andness: {andness:.4f}"
+                color = "#2196F3" if layer_idx < len(layer_widths) - 1 else "#9C27B0"
+                size = 32
+
+            net.add_node(
+                node_id,
+                label=label,
+                color=color,
+                size=size,
+                shape="ellipse",
+                title=title_text,
+                level=layer_idx,
+                font={"color": "#111827", "size": 13, "face": "Verdana"}
+            )
+
+    # Add edges.
+    for edge in structure.get('edges', []):
+        src = f"L{edge['layer']}_{edge['src']}"
+        dst = f"L{edge['layer'] + 1}_{edge['dst']}"
+        select_w = float(edge.get('weight', 0.0))
+        scale_w = float(edge.get('scale', 1.0))
+        width = 1 + 5 * select_w
+        alpha = 0.25 + 0.75 * select_w
+        color = f"rgba(33,150,243,{alpha:.3f})"
+        net.add_edge(
+            src,
+            dst,
+            color=color,
+            width=width,
+            title=f"Select: {select_w:.4f}<br>Scale: {scale_w:.4f}"
+        )
+
+    output_path = save_path or "full_tree_viz.html"
+    net.save_graph(output_path)
+    print(f"💾 Saved visualization to: {output_path}")
+
+    if show:
+        import os
+        import webbrowser
+        webbrowser.open('file://' + os.path.realpath(output_path))
+
+    return net
+
+
 # =============================================================================
 # Alternating Tree Visualization
 # =============================================================================

@@ -1,1 +1,1 @@
-from .operator_set import OperatorSetAggregator, BoolOperatorSet, ArithmeticOperatorSet
+from .operator_set import OperatorSetAggregator, BoolOperatorSet, BoolOperatorSetWithIdentity, ArithmeticOperatorSet

@@ -348,10 +348,12 @@ class FullyConnectedTree(nn.Module):
         
         This ensures one operator selection per destination node.
         """
-        batch_size, in_width = inputs.shape
-        
-        # Combined weight = selection * scale (unbounded)
-        combined_weights = weights * scales
+        _, in_width = inputs.shape
+
+        if getattr(aggregator, "uses_edge_scales", True):
+            combined_weights = weights * scales
+        else:
+            combined_weights = weights
         
         # Collect all inputs as a list for the aggregator
         input_list = [inputs[:, i] for i in range(in_width)]
@@ -523,67 +525,80 @@ class FullyConnectedTree(nn.Module):
                 - "hungarian": Optimal assignment via Hungarian algorithm (for square matrices)
                 - "smart": Use Hungarian for square, column argmax for bottleneck, row argmax for expansion
         """
-        self.hardened_edges = []
-        
-        with torch.no_grad():
-            for l in range(self.depth):
-                soft_weights = self._compute_edge_weights(l)
-                in_width, out_width = soft_weights.shape
-                
-                # Determine effective mode for this layer
-                effective_mode = mode
-                if mode == "smart":
-                    if in_width == out_width:
-                        effective_mode = "hungarian"
-                    elif in_width > out_width:
-                        # Bottleneck: multiple sources combine into fewer destinations
-                        # All sources should contribute - use "all" mode
-                        effective_mode = "all"
-                    else:
-                        # Expansion: fewer sources go to more destinations
-                        effective_mode = "argmax_row"
-                
-                if effective_mode == "argmax":
-                    # Each column (destination) picks one source (argmax)
-                    hard_weights = torch.zeros_like(soft_weights)
-                    max_indices = soft_weights.argmax(dim=0)
-                    for j in range(out_width):
-                        hard_weights[max_indices[j], j] = 1.0
-                
-                elif effective_mode == "argmax_row":
-                    # Each row (source) picks one destination (argmax)
-                    hard_weights = torch.zeros_like(soft_weights)
-                    max_indices = soft_weights.argmax(dim=1)
-                    for i in range(in_width):
-                        hard_weights[i, max_indices[i]] = 1.0
-                        
-                elif effective_mode == "threshold":
-                    # Edges above 0.5 become 1
-                    hard_weights = (soft_weights > 0.5).float()
-                
-                elif effective_mode == "all":
-                    # All edges become 1 (for bottleneck layers where all must contribute)
-                    hard_weights = torch.ones_like(soft_weights)
+        new_hardened_edges = []
+
+        # Derive hardened structure from the current soft logits/temperatures, not from any
+        # previously hardened state. This also avoids reading from a partially built list.
+        prev_hardened_edges = self.hardened_edges
+        prev_is_frozen = self.is_frozen
+        self.hardened_edges = None
+        self.is_frozen = False
+
+        try:
+            with torch.no_grad():
+                for l in range(self.depth):
+                    soft_weights = self._compute_edge_weights(l)
+                    in_width, out_width = soft_weights.shape
                     
-                elif effective_mode == "hungarian":
-                    # Use Hungarian algorithm for optimal assignment
-                    # Only works well for square matrices
-                    from scipy.optimize import linear_sum_assignment
-                    cost_matrix = -soft_weights.cpu().numpy()
-                    # Pad matrix if not square
-                    max_dim = max(in_width, out_width)
-                    padded_cost = np.zeros((max_dim, max_dim))
-                    padded_cost[:in_width, :out_width] = cost_matrix
-                    row_ind, col_ind = linear_sum_assignment(padded_cost)
-                    hard_weights = torch.zeros_like(soft_weights)
-                    for r, c in zip(row_ind, col_ind):
-                        if r < in_width and c < out_width:
-                            hard_weights[r, c] = 1.0
-                else:
-                    raise ValueError(f"Unknown hardening mode: {mode}")
-                
-                self.hardened_edges.append(hard_weights)
-        
+                    # Determine effective mode for this layer
+                    effective_mode = mode
+                    if mode == "smart":
+                        if in_width == out_width:
+                            effective_mode = "hungarian"
+                        elif in_width > out_width:
+                            # Bottleneck: multiple sources combine into fewer destinations
+                            # All sources should contribute - use "all" mode
+                            effective_mode = "all"
+                        else:
+                            # Expansion: fewer sources go to more destinations
+                            effective_mode = "argmax_row"
+                    
+                    if effective_mode == "argmax":
+                        # Each column (destination) picks one source (argmax)
+                        hard_weights = torch.zeros_like(soft_weights)
+                        max_indices = soft_weights.argmax(dim=0)
+                        for j in range(out_width):
+                            hard_weights[max_indices[j], j] = 1.0
+                    
+                    elif effective_mode == "argmax_row":
+                        # Each row (source) picks one destination (argmax)
+                        hard_weights = torch.zeros_like(soft_weights)
+                        max_indices = soft_weights.argmax(dim=1)
+                        for i in range(in_width):
+                            hard_weights[i, max_indices[i]] = 1.0
+                            
+                    elif effective_mode == "threshold":
+                        # Edges above 0.5 become 1
+                        hard_weights = (soft_weights > 0.5).float()
+                    
+                    elif effective_mode == "all":
+                        # All edges become 1 (for bottleneck layers where all must contribute)
+                        hard_weights = torch.ones_like(soft_weights)
+                        
+                    elif effective_mode == "hungarian":
+                        # Use Hungarian algorithm for optimal assignment
+                        # Only works well for square matrices
+                        from scipy.optimize import linear_sum_assignment
+                        cost_matrix = -soft_weights.cpu().numpy()
+                        # Pad matrix if not square
+                        max_dim = max(in_width, out_width)
+                        padded_cost = np.zeros((max_dim, max_dim))
+                        padded_cost[:in_width, :out_width] = cost_matrix
+                        row_ind, col_ind = linear_sum_assignment(padded_cost)
+                        hard_weights = torch.zeros_like(soft_weights)
+                        for r, c in zip(row_ind, col_ind):
+                            if r < in_width and c < out_width:
+                                hard_weights[r, c] = 1.0
+                    else:
+                        raise ValueError(f"Unknown hardening mode: {mode}")
+                    
+                    new_hardened_edges.append(hard_weights)
+        except Exception:
+            self.hardened_edges = prev_hardened_edges
+            self.is_frozen = prev_is_frozen
+            raise
+
+        self.hardened_edges = new_hardened_edges
         self.is_frozen = True
         logging.info(f"🔒 FullyConnectedTree hardened with mode='{mode}'")
     

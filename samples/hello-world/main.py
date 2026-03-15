@@ -1,5 +1,6 @@
 # Note: required to import baconNet from local folder
 import sys
+import random
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -14,6 +15,13 @@ import logging
 logging.basicConfig(level=logging.ERROR, format='%(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+seed = 7
+random.seed(seed)
+torch.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+torch.use_deterministic_algorithms(True, warn_only=True)
+
 input_size = 3
 
 # For small boolean demos, use full truth table for structural identifiability.
@@ -27,9 +35,11 @@ print(f"➗ Expression: {expr_info['expression_text']}")
 
 bacon = baconNet(input_size, 
                 aggregator='bool.min_max',
+                tree_layout='left',
                 weight_mode='fixed', 
                 loss_amplifier=1000, 
-                normalize_andness=False)
+                normalize_andness=False,
+                use_permutation_layer=False)
 
 (best_model, best_accuracy) = bacon.find_best_model(x, y, x, y, 
                                                     acceptance_threshold=0.95, 
@@ -38,5 +48,9 @@ bacon = baconNet(input_size,
                                                     save_model=False)
 
 print(f"🏆 Best accuracy: {best_accuracy * 100:.2f}%")
-print_tree_structure(bacon.assembler, expr_info['var_names'], classic_boolean=True)
-visualize_tree_structure(bacon.assembler, expr_info['var_names'])
+pred = bacon.inference(x, threshold=0.5)
+final_accuracy = (pred == y).float().mean().item()
+print(f"📏 Final accuracy: {final_accuracy * 100:.2f}%")
+
+print_tree_structure(bacon.assembler, expr_info['var_names'], classic_boolean=True, layout='left')
+visualize_tree_structure(bacon.assembler, expr_info['var_names'], layout='left')
