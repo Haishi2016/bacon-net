@@ -1682,7 +1682,7 @@ def visualize_alternating_tree(
             for i in range(len(coeffs)):
                 nid = f"coeff_{coeff_idx}_{i}"
                 coeff_ids.append(nid)
-                coeff_val = coeffs[i]
+                coeff_val = float(coeffs[i])
                 net.add_node(
                     nid,
                     label=f"×{coeff_val:.2f}",
@@ -1726,7 +1726,7 @@ def visualize_alternating_tree(
                     probs = torch.softmax(logits, dim=0).detach().cpu()
                     op_idx = probs.argmax().item()
                     op_name = aggregator.op_names[op_idx]
-                    conf = probs[op_idx].item()
+                    conf = float(probs[op_idx].item())
                     op_names.append((op_name, conf))
                 else:
                     op_names.append(("?", 0))
@@ -1754,7 +1754,7 @@ def visualize_alternating_tree(
             # Edges from previous layer
             prev_ids = layer_node_ids[-1]
             for i in range(agg_layer.in_width):
-                w = edge_weights[i, j]
+                w = float(edge_weights[i, j])
                 if w > 0.05:
                     if is_learned_routing:
                         # Learned: solid blue

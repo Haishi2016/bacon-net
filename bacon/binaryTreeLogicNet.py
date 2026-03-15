@@ -300,6 +300,7 @@ class binaryTreeLogicNet(nn.Module):
         if self.tree_layout == "alternating":
             self.alternating_tree = AlternatingTree(
                 num_inputs=self.original_input_size,
+                learn_coefficients=self.weight_mode != "fixed",
                 learn_first_routing=self.alternating_learn_first_routing,
                 learn_subsequent_routing=self.alternating_learn_subsequent_routing,
                 max_egress=self.alternating_max_egress,
