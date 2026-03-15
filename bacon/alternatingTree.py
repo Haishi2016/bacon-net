@@ -379,6 +379,20 @@ class AlternatingTree(nn.Module):
             self.agg_layers.append(agg_layer)
             current_width = next_width
             layer_idx += 1
+
+        # Single-input trees still need one coefficient stage so regression tasks
+        # can fit scalar rescaling instead of degenerating to a parameter-free pass-through.
+        if num_inputs == 1:
+            self.coeff_layers.append(
+                CoefficientLayer(
+                    1,
+                    self.device,
+                    trainable=learn_coefficients,
+                    learn_exponents=learn_exponents,
+                    min_exponent=min_exponent,
+                    max_exponent=max_exponent,
+                )
+            )
         
         self.num_agg_nodes = sum(layer.out_width for layer in self.agg_layers)
         self.is_frozen = False
@@ -412,6 +426,9 @@ class AlternatingTree(nn.Module):
                 coeff_idx += 1
             # Apply aggregation
             current = agg_layer(current, aggregator)
+
+        if coeff_idx < len(self.coeff_layers):
+            current = self.coeff_layers[coeff_idx](current)
         
         return current
     

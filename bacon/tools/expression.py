@@ -52,6 +52,9 @@ def reconstruct_expression(
     # Check if we have an operator set aggregator
     if not hasattr(aggregator, 'op_logits_per_node') or aggregator.op_logits_per_node is None:
         return "Cannot reconstruct: aggregator does not have operator logits"
+
+    if hasattr(assembler, 'get_input_labels'):
+        variables = assembler.get_input_labels(variables)
     
     op_names = aggregator.op_names
     num_nodes = len(aggregator.op_logits_per_node)
@@ -68,6 +71,8 @@ def reconstruct_expression(
     if hasattr(assembler, 'locked_perm') and assembler.locked_perm is not None:
         perm = assembler.locked_perm.tolist()
         permuted_variables = [variables[i] for i in perm]
+        if len(variables) > len(perm):
+            permuted_variables.extend(variables[len(perm):])
     elif hasattr(assembler, 'input_to_leaf') and hasattr(assembler.input_to_leaf, 'weights'):
         # Derive permutation from soft input_to_leaf weights
         # perm_matrix[leaf, input]: probability that leaf gets input
@@ -77,6 +82,8 @@ def reconstruct_expression(
             # For each leaf, find which input it most likely receives
             perm = perm_matrix.argmax(dim=1).tolist()
             permuted_variables = [variables[i] if i < len(variables) else f"x{i}" for i in perm]
+            if len(variables) > len(perm):
+                permuted_variables.extend(variables[len(perm):])
     else:
         permuted_variables = variables
     

@@ -1,6 +1,8 @@
 import torch
 
-from bacon.alternatingTree import CoefficientLayer
+from bacon.alternatingTree import AlternatingTree, CoefficientLayer
+from bacon.aggregators.math import ArithmeticOperatorSet
+from bacon.binaryTreeLogicNet import binaryTreeLogicNet
 
 
 def test_coefficient_layer_defaults_to_ax_behavior():
@@ -60,3 +62,34 @@ def test_coefficient_layer_endpoint_regularizer_prefers_1_or_2_over_midpoint():
     assert penalties[1].item() > penalties[0].item()
     assert penalties[1].item() > penalties[2].item()
     assert loss.item() > 0.0
+
+
+def test_single_input_alternating_tree_keeps_trainable_coefficient_layer():
+    tree = AlternatingTree(num_inputs=1, learn_coefficients=True, device=torch.device("cpu"))
+
+    assert len(tree.coeff_layers) == 1
+    assert sum(parameter.numel() for parameter in tree.parameters()) > 0
+
+    outputs = tree(torch.tensor([[3.0]]), aggregator=object())
+
+    torch.testing.assert_close(outputs, torch.tensor([[3.0]]))
+
+
+def test_binary_tree_logic_net_appends_constant_leaf_after_routing():
+    model = binaryTreeLogicNet(
+        input_size=2,
+        tree_layout="alternating",
+        aggregator=ArithmeticOperatorSet(),
+        use_permutation_layer=False,
+        use_constant_input=True,
+        device=torch.device("cpu"),
+    )
+
+    routed = model.input_to_leaf(torch.tensor([[2.0, 3.0]]))
+    assert routed.shape[1] == 2
+
+    outputs = model(torch.tensor([[2.0, 3.0]]))
+
+    assert model.num_leaves == 3
+    assert model.alternating_tree.num_inputs == 3
+    assert outputs.shape == (1, 1)

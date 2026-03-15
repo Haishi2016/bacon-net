@@ -1653,7 +1653,9 @@ def visualize_alternating_tree(
     """)
     
     num_inputs = model.num_inputs
-    if variable_names is None:
+    if hasattr(assembler_or_model, 'get_input_labels'):
+        variable_names = assembler_or_model.get_input_labels(variable_names)
+    elif variable_names is None:
         variable_names = [f"x{i}" for i in range(num_inputs)]
     
     node_id = 0
@@ -1898,7 +1900,9 @@ def print_alternating_tree_structure(assembler_or_model, aggregator=None, variab
         return
     
     num_inputs = model.num_inputs
-    if variable_names is None:
+    if hasattr(assembler_or_model, 'get_input_labels'):
+        variable_names = assembler_or_model.get_input_labels(variable_names)
+    elif variable_names is None:
         variable_names = [f"x{i}" for i in range(num_inputs)]
     
     print("\n" + "="*60)
