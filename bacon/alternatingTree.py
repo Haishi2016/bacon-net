@@ -26,26 +26,69 @@ from typing import Optional, List, Tuple
 class CoefficientLayer(nn.Module):
     """Layer that applies learnable scalar coefficients to inputs (1:1 mapping)."""
     
-    def __init__(self, width: int, device: torch.device, trainable: bool = True):
+    def __init__(
+        self,
+        width: int,
+        device: torch.device,
+        trainable: bool = True,
+        learn_exponents: bool = False,
+        min_exponent: float = 1.0,
+        max_exponent: float = 2.0,
+    ):
         super().__init__()
         self.width = width
         self.device = device
         self.trainable = trainable
+        self.learn_exponents = learn_exponents
+        self.min_exponent = float(min_exponent)
+        self.max_exponent = float(max_exponent)
+        if self.max_exponent < self.min_exponent:
+            raise ValueError("max_exponent must be greater than or equal to min_exponent")
         # Learnable coefficients in LOG space - initialized to 0 (exp(0) = 1)
         # Using log-space prevents coefficients from going negative
         self.log_coefficients = nn.Parameter(torch.zeros(width), requires_grad=trainable)
+        if self.learn_exponents:
+            initial_exponent_logit = torch.full((width,), -3.0)
+            self.exponent_logits = nn.Parameter(initial_exponent_logit, requires_grad=trainable)
+        else:
+            self.exponent_logits = None
+
+    def _get_exponents(self) -> torch.Tensor:
+        if not self.learn_exponents or self.exponent_logits is None:
+            return torch.ones(self.width, device=self.device)
+        exponent_span = self.max_exponent - self.min_exponent
+        if exponent_span <= 0:
+            return torch.full((self.width,), self.min_exponent, device=self.device)
+        return self.min_exponent + exponent_span * torch.sigmoid(self.exponent_logits)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply coefficients: output[i] = exp(log_coeff[i]) * x[i]"""
+        """Apply coefficients: output[i] = exp(log_coeff[i]) * x[i]^b[i]."""
         # x shape: (batch, width)
         log_coeff_clamped = torch.clamp(self.log_coefficients, -10, 10)
         coefficients = torch.exp(log_coeff_clamped)
-        result = x * coefficients.unsqueeze(0)
+        if self.learn_exponents and self.exponent_logits is not None:
+            exponents = self._get_exponents().unsqueeze(0)
+            powered = torch.sign(x) * torch.pow(torch.clamp(x.abs(), min=1e-6), exponents)
+            result = powered * coefficients.unsqueeze(0)
+        else:
+            result = x * coefficients.unsqueeze(0)
         return torch.clamp(result, -1e4, 1e4)
     
     def get_coefficients(self) -> torch.Tensor:
         log_coeff_clamped = torch.clamp(self.log_coefficients, -10, 10)
         return torch.exp(log_coeff_clamped).detach()
+
+    def get_exponents(self) -> torch.Tensor:
+        return self._get_exponents().detach()
+
+    def get_exponent_regularization_loss(self) -> torch.Tensor:
+        if not self.learn_exponents or self.exponent_logits is None:
+            return torch.tensor(0.0, device=self.device)
+        exponent_span = self.max_exponent - self.min_exponent
+        if exponent_span <= 0:
+            return torch.tensor(0.0, device=self.device)
+        normalized = (self._get_exponents() - self.min_exponent) / exponent_span
+        return (normalized * (1.0 - normalized)).mean()
 
 
 class FirstAggregationLayer(nn.Module):
@@ -270,6 +313,9 @@ class AlternatingTree(nn.Module):
         learn_coefficients: bool = True,
         learn_first_routing: bool = True,
         learn_subsequent_routing: bool = True,
+        learn_exponents: bool = False,
+        min_exponent: float = 1.0,
+        max_exponent: float = 2.0,
         max_egress: int = 1,
         use_straight_through: bool = True,  # NEW: control hard vs soft routing
         temperature: float = 3.0,
@@ -284,6 +330,9 @@ class AlternatingTree(nn.Module):
         self.learn_coefficients = learn_coefficients
         self.learn_first_routing = learn_first_routing
         self.learn_subsequent_routing = learn_subsequent_routing
+        self.learn_exponents = learn_exponents
+        self.min_exponent = min_exponent
+        self.max_exponent = max_exponent
         self.max_egress = max_egress
         self.use_straight_through = use_straight_through
         self.temperature = temperature
@@ -298,7 +347,16 @@ class AlternatingTree(nn.Module):
         layer_idx = 0
         while current_width > 1:
             # Coefficient layer
-            self.coeff_layers.append(CoefficientLayer(current_width, self.device, trainable=learn_coefficients))
+            self.coeff_layers.append(
+                CoefficientLayer(
+                    current_width,
+                    self.device,
+                    trainable=learn_coefficients,
+                    learn_exponents=learn_exponents,
+                    min_exponent=min_exponent,
+                    max_exponent=max_exponent,
+                )
+            )
             
             # Determine if this layer should learn routing
             if layer_idx == 0:
@@ -330,11 +388,12 @@ class AlternatingTree(nn.Module):
         first_str = "learned" if learn_first_routing else "fixed"
         subseq_str = "learned" if learn_subsequent_routing else "fixed"
         coeff_str = "learned" if learn_coefficients else "fixed"
+        exponent_str = f", exponent range: [{min_exponent:.2f}, {max_exponent:.2f}]" if learn_exponents else ""
         if learn_first_routing == learn_subsequent_routing:
             routing_str = f"all {first_str}"
         else:
             routing_str = f"first={first_str}, rest={subseq_str}"
-        logging.info(f"AlternatingTree: {num_inputs} inputs, coeffs: {coeff_str}, routing: {routing_str}, {len(self.agg_layers)} layers, {self.num_agg_nodes} total nodes")
+        logging.info(f"AlternatingTree: {num_inputs} inputs, coeffs: {coeff_str}{exponent_str}, routing: {routing_str}, {len(self.agg_layers)} layers, {self.num_agg_nodes} total nodes")
     
     def forward(self, x: torch.Tensor, aggregator=None) -> torch.Tensor:
         if aggregator is None:
@@ -385,6 +444,15 @@ class AlternatingTree(nn.Module):
             if isinstance(agg_layer, FirstAggregationLayer):
                 total_loss = total_loss + agg_layer.get_egress_loss()
         return total_loss
+
+    def get_exponent_regularization_loss(self) -> torch.Tensor:
+        exponent_losses = []
+        for coeff_layer in self.coeff_layers:
+            if hasattr(coeff_layer, 'get_exponent_regularization_loss'):
+                exponent_losses.append(coeff_layer.get_exponent_regularization_loss())
+        if not exponent_losses:
+            return torch.tensor(0.0, device=self.device)
+        return torch.stack(exponent_losses).mean()
     
     def harden(self) -> None:
         for agg_layer in self.agg_layers:
@@ -397,7 +465,11 @@ class AlternatingTree(nn.Module):
         
         for i, coeff in enumerate(self.coeff_layers):
             coeffs = coeff.get_coefficients()
-            coeff_str = ", ".join([f"{c:.3f}" for c in coeffs])
+            if getattr(coeff, 'learn_exponents', False):
+                exponents = coeff.get_exponents()
+                coeff_str = ", ".join([f"a={c:.3f}, b={e:.3f}" for c, e in zip(coeffs, exponents)])
+            else:
+                coeff_str = ", ".join([f"{c:.3f}" for c in coeffs])
             lines.append(f"  Coeff Layer {i}: [{coeff_str}]")
         
         for i, agg_layer in enumerate(self.agg_layers):

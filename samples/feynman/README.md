@@ -1,5 +1,32 @@
 ## Feynman symbolic regression samples
 
+This folder now supports two workflows:
+
+- `download_prepare.py` for preparing local Feynman-I tabular datasets with noise variants
+- `main.py` for running BACON directly against the official published formulas without pre-downloading the dataset tables
+
+### Running directly from formulas
+
+The formula-driven runner downloads the official metadata CSV on first use, generates synthetic train/validation/test samples from the published variable ranges, and evaluates BACON on the selected problems.
+
+Run one problem:
+
+```bash
+python samples/feynman/main.py --dataset feynman --problem I.13.4
+```
+
+Run the same problem with alternating `a*x^b`, where `b` is constrained to `[1, 2]`:
+
+```bash
+python samples/feynman/main.py --dataset feynman --problem I.13.4 --tree-layout alternating --alternating-axb
+```
+
+Run the full bonus set:
+
+```bash
+python samples/feynman/main.py --dataset bonus --all
+```
+
 This folder hosts locally prepared datasets based on the canonical Feynman-I collection (100 equations) that is widely used in recent symbolic regression papers and in SRBench. Each equation is stored in its own subfolder, and within it, multiple noise-level variants are provided with a standardized 75/25 train/test split for comparability.
 
 Folder layout (created by the script):

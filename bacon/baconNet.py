@@ -153,10 +153,14 @@ class baconNet(nn.Module):
                  # Alternating tree parameters
                  alternating_learn_first_routing: bool = True,
                  alternating_learn_subsequent_routing: bool = True,
+                 alternating_learn_exponents: bool = False,
+                 alternating_min_exponent: float = 1.0,
+                 alternating_max_exponent: float = 2.0,
                  alternating_max_egress: int = 1,
                  alternating_use_straight_through: bool = True,
                  loss_weight_alternating_balance: float = 50.0,
                  loss_weight_alternating_egress: float = 0.5,
+                 loss_weight_alternating_exponent_reg: float = 0.0,
                  use_permutation_layer: bool = True,
                  regression_loss_type: str = "mse"):
         super(baconNet, self).__init__()        
@@ -195,10 +199,14 @@ class baconNet(nn.Module):
         # Alternating tree loss weights
         self.alternating_learn_first_routing = alternating_learn_first_routing
         self.alternating_learn_subsequent_routing = alternating_learn_subsequent_routing
+        self.alternating_learn_exponents = alternating_learn_exponents
+        self.alternating_min_exponent = alternating_min_exponent
+        self.alternating_max_exponent = alternating_max_exponent
         self.alternating_max_egress = alternating_max_egress
         self.alternating_use_straight_through = alternating_use_straight_through
         self.loss_weight_alternating_balance = loss_weight_alternating_balance
         self.loss_weight_alternating_egress = loss_weight_alternating_egress
+        self.loss_weight_alternating_exponent_reg = loss_weight_alternating_exponent_reg
         
         # Full tree parameters (stored for reference)
         self.full_tree_depth = full_tree_depth
@@ -265,6 +273,9 @@ class baconNet(nn.Module):
                                             # Alternating tree parameters
                                             alternating_learn_first_routing=alternating_learn_first_routing,
                                             alternating_learn_subsequent_routing=alternating_learn_subsequent_routing,
+                                            alternating_learn_exponents=alternating_learn_exponents,
+                                            alternating_min_exponent=alternating_min_exponent,
+                                            alternating_max_exponent=alternating_max_exponent,
                                             alternating_max_egress=alternating_max_egress,
                                             alternating_use_straight_through=alternating_use_straight_through,
                                             alternating_balance_weight=loss_weight_alternating_balance,
@@ -429,6 +440,9 @@ class baconNet(nn.Module):
             # Alternating tree parameters
             alternating_learn_first_routing=cfg.alternating_learn_first_routing,
             alternating_learn_subsequent_routing=cfg.alternating_learn_subsequent_routing,
+            alternating_learn_exponents=cfg.alternating_learn_exponents,
+            alternating_min_exponent=cfg.alternating_min_exponent,
+            alternating_max_exponent=cfg.alternating_max_exponent,
             alternating_max_egress=cfg.alternating_max_egress,
             alternating_use_straight_through=cfg.alternating_use_straight_through,
             alternating_balance_weight=cfg.alternating_balance_weight,
@@ -847,6 +861,10 @@ class baconNet(nn.Module):
             if self.loss_weight_alternating_egress > 0:
                 egress_loss = self.assembler.get_alternating_tree_egress_loss()
                 loss = loss + self.loss_weight_alternating_egress * egress_loss
+
+            if self.loss_weight_alternating_exponent_reg > 0:
+                exponent_reg = self.assembler.get_alternating_tree_exponent_regularization_loss()
+                loss = loss + self.loss_weight_alternating_exponent_reg * exponent_reg
         
         # Training policy regularization (e.g., andness penalty)
         if self.training_policy is not None and hasattr(self.training_policy, 'penalty'):
