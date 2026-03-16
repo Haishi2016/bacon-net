@@ -21,6 +21,7 @@ import numpy as np
 import sympy
 import torch
 import torch.nn as nn
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -70,9 +71,31 @@ class BenchmarkResult:
     validation_r2: float
     test_r2: float
     operator_set: list[str]
+    selected_operators: list[str]
     alternating_axb: bool
     success: bool
+    model_complexity: float = 0.0
+    selection_score: float = 0.0
     error: str | None = None
+
+
+@dataclass(frozen=True)
+class SearchSettings:
+    use_operator_curriculum: bool
+    operator_curriculum_epochs: int
+    complexity_weight: float
+    use_candidate_ranking: bool
+    selection_r2_tolerance: float
+
+
+@dataclass
+class CandidateResult:
+    model: baconNet
+    validation_r2: float
+    test_r2: float
+    selected_operators: list[str]
+    model_complexity: float
+    selection_score: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -87,6 +110,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--samples-val", type=int, default=200)
     parser.add_argument("--samples-test", type=int, default=200)
     parser.add_argument("--operator-mode", choices=["auto", "basic", "expanded"], default="auto")
+    parser.add_argument("--pysr-mode", action="store_true", help="Use PySR-inspired search heuristics: staged operator curriculum plus complexity-aware candidate ranking")
+    parser.add_argument("--complexity-weight", type=float, default=0.0, help="Penalty weight used when ranking candidate models by validation R² minus complexity")
+    parser.add_argument("--operator-curriculum", action="store_true", help="Freeze operators to a safe default early in training, then unlock the full operator set")
+    parser.add_argument("--operator-curriculum-epochs", type=int, default=0, help="Number of warmup epochs for the staged operator curriculum; 0 picks a heuristic default when enabled")
     parser.add_argument("--alternating-axb", action="store_true", help="Enable alternating coefficient layers of the form a*x^b with b constrained to [1, 2]")
     parser.add_argument("--axb-reg-weight", type=float, default=0.0, help="Optional regularization weight that encourages b to snap toward the allowed endpoints")
     parser.add_argument("--use-constant-input", action="store_true", help="Append a learned constant leaf with value 1 after routing/transforms so the tree can form offsets like 1+x")
@@ -258,6 +285,77 @@ def infer_operator_names(formula: str, mode: str, alternating_axb: bool, tree_la
     return deduped or ["add", "identity"]
 
 
+def resolve_search_settings(args: argparse.Namespace) -> SearchSettings:
+    use_operator_curriculum = bool(args.operator_curriculum or args.pysr_mode)
+    operator_curriculum_epochs = int(args.operator_curriculum_epochs)
+    if use_operator_curriculum and operator_curriculum_epochs <= 0:
+        operator_curriculum_epochs = min(400, max(100, args.epochs // 5))
+
+    complexity_weight = float(args.complexity_weight)
+    if args.pysr_mode and complexity_weight <= 0.0:
+        complexity_weight = 0.001
+
+    use_candidate_ranking = bool(args.pysr_mode or complexity_weight > 0.0)
+    return SearchSettings(
+        use_operator_curriculum=use_operator_curriculum,
+        operator_curriculum_epochs=operator_curriculum_epochs,
+        complexity_weight=complexity_weight,
+        use_candidate_ranking=use_candidate_ranking,
+        selection_r2_tolerance=0.0025 if args.pysr_mode else 0.0,
+    )
+
+
+def get_selected_operator_names(model: baconNet) -> list[str]:
+    aggregator = model.assembler.aggregator
+    if not hasattr(aggregator, "op_logits_per_node") or aggregator.op_logits_per_node is None:
+        return []
+
+    selected: list[str] = []
+    for logits in aggregator.op_logits_per_node:
+        probs = torch.softmax(logits, dim=0)
+        selected.append(aggregator.op_names[int(torch.argmax(probs).item())])
+    return selected
+
+
+def compute_operator_complexity(selected_operators: list[str]) -> float:
+    operator_weights = {
+        "identity": 0.0,
+        "add": 0.5,
+        "sub": 0.75,
+        "mul": 1.5,
+        "div": 2.5,
+    }
+    return float(sum(operator_weights.get(name, 1.5) for name in selected_operators))
+
+
+def compute_model_complexity(model: baconNet) -> float:
+    complexity = compute_operator_complexity(get_selected_operator_names(model))
+
+    if getattr(model.assembler, "use_constant_input", False):
+        complexity += 1.0
+
+    alternating_tree = getattr(model.assembler, "alternating_tree", None)
+    if alternating_tree is not None:
+        for coeff_layer in alternating_tree.coeff_layers:
+            if getattr(coeff_layer, "learn_exponents", False):
+                exponents = coeff_layer.get_exponents().detach().cpu()
+                complexity += float(torch.abs(exponents - 1.0).sum().item() * 0.5)
+
+    return complexity
+
+
+def compute_selection_score(validation_r2: float, model_complexity: float, complexity_weight: float) -> float:
+    return float(validation_r2 - complexity_weight * model_complexity)
+
+
+def should_use_operator_curriculum(num_inputs: int, operator_names: list[str], search_settings: SearchSettings) -> bool:
+    if not search_settings.use_operator_curriculum:
+        return False
+    if num_inputs < 3:
+        return False
+    return "sub" in operator_names
+
+
 def sample_problem_data(
     problem: ProblemSpec,
     train_size: int,
@@ -393,6 +491,103 @@ def compute_r2(model: baconNet, x: torch.Tensor, y: torch.Tensor) -> float:
         return float((1 - ss_res / (ss_tot + 1e-8)).item())
 
 
+def harden_trained_model(model: baconNet, tree_layout: str, variable_names: list[str]) -> list[str]:
+    if tree_layout == "alternating" and model.assembler.alternating_tree is not None:
+        model.assembler.harden_alternating_tree()
+        log_alternating_exponents(model, variable_names)
+    elif tree_layout == "full" and model.assembler.fully_connected_tree is not None:
+        model.assembler.harden_full_tree(mode="auto")
+
+    if hasattr(model.assembler.aggregator, "harden_operators"):
+        model.assembler.aggregator.harden_operators()
+
+    return get_selected_operator_names(model)
+
+
+def train_candidate(
+    problem: ProblemSpec,
+    args: argparse.Namespace,
+    device: torch.device,
+    x_train: torch.Tensor,
+    y_train: torch.Tensor,
+    x_val: torch.Tensor,
+    y_val: torch.Tensor,
+    x_test: torch.Tensor,
+    y_test: torch.Tensor,
+    operator_names: list[str],
+    search_settings: SearchSettings,
+    attempt_index: int,
+) -> CandidateResult:
+    attempt_seed = args.seed + attempt_index
+    torch.manual_seed(attempt_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(attempt_seed)
+
+    model = create_regression_model(
+        num_inputs=len(problem.variable_names),
+        operator_names=operator_names,
+        tree_layout=args.tree_layout,
+        alternating_axb=args.alternating_axb,
+        axb_reg_weight=args.axb_reg_weight,
+        use_constant_input=args.use_constant_input,
+        device=device,
+    )
+
+    use_operator_curriculum = should_use_operator_curriculum(
+        num_inputs=len(problem.variable_names),
+        operator_names=operator_names,
+        search_settings=search_settings,
+    )
+
+    best_model, best_val_r2 = train_bacon_model(
+        model=model,
+        X_train=x_train,
+        Y_train=y_train,
+        X_test=x_val,
+        Y_test=y_val,
+        attempts=1,
+        max_epochs=args.epochs,
+        acceptance_threshold=1.0,
+        task_type="regression",
+        use_hierarchical_permutation=False,
+        operator_initial_tau=3.0,
+        operator_final_tau=0.1,
+        operator_freeze_min_confidence=0.85,
+        operator_freeze_epochs=search_settings.operator_curriculum_epochs if use_operator_curriculum else 0,
+        frozen_training_epochs=min(800, max(200, args.epochs // 2)),
+        save_model=False,
+        save_path=None,
+        full_tree_egress_warmup_epochs=min(150, max(50, args.epochs // 12)),
+        full_tree_egress_ramp_epochs=min(300, max(100, args.epochs // 6)),
+        full_tree_egress_start_metric=0.99,
+        full_tree_egress_drop_tolerance=0.02,
+        full_tree_egress_adapt_rate=0.2,
+    )
+
+    selected_operators = harden_trained_model(best_model, args.tree_layout, problem.variable_names)
+    test_r2 = compute_r2(best_model, x_test, y_test)
+    model_complexity = compute_model_complexity(best_model)
+    selection_score = compute_selection_score(best_val_r2, model_complexity, search_settings.complexity_weight)
+
+    return CandidateResult(
+        model=best_model,
+        validation_r2=float(best_val_r2),
+        test_r2=float(test_r2),
+        selected_operators=selected_operators,
+        model_complexity=float(model_complexity),
+        selection_score=float(selection_score),
+    )
+
+
+def choose_best_candidate(candidates: list[CandidateResult], search_settings: SearchSettings) -> CandidateResult:
+    best_validation_r2 = max(item.validation_r2 for item in candidates)
+    near_best = [
+        item for item in candidates
+        if item.validation_r2 >= best_validation_r2 - search_settings.selection_r2_tolerance
+    ]
+    return max(near_best, key=lambda item: (item.selection_score, item.validation_r2, -item.model_complexity))
+
+
 def log_alternating_exponents(model: baconNet, variable_names: list[str]) -> None:
     alternating_tree = getattr(model.assembler, "alternating_tree", None)
     if alternating_tree is None:
@@ -412,12 +607,19 @@ def log_alternating_exponents(model: baconNet, variable_names: list[str]) -> Non
 
 def run_problem(problem: ProblemSpec, args: argparse.Namespace, device: torch.device) -> BenchmarkResult:
     operator_names = infer_operator_names(problem.formula, args.operator_mode, args.alternating_axb, args.tree_layout)
+    search_settings = resolve_search_settings(args)
     logging.info(f"\n🧪 {problem.problem_id}: {problem.name}")
     logging.info(f"   Formula: {problem.formula}")
     logging.info(f"   Operators: {operator_names}")
     logging.info(f"   Layout: {args.tree_layout}")
     logging.info(f"   Alternating a*x^b: {'on' if args.alternating_axb else 'off'}")
     logging.info(f"   Constant leaf: {'on' if args.use_constant_input else 'off'}")
+    if should_use_operator_curriculum(len(problem.variable_names), operator_names, search_settings):
+        logging.info(f"   Operator curriculum: on ({search_settings.operator_curriculum_epochs} warmup epochs)")
+    elif search_settings.use_operator_curriculum:
+        logging.info("   Operator curriculum: skipped for this problem")
+    if search_settings.complexity_weight > 0.0:
+        logging.info(f"   Complexity weight: {search_settings.complexity_weight:.4f}")
 
     x_train, y_train, x_val, y_val, x_test, y_test = sample_problem_data(
         problem,
@@ -428,53 +630,69 @@ def run_problem(problem: ProblemSpec, args: argparse.Namespace, device: torch.de
         device=device,
     )
 
-    model = create_regression_model(
-        num_inputs=len(problem.variable_names),
-        operator_names=operator_names,
-        tree_layout=args.tree_layout,
-        alternating_axb=args.alternating_axb,
-        axb_reg_weight=args.axb_reg_weight,
-        use_constant_input=args.use_constant_input,
-        device=device,
-    )
+    if search_settings.use_candidate_ranking:
+        candidates: list[CandidateResult] = []
+        for attempt_index in range(args.attempts):
+            candidate = train_candidate(
+                problem=problem,
+                args=args,
+                device=device,
+                x_train=x_train,
+                y_train=y_train,
+                x_val=x_val,
+                y_val=y_val,
+                x_test=x_test,
+                y_test=y_test,
+                operator_names=operator_names,
+                search_settings=search_settings,
+                attempt_index=attempt_index,
+            )
+            logging.info(
+                "   Candidate %d/%d: val=%.4f test=%.4f complexity=%.2f score=%.4f ops=%s",
+                attempt_index + 1,
+                args.attempts,
+                candidate.validation_r2,
+                candidate.test_r2,
+                candidate.model_complexity,
+                candidate.selection_score,
+                candidate.selected_operators,
+            )
+            candidates.append(candidate)
+        best_candidate = choose_best_candidate(candidates, search_settings)
+        best_model = best_candidate.model
+        best_val_r2 = best_candidate.validation_r2
+        test_r2 = best_candidate.test_r2
+        selected_operators = best_candidate.selected_operators
+        model_complexity = best_candidate.model_complexity
+        selection_score = best_candidate.selection_score
+    else:
+        best_candidate = train_candidate(
+            problem=problem,
+            args=SimpleNamespace(**{**vars(args), "attempts": 1}),
+            device=device,
+            x_train=x_train,
+            y_train=y_train,
+            x_val=x_val,
+            y_val=y_val,
+            x_test=x_test,
+            y_test=y_test,
+            operator_names=operator_names,
+            search_settings=search_settings,
+            attempt_index=0,
+        )
+        best_model = best_candidate.model
+        best_val_r2 = best_candidate.validation_r2
+        test_r2 = best_candidate.test_r2
+        selected_operators = best_candidate.selected_operators
+        model_complexity = best_candidate.model_complexity
+        selection_score = best_candidate.selection_score
 
-    best_model, best_val_r2 = train_bacon_model(
-        model=model,
-        X_train=x_train,
-        Y_train=y_train,
-        X_test=x_val,
-        Y_test=y_val,
-        attempts=args.attempts,
-        max_epochs=args.epochs,
-        acceptance_threshold=1.0,
-        task_type="regression",
-        use_hierarchical_permutation=False,
-        operator_initial_tau=3.0,
-        operator_final_tau=0.1,
-        operator_freeze_min_confidence=0.85,
-        operator_freeze_epochs=0,
-        frozen_training_epochs=min(800, max(200, args.epochs // 2)),
-        save_model=False,
-        save_path=None,
-        full_tree_egress_warmup_epochs=min(150, max(50, args.epochs // 12)),
-        full_tree_egress_ramp_epochs=min(300, max(100, args.epochs // 6)),
-        full_tree_egress_start_metric=0.99,
-        full_tree_egress_drop_tolerance=0.02,
-        full_tree_egress_adapt_rate=0.2,
-    )
-
-    if args.tree_layout == "alternating" and best_model.assembler.alternating_tree is not None:
-        best_model.assembler.harden_alternating_tree()
-        log_alternating_exponents(best_model, problem.variable_names)
-    elif args.tree_layout == "full" and best_model.assembler.fully_connected_tree is not None:
-        best_model.assembler.harden_full_tree(mode="auto")
-    if hasattr(best_model.assembler.aggregator, "harden_operators"):
-        best_model.assembler.aggregator.harden_operators()
-
-    test_r2 = compute_r2(best_model, x_test, y_test)
     success = test_r2 >= args.success_threshold
     logging.info(f"   Validation R²: {best_val_r2:.4f}")
     logging.info(f"   Test R²:       {test_r2:.4f}")
+    logging.info(f"   Complexity:    {model_complexity:.2f}")
+    logging.info(f"   Select score:  {selection_score:.4f}")
+    logging.info(f"   Chosen ops:    {selected_operators}")
     logging.info(f"   Success:       {'yes' if success else 'no'}")
 
     return BenchmarkResult(
@@ -483,7 +701,10 @@ def run_problem(problem: ProblemSpec, args: argparse.Namespace, device: torch.de
         validation_r2=float(best_val_r2),
         test_r2=float(test_r2),
         operator_set=operator_names,
+        selected_operators=selected_operators,
         alternating_axb=args.alternating_axb,
+        model_complexity=float(model_complexity),
+        selection_score=float(selection_score),
         success=success,
     )
 
@@ -512,7 +733,10 @@ def main() -> None:
                     validation_r2=float("nan"),
                     test_r2=float("nan"),
                     operator_set=[],
+                    selected_operators=[],
                     alternating_axb=args.alternating_axb,
+                    model_complexity=float("nan"),
+                    selection_score=float("nan"),
                     success=False,
                     error=str(exc),
                 )
@@ -535,7 +759,10 @@ def main() -> None:
                 logging.info(f"   FAIL {item.problem_id}: {item.error}")
             else:
                 status = "PASS" if item.success else "MISS"
-                logging.info(f"   {status:4s} {item.problem_id:12s} val={item.validation_r2:.4f} test={item.test_r2:.4f}")
+                logging.info(
+                    f"   {status:4s} {item.problem_id:12s} val={item.validation_r2:.4f} test={item.test_r2:.4f} "
+                    f"complexity={item.model_complexity:.2f} score={item.selection_score:.4f}"
+                )
 
     if args.output_json is not None:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)

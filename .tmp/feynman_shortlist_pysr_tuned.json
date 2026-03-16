@@ -1,0 +1,92 @@
+{
+  "dataset": "feynman",
+  "success_threshold": 0.999,
+  "results": [
+    {
+      "problem_id": "I.10.7",
+      "name": "I.10.7",
+      "validation_r2": 0.9869821667671204,
+      "test_r2": 0.9869728088378906,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "selected_operators": [
+        "sub",
+        "sub",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "model_complexity": 1.5,
+      "selection_score": 0.9854821667671204,
+      "error": null
+    },
+    {
+      "problem_id": "I.16.6",
+      "name": "I.16.6",
+      "validation_r2": 0.8449884057044983,
+      "test_r2": 0.9071049690246582,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "selected_operators": [
+        "identity",
+        "identity",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "model_complexity": 0.0,
+      "selection_score": 0.8449884057044983,
+      "error": null
+    },
+    {
+      "problem_id": "II.13.23",
+      "name": "II.13.23",
+      "validation_r2": 0.9869821667671204,
+      "test_r2": 0.9869728088378906,
+      "operator_set": [
+        "sub",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "selected_operators": [
+        "sub",
+        "sub",
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "model_complexity": 1.5,
+      "selection_score": 0.9854821667671204,
+      "error": null
+    },
+    {
+      "problem_id": "II.38.14",
+      "name": "II.38.14",
+      "validation_r2": 0.5651448965072632,
+      "test_r2": 0.53579181432724,
+      "operator_set": [
+        "add",
+        "mul",
+        "div",
+        "identity"
+      ],
+      "selected_operators": [
+        "identity"
+      ],
+      "alternating_axb": false,
+      "success": false,
+      "model_complexity": 0.0,
+      "selection_score": 0.5651448965072632,
+      "error": null
+    }
+  ]
+}
