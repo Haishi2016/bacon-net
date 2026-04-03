@@ -28,13 +28,14 @@ trans = [
     NegationTransformation(1)
 ]
 
-# Create model
+# Create model with alternating tree and generic GL aggregator
 bacon = create_bacon_model(
     input_size=num_features,
-    aggregator='lsp.half_weight',
+    aggregator='gl.generic',
     weight_mode='trainable',
     transformations=trans,
     use_transformation_layer=True,
+    tree_layout='alternating',
     weight_normalization='softmax',
     use_class_weighting=True,
     weight_penalty_strength=1e-4,

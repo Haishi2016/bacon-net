@@ -35,9 +35,11 @@ def main():
     # Register subcommands — add new ones here.
     from bacon.tools.distill import add_distill_parser
     from bacon.tools.demo import add_demo_parser
+    from bacon.tools.viz import add_viz_parser
 
     add_distill_parser(subparsers)
     add_demo_parser(subparsers)
+    add_viz_parser(subparsers)
 
     args = parser.parse_args()
     if args.command is None:
