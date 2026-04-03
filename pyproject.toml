@@ -55,7 +55,7 @@ include = ["bacon", "README.md", "LICENSE"]
 exclude = ["docs/build", "docs/build/**"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["bacon"]
+packages = ["bacon", "bacon.demos"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
