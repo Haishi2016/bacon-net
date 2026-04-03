@@ -67,13 +67,19 @@ Examples:
     )
     
     parser.add_argument(
+        '--force', '-f',
+        action='store_true',
+        help='Overwrite output file without prompting',
+    )
+
+    parser.add_argument(
         '--verbose',
         '-v',
         action='store_true',
         help='Enable verbose output'
     )
     
-    parser.set_defaults(func=run_distill)
+    parser.set_defaults(func=run_distill, command='distill')
     return parser
 
 
@@ -85,7 +91,7 @@ def run_distill(args):
         return 1
     
     # Check if output file already exists
-    if os.path.exists(args.output_file):
+    if os.path.exists(args.output_file) and not args.force:
         response = input(f"⚠️  Output file '{args.output_file}' already exists. Overwrite? (y/N): ")
         if response.lower() != 'y':
             print("Aborted.")
