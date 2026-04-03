@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator, LspSoftmaxAggregator
+from bacon.aggregators.lsp.generic_gl import GenericGLAggregator
 from bacon.aggregators.bool import MinMaxAggregator
 from bacon.aggregators.math import OperatorSetAggregator, BoolOperatorSet, BoolOperatorSetWithIdentity, ArithmeticOperatorSet
 
@@ -14,6 +15,7 @@ _aggregator_registry = {
     "lsp.full_weight": FullWeightAggregator,
     "lsp.half_weight": HalfWeightAggregator,
     "lsp.softmax": LspSoftmaxAggregator,
+    "gl.generic": GenericGLAggregator,
     "bool.min_max": MinMaxAggregator,
     "math.operator_set.logic": BoolOperatorSet,
     "math.operator_set.logic_identity": BoolOperatorSetWithIdentity,
