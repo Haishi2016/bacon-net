@@ -1,3 +1,4 @@
+import copy
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
@@ -6,6 +7,7 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Optional
+from bacon.aggregators.base import AggregatorBase
 from bacon.aggregators.lsp import FullWeightAggregator, HalfWeightAggregator, LspSoftmaxAggregator
 from bacon.aggregators.lsp.generic_gl import GenericGLAggregator
 from bacon.aggregators.bool import MinMaxAggregator
@@ -167,10 +169,15 @@ class baconNet(nn.Module):
                  use_permutation_layer: bool = True,
                  regression_loss_type: str = "mse"):
         super(baconNet, self).__init__()        
-        if aggregator not in _aggregator_registry:
-            raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
-        aggregator_class = _aggregator_registry[aggregator]
-        aggregator = aggregator_class()
+        if isinstance(aggregator, str):
+            if aggregator not in _aggregator_registry:
+                raise ValueError(f"Unknown aggregator: {aggregator}. Available options: {list(_aggregator_registry.keys())}")
+            aggregator_class = _aggregator_registry[aggregator]
+            aggregator = aggregator_class()
+        elif not isinstance(aggregator, AggregatorBase):
+            raise TypeError(f"aggregator must be a string name or an AggregatorBase instance, got {type(aggregator).__name__}")
+        # Keep a pristine copy for re-creating fresh aggregators across attempts
+        self._original_aggregator = copy.deepcopy(aggregator)
         self.is_frozen = is_frozen
         self.early_stop_threshold_large_inputs = early_stop_threshold_large_inputs
         self.permutation_initial_temperature = permutation_initial_temperature
@@ -407,6 +414,13 @@ class baconNet(nn.Module):
         """
         # Re-initialize assembler
         cfg = self.assembler
+
+        # Create a fresh aggregator instance so NaN parameters from a failed
+        # attempt don't poison subsequent attempts.
+        fresh_aggregator = copy.deepcopy(self._original_aggregator)
+        if hasattr(fresh_aggregator, 'to') and cfg.device is not None:
+            fresh_aggregator = fresh_aggregator.to(cfg.device)
+
         self.assembler = binaryTreeLogicNet(
             cfg.original_input_size,
             weight_mode=cfg.weight_mode,
@@ -423,7 +437,7 @@ class baconNet(nn.Module):
             is_frozen=False,
             tree_layout=cfg.tree_layout,
             weight_penalty_strength=cfg.weight_penalty_strength,
-            aggregator=cfg.aggregator,
+            aggregator=fresh_aggregator,
             early_stop_patience=cfg.early_stop_patience,
             early_stop_min_delta=cfg.early_stop_min_delta,
             early_stop_threshold=cfg.early_stop_threshold,
@@ -1333,6 +1347,7 @@ class baconNet(nn.Module):
 
             torch.manual_seed(torch.initial_seed() + attempt)
 
+            setup = None
             try:
                 # Setup training for this attempt (assembler, optimizer, criterion, etc.)
                 setup = self._setup_training_attempt(
@@ -1707,7 +1722,21 @@ class baconNet(nn.Module):
                         loss.backward()
                         # Aggressive gradient clipping to prevent explosion from mul/div operators
                         torch.nn.utils.clip_grad_norm_(self.assembler.parameters(), max_norm=0.5)
-                        setup.optimizer.step()
+                        # Guard against NaN gradients corrupting parameters
+                        nan_grad = False
+                        for p in self.assembler.parameters():
+                            if p.grad is not None and (torch.isnan(p.grad).any() or torch.isinf(p.grad).any()):
+                                nan_grad = True
+                                break
+                        if nan_grad:
+                            setup.optimizer.zero_grad(set_to_none=True)
+                            setup.nan_steps = getattr(setup, 'nan_steps', 0) + 1
+                            if setup.nan_steps >= 5:
+                                logging.warning(f"   ⚠️  {setup.nan_steps} consecutive NaN gradient steps, aborting attempt")
+                                break
+                        else:
+                            setup.nan_steps = 0
+                            setup.optimizer.step()
                                         
                     # Check if transformation layer has converged
                     # Only check transformation convergence when transformation temperature is low
@@ -1935,9 +1964,11 @@ class baconNet(nn.Module):
                         
             except RuntimeError as e:
                 logging.error(f"🔥 Attempt {attempt + 1} failed with error: {e}")
+            except Exception as e:
+                logging.error(f"🔥 Attempt {attempt + 1} failed with error: {e}")
             finally:
                 # Restore original sparsity weight if it was overridden
-                if setup.original_sparsity_weight is not None:
+                if setup is not None and setup.original_sparsity_weight is not None:
                     self.loss_weight_perm_sparsity = setup.original_sparsity_weight
                 if hasattr(self, '_dynamic_full_tree_egress_weight'):
                     delattr(self, '_dynamic_full_tree_egress_weight')

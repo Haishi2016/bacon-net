@@ -6,6 +6,7 @@ sys.path.insert(0, '../')
 import torch
 import logging
 from bacon.transformationLayer import IdentityTransformation, NegationTransformation
+from bacon.aggregators.lsp.generic_gl import GenericGLAggregator
 from dataset import prepare_data, balance_data
 from common import create_bacon_model, train_bacon_model, run_standard_analysis
 
@@ -29,9 +30,18 @@ trans = [
 ]
 
 # Create model with alternating tree and generic GL aggregator
+aggregator = GenericGLAggregator(
+    anchors=('min', 'harmonic', 'geometric', 'mean', 'quadratic', 'max'),
+    anchor_interpolation=5,
+    #anchors=('min', 'mean', 'max'),
+    weight_mode='static',
+    use_transform=False,
+    tau=0.5,
+)
+
 bacon = create_bacon_model(
     input_size=num_features,
-    aggregator='gl.generic',
+    aggregator=aggregator,
     weight_mode='trainable',
     transformations=trans,
     use_transformation_layer=True,
@@ -39,6 +49,7 @@ bacon = create_bacon_model(
     weight_normalization='softmax',
     use_class_weighting=True,
     weight_penalty_strength=1e-4,
+    use_permutation_layer=False
 )
 
 # Train model
@@ -46,15 +57,18 @@ train_bacon_model(
     bacon,
     X_train, Y_train, X_test, Y_test,
     attempts=10,
-    acceptance_threshold=0.7,
-     binary_threshold=0.337
+    acceptance_threshold=1.0,
+     binary_threshold=0.5,
+     use_hierarchical_permutation=False
 )
 
 # Run standard analysis
 run_standard_analysis(
     bacon,
-    X_train, Y_train, X_test, Y_test,
+    X_train, Y_train,
+    X_test, Y_test,
+    X_test, Y_test,
     feature_names,
     title_prefix="AIDS Clinical Trials",
-    pruning_threshold=0.337
+    pruning_threshold=0.5
 )

@@ -48,13 +48,19 @@ def _n_min(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
 def _n_harmonic_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
     """Harmonic mean: N / sum(1/x_i).  Strong quasi-conjunction."""
     N = u.size(0)
-    return N / (1.0 / (u + eps)).sum(dim=0)
+    # Clamp inputs away from zero to prevent 1/x explosion and gradient blow-up.
+    u_safe = u.clamp(min=eps)
+    return N / (1.0 / u_safe).sum(dim=0)
 
 
 def _n_geometric_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
-    """Geometric mean: (prod x_i)^(1/N).  Medium quasi-conjunction."""
-    N = u.size(0)
-    return (u + eps).prod(dim=0).pow(1.0 / N)
+    """Geometric mean: exp(mean(log(x_i))).  Medium quasi-conjunction.
+
+    Uses log-space computation to avoid product underflow and provide
+    numerically stable gradients.
+    """
+    u_safe = u.clamp(min=eps)
+    return torch.exp(u_safe.log().mean(dim=0))
 
 
 def _n_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
@@ -64,7 +70,7 @@ def _n_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
 
 def _n_quadratic_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
     """Quadratic (RMS) mean: sqrt(mean(x_i^2)).  Medium quasi-disjunction."""
-    return (u ** 2).mean(dim=0).sqrt()
+    return (u ** 2).mean(dim=0).clamp(min=eps * eps).sqrt()
 
 
 def _n_max(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
@@ -116,6 +122,54 @@ ANCHOR_ANDNESS = {
 _PSI_DIM = 5
 
 
+# ---------------------------------------------------------------------------
+# Anchor interpolation helper
+# ---------------------------------------------------------------------------
+
+def _make_interpolated_fn(fn_a, fn_b, t: float):
+    """Create a function that linearly interpolates between two anchors.
+
+    Returns ``(1-t)*fn_a(u) + t*fn_b(u)``.
+    """
+    def _interp(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
+        return (1.0 - t) * fn_a(u, eps) + t * fn_b(u, eps)
+    return _interp
+
+
+def _expand_anchors_with_interpolation(
+    names: list[str],
+    fns: list,
+    andness_vals: list[float],
+    n_interp: int,
+) -> tuple[list[str], list, list[float]]:
+    """Insert *n_interp* linearly interpolated anchors between each pair.
+
+    For example, with anchors [min, harmonic, geometric] and n_interp=1::
+
+        min, (min+harmonic)/2, harmonic, (harmonic+geometric)/2, geometric
+
+    Returns expanded (names, fns, andness_vals).
+    """
+    exp_names = [names[0]]
+    exp_fns = [fns[0]]
+    exp_andness = [andness_vals[0]]
+
+    for i in range(len(names) - 1):
+        for j in range(1, n_interp + 1):
+            t = j / (n_interp + 1)
+            interp_name = f"{names[i]}~{names[i+1]}@{t:.2f}"
+            interp_fn = _make_interpolated_fn(fns[i], fns[i+1], t)
+            interp_andness = (1.0 - t) * andness_vals[i] + t * andness_vals[i+1]
+            exp_names.append(interp_name)
+            exp_fns.append(interp_fn)
+            exp_andness.append(interp_andness)
+        exp_names.append(names[i+1])
+        exp_fns.append(fns[i+1])
+        exp_andness.append(andness_vals[i+1])
+
+    return exp_names, exp_fns, exp_andness
+
+
 class GenericGLAggregator(AggregatorBase, nn.Module):
     """Generic Graded Logic aggregator — N-ary canonical form.
 
@@ -141,6 +195,12 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         ``('min', 'harmonic', 'geometric', 'mean', 'quadratic', 'max')``.
         Additional choices: ``'product'`` (algebraic t-norm, andness ≈ 1.08),
         ``'prob_sum'`` (probabilistic t-conorm, andness ≈ −0.08).
+    anchor_interpolation : int
+        Number of linearly interpolated anchors to insert between each
+        consecutive pair.  For example, ``anchor_interpolation=1`` with the
+        default 6 anchors produces 6 + 5 = 11 total anchors; the 5 extras
+        sit at the midpoints of each adjacent pair.  ``0`` (default) adds
+        no interpolated anchors.
     weight_mode : str
         * ``'static'``  — fixed learnable logits (MAT).
         * ``'conditional'``  — weights from context *c*.
@@ -164,6 +224,7 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         self,
         anchors: Sequence[str] = ('min', 'harmonic', 'geometric',
                                    'mean', 'quadratic', 'max'),
+        anchor_interpolation: int = 0,
         weight_mode: str = 'static',
         use_transform: bool = False,
         context_dim: int = 0,
@@ -181,9 +242,24 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
                     f"Unknown anchor '{name}'. "
                     f"Choose from: {list(ANCHOR_FUNCTIONS.keys())}"
                 )
-        self._anchor_names = list(anchors)
-        self._anchor_fns = [ANCHOR_FUNCTIONS[n] for n in anchors]
-        self.k = len(anchors)
+
+        # Build the (possibly expanded) anchor list with interpolations
+        base_names = list(anchors)
+        base_fns = [ANCHOR_FUNCTIONS[n] for n in base_names]
+        base_andness = [ANCHOR_ANDNESS.get(n, 0.5) for n in base_names]
+
+        if anchor_interpolation > 0 and len(base_names) >= 2:
+            names, fns, andness_vals = _expand_anchors_with_interpolation(
+                base_names, base_fns, base_andness, anchor_interpolation
+            )
+        else:
+            names, fns, andness_vals = base_names, base_fns, base_andness
+
+        self._anchor_names = names
+        self._anchor_fns = fns
+        self._anchor_andness = andness_vals
+        self._anchor_interpolation = anchor_interpolation
+        self.k = len(names)
 
         self.weight_mode = weight_mode
         self.use_transform = use_transform
@@ -253,6 +329,10 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
     @property
     def tau(self) -> float:
         return self._tau
+
+    @tau.setter
+    def tau(self, value: float):
+        self._tau = max(value, 1e-4)
 
     def set_tau(self, new_tau: float):
         self._tau = max(new_tau, 1e-4)
@@ -461,7 +541,7 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         c: Optional[torch.Tensor] = None,
     ) -> float:
         w = self.get_weights(u, c)
-        a = np.array([ANCHOR_ANDNESS.get(n, 0.5) for n in self._anchor_names])
+        a = np.array(self._anchor_andness)
         return float(np.dot(w, a))
 
     def entropy(
