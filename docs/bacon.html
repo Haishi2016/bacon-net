@@ -205,13 +205,20 @@
 <li class="toctree-l1"><a class="reference internal" href="dev-guide/dev-guide.html">Developer Guide</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">BACON Module</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="aggregators/index.html">Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="aggregators/base.html">Aggregator Base Interfaces</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="aggregators/lsp/index.html">LSP Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of LSP Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/full_weight.html">Full-Weight Aggregator</a></li>
 <li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/half_weight.html">Half-Weight Aggregator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/softmax_lsp.html">LSP Softmax Aggregator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/generic_gl.html">Generic GL Aggregator</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="aggregators/boolean/index.html">Boolean Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Boolean Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="aggregators/boolean/min_max.html">Min-Max Aggregator</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="aggregators/math/index.html">Math Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of Math Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="aggregators/math/operator_set.html">Operator-Set Aggregators</a></li>
 </ul>
 </li>
 </ul>
@@ -261,7 +268,7 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.FullWeightAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.</span></span><span class="sig-name descname"><span class="pre">FullWeightAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.FullWeightAggregator" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AggregatorBase</span></code></p>
+<dd><p>Bases: <a class="reference internal" href="aggregators/base.html#bacon.aggregators.base.AggregatorBase" title="bacon.aggregators.base.AggregatorBase"><code class="xref py py-class docutils literal notranslate"><span class="pre">AggregatorBase</span></code></a></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="bacon.FullWeightAggregator.aggregate_float">
 <span class="sig-name descname"><span class="pre">aggregate_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#bacon.FullWeightAggregator.aggregate_float" title="Link to this definition">¶</a></dt>
@@ -296,7 +303,7 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.HalfWeightAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.</span></span><span class="sig-name descname"><span class="pre">HalfWeightAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.HalfWeightAggregator" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AggregatorBase</span></code></p>
+<dd><p>Bases: <a class="reference internal" href="aggregators/base.html#bacon.aggregators.base.AggregatorBase" title="bacon.aggregators.base.AggregatorBase"><code class="xref py py-class docutils literal notranslate"><span class="pre">AggregatorBase</span></code></a></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="bacon.HalfWeightAggregator.aggregate_float">
 <span class="sig-name descname"><span class="pre">aggregate_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#bacon.HalfWeightAggregator.aggregate_float" title="Link to this definition">¶</a></dt>
@@ -319,7 +326,7 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.MinMaxAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.</span></span><span class="sig-name descname"><span class="pre">MinMaxAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.MinMaxAggregator" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AggregatorBase</span></code></p>
+<dd><p>Bases: <a class="reference internal" href="aggregators/base.html#bacon.aggregators.base.AggregatorBase" title="bacon.aggregators.base.AggregatorBase"><code class="xref py py-class docutils literal notranslate"><span class="pre">AggregatorBase</span></code></a></p>
 <p>Aggregate a sequence of inputs with min/max interpolation.</p>
 <p>The aggregator computes:</p>
 <ul class="simple">

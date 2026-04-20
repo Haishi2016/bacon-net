@@ -270,15 +270,13 @@
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.aggregators.math.operator_set.</span></span><span class="sig-name descname"><span class="pre">ArithmeticOperatorSet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">op_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_gumbel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_harden_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_clamp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10000.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.math.operator_set.ArithmeticOperatorSet" title="Link to this definition">¶</a></dt>
 <dd><p>Arithmetic operator set aggregator with proper weighted operations.</p>
 <p>Default operators: [“add”, “sub”, “mul”, “div”]</p>
-<dl class="simple">
-<dt>Operations use proper weights (no normalization to [0,1]):</dt><dd><ul class="simple">
-<li><p>add: weighted sum = sum(w_i * x_i)</p></li>
-<li><p>sub: weighted subtraction in order = w_0*x_0 - w_1*x_1 - …</p></li>
-<li><p>mul: product of weighted inputs = prod(w_i * x_i)</p></li>
-<li><p>div: weighted division = (w_0*x_0) / (w_1*x_1 + eps), clamped for stability</p></li>
+<p>Operations use proper weights (no normalization to [0,1]):</p>
+<ul class="simple">
+<li><p>add: weighted sum <span class="math notranslate nohighlight">\(\sum_i w_i x_i\)</span></p></li>
+<li><p>sub: ordered weighted subtraction <span class="math notranslate nohighlight">\(w_0x_0 - w_1x_1 - \cdots\)</span></p></li>
+<li><p>mul: weighted product <span class="math notranslate nohighlight">\(\prod_i (w_i x_i)\)</span></p></li>
+<li><p>div: weighted division <span class="math notranslate nohighlight">\((w_0x_0) / (w_1x_1 + \varepsilon)\)</span></p></li>
 </ul>
-</dd>
-</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="bacon.aggregators.math.operator_set.ArithmeticOperatorSet.get_default_op_names">
 <span class="sig-name descname"><span class="pre">get_default_op_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#bacon.aggregators.math.operator_set.ArithmeticOperatorSet.get_default_op_names" title="Link to this definition">¶</a></dt>
@@ -327,38 +325,28 @@
 <p>For each internal node in BACON, there is a separate learnable logits
 vector over operators. During forward pass, softmax/Gumbel-softmax is
 applied to select operators differentiably.</p>
-<dl>
-<dt>Subclasses must implement:</dt><dd><ul class="simple">
-<li><p>get_default_op_names(): Return default operator names for this type</p></li>
-<li><p>_apply_op(name, values, a, weights): Apply the named operator</p></li>
+<blockquote>
+<div><p>Subclasses must implement these methods:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">get_default_op_names()</span></code>: return default operator names for this type.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_apply_op(name,</span> <span class="pre">values,</span> <span class="pre">a,</span> <span class="pre">weights)</span></code>: apply a named operator.</p></li>
 </ul>
-</dd>
-<dt>BACON integration:</dt><dd><ul>
+<p>BACON integration points:</p>
+<ul class="simple">
 <li><dl class="simple">
-<dt>binaryTreeLogicNet.__init__ calls:</dt><dd><dl class="simple">
-<dt>if hasattr(self.aggregator, “attach_to_tree”):</dt><dd><p>self.aggregator.attach_to_tree(self.num_layers)</p>
-</dd>
-</dl>
+<dt><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.__init__</span></code> calls <code class="docutils literal notranslate"><span class="pre">attach_to_tree(self.num_layers)</span></code></dt><dd><p>when available.</p>
 </dd>
 </dl>
 </li>
+<li><p><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.forward</span></code> calls <code class="docutils literal notranslate"><span class="pre">start_forward()</span></code> when available.</p></li>
 <li><dl class="simple">
-<dt>binaryTreeLogicNet.forward calls:</dt><dd><dl class="simple">
-<dt>if hasattr(self.aggregator, “start_forward”):</dt><dd><p>self.aggregator.start_forward()</p>
+<dt>Tree building repeatedly calls <code class="docutils literal notranslate"><span class="pre">aggregate(values,</span> <span class="pre">a,</span> <span class="pre">weights)</span></code>, where</dt><dd><p><code class="docutils literal notranslate"><span class="pre">values</span></code> is a sequence of tensors and <code class="docutils literal notranslate"><span class="pre">weights</span></code> is a sequence of
+per-input weights.</p>
 </dd>
 </dl>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Tree building keeps calling:</dt><dd><p>self.aggregator.aggregate(values, a, weights)</p>
-</dd>
-</dl>
-<p>where values is a sequence of tensors and weights is a sequence of weights.</p>
 </li>
 </ul>
-</dd>
-</dl>
+</div></blockquote>
 <dl class="py method">
 <dt class="sig sig-object py" id="bacon.aggregators.math.operator_set.OperatorSetAggregator.aggregate">
 <span class="sig-name descname"><span class="pre">aggregate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.math.operator_set.OperatorSetAggregator.aggregate" title="Link to this definition">¶</a></dt>
@@ -517,5 +505,6 @@ Creates a set of operator logits, one per internal node.</p>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>

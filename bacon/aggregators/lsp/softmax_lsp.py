@@ -1,13 +1,28 @@
-"""
+r"""
 LSP Softmax Aggregator
 
 A differentiable aggregator that combines 5 canonical LSP operators using
 softmax-weighted mixing based on the tree's andness parameter 'a':
-    A0(x,y) = x*y           (product / pure t-norm)
-    A1(x,y) = min(x,y)      (minimum / weak AND)
-    A2(x,y) = (x+y)/2       (arithmetic mean)
-    A3(x,y) = max(x,y)      (maximum / weak OR)
-    A4(x,y) = x+y-x*y       (probabilistic sum / pure t-conorm)
+
+.. math::
+
+    A_0(x, y) = x y \quad\text{(product / pure t-norm)}
+
+.. math::
+
+    A_1(x, y) = \min(x, y) \quad\text{(minimum / weak AND)}
+
+.. math::
+
+    A_2(x, y) = \frac{x + y}{2} \quad\text{(arithmetic mean)}
+
+.. math::
+
+    A_3(x, y) = \max(x, y) \quad\text{(maximum / weak OR)}
+
+.. math::
+
+    A_4(x, y) = x + y - xy \quad\text{(probabilistic sum / pure t-conorm)}
 
 The weights are computed via softmax based on distance from the tree's 'a' parameter
 to each operator's canonical andness value (configurable, default evenly-spaced).
@@ -22,19 +37,25 @@ from typing import Sequence, Any
 
 
 class LspSoftmaxAggregator(AggregatorBase, nn.Module):
-    """
+    r"""
     LSP Softmax Aggregator using 5 canonical operators.
     
-    Computes F(x,y) = sum_i w_i * A_i(x,y) where weights are determined
+    Computes :math:`F(x, y) = \sum_i w_i A_i(x, y)` where weights are determined
     by the tree's andness parameter 'a':
-        w = softmax(-|a - center_i|^2 / tau)
+
+    .. math::
+
+       w_i = \operatorname{softmax}\left(-\frac{(a - c_i)^2}{\tau}\right)
     
     Each operator has a canonical "center" andness value (default evenly-spaced):
-        A0 (product):   a = 1.5   (pure t-norm)
-        A1 (min):       a = 1.0   (weak AND)
-        A2 (avg):       a = 0.5   (neutral)
-        A3 (max):       a = 0.0   (weak OR)
-        A4 (prob_sum):  a = -0.5  (pure t-conorm)
+
+    .. math::
+
+       A_0\,(\text{product})\!:\; a=1.5,\;
+       A_1\,(\min)\!:\; a=1.0,\;
+       A_2\,(\text{avg})\!:\; a=0.5,\;
+       A_3\,(\max)\!:\; a=0.0,\;
+       A_4\,(\text{prob\_sum})\!:\; a=-0.5
     
     Concentration can be encouraged via:
         1. Tau annealing: decrease tau over training (use anneal_tau() or set_tau())
@@ -122,7 +143,10 @@ class LspSoftmaxAggregator(AggregatorBase, nn.Module):
         Compute operator weights based on andness parameter.
         
         Uses squared distance to canonical centers with softmax:
-            w_i = softmax(-|a - center_i|^2 / tau)
+
+        .. math::
+
+           w_i = \\operatorname{softmax}\\left(-\\frac{(a-c_i)^2}{\\tau}\\right)
         
         Args:
             a: Andness parameter, typically in [-1, 2]

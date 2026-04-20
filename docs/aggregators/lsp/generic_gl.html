@@ -267,9 +267,10 @@
 <span id="generic-gl-aggregator"></span><h1>Generic GL Aggregator<a class="headerlink" href="#module-bacon.aggregators.lsp.generic_gl" title="Link to this heading">¶</a></h1>
 <p>Generic Graded Logic (GL) Aggregator</p>
 <p>Implements the canonical aggregation form from the GL aggregator paper:</p>
-<blockquote>
-<div><p>A(x | c) = sum_i  alpha_i(psi(u, c)) * F_i(u),    u = II(x)</p>
-</div></blockquote>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A(x \mid c) = \sum_i \alpha_i(\psi(u, c))\,F_i(u), \quad u = II(x)\]</div>
+</div>
 <dl class="simple">
 <dt>where:</dt><dd><ul class="simple">
 <li><p>x = (x1, …, xn) are the original inputs in [0, 1]</p></li>
@@ -295,18 +296,25 @@ gating, enabling joint-condition aggregation.</p></li>
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.aggregators.lsp.generic_gl.GenericGLAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.aggregators.lsp.generic_gl.</span></span><span class="sig-name descname"><span class="pre">GenericGLAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">anchors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">('min',</span> <span class="pre">'harmonic',</span> <span class="pre">'geometric',</span> <span class="pre">'mean',</span> <span class="pre">'quadratic',</span> <span class="pre">'max')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anchor_interpolation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'static'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_transform</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identity_reg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-07</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.lsp.generic_gl.GenericGLAggregator" title="Link to this definition">¶</a></dt>
-<dd><p>Generic Graded Logic aggregator — N-ary canonical form.</p>
+<dd><p>Generic Graded Logic aggregator - N-ary canonical form.</p>
 <p>Implements the canonical GL aggregation (paper Section 4.5):</p>
-<blockquote>
-<div><p>A(x | c) = Σ αᵢ(ψ(u, c)) · Fᵢ(u),   u = R · x</p>
-</div></blockquote>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A(x \mid c) = \sum_i \alpha_i(\psi(u, c))\,F_i(u), \quad u = R x\]</div>
+</div>
 <p>where Fᵢ are anchor operators from the generalized-mean family and
 the convex weights αᵢ are controlled by the Mean Andness Theorem.</p>
-<p>The six core anchors from the paper are:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>min  →  harmonic  →  geometric  →  mean  →  quadratic  →  max
-(α=1)   (α=3/4)     (α=5/8)      (α=1/2)  (α=3/8)      (α=0)
-</pre></div>
+<blockquote>
+<div><p>The six core anchors from the paper are:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[ext{min} \rightarrow \text{harmonic} \rightarrow \text{geometric} \rightarrow \text{mean} \rightarrow \text{quadratic} \rightarrow \text{max}\]</div>
 </div>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[(\alpha=1),\ (\alpha=3/4),\ (\alpha=5/8),\ (\alpha=1/2),\ (\alpha=3/8),\ (\alpha=0)\]</div>
+</div>
+</div></blockquote>
 <p>Two additional t-norm / t-conorm anchors (<code class="docutils literal notranslate"><span class="pre">product</span></code>, <code class="docutils literal notranslate"><span class="pre">prob_sum</span></code>)
 are available as extensions but are not part of the standard GL set.</p>
 <dl class="field-list simple">
@@ -482,5 +490,6 @@ no interpolated anchors.</p></li>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>
