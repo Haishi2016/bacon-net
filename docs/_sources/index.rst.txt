@@ -1,7 +1,7 @@
 BACON documentation
 ===================
 
-Welcome to BACON, a neural symbolic network for decision-making problems.
+Welcome to BACON, a neural symbolic network for decision-making problems using Graded Logic.
 
 .. toctree::
    :maxdepth: 2
