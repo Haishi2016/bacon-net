@@ -15,22 +15,19 @@ class OperatorSetAggregator(nn.Module, AggregatorBase):
     vector over operators. During forward pass, softmax/Gumbel-softmax is 
     applied to select operators differentiably.
 
-    Subclasses must implement:
-        - get_default_op_names(): Return default operator names for this type
-        - _apply_op(name, values, a, weights): Apply the named operator
+        Subclasses must implement these methods:
 
-    BACON integration:
-      * binaryTreeLogicNet.__init__ calls:
-            if hasattr(self.aggregator, "attach_to_tree"):
-                self.aggregator.attach_to_tree(self.num_layers)
+        - ``get_default_op_names()``: return default operator names for this type.
+        - ``_apply_op(name, values, a, weights)``: apply a named operator.
 
-      * binaryTreeLogicNet.forward calls:
-            if hasattr(self.aggregator, "start_forward"):
-                self.aggregator.start_forward()
+        BACON integration points:
 
-      * Tree building keeps calling:
-            self.aggregator.aggregate(values, a, weights)
-        where values is a sequence of tensors and weights is a sequence of weights.
+        - ``binaryTreeLogicNet.__init__`` calls ``attach_to_tree(self.num_layers)``
+            when available.
+        - ``binaryTreeLogicNet.forward`` calls ``start_forward()`` when available.
+        - Tree building repeatedly calls ``aggregate(values, a, weights)``, where
+            ``values`` is a sequence of tensors and ``weights`` is a sequence of
+            per-input weights.
     """
 
     def __init__(
@@ -363,16 +360,17 @@ class BoolOperatorSetWithIdentity(BoolOperatorSet):
 # =============================================================================
 
 class ArithmeticOperatorSet(OperatorSetAggregator):
-    """
+    r"""
     Arithmetic operator set aggregator with proper weighted operations.
     
     Default operators: ["add", "sub", "mul", "div"]
     
     Operations use proper weights (no normalization to [0,1]):
-        - add: weighted sum = sum(w_i * x_i)
-        - sub: weighted subtraction in order = w_0*x_0 - w_1*x_1 - ...
-        - mul: product of weighted inputs = prod(w_i * x_i)
-        - div: weighted division = (w_0*x_0) / (w_1*x_1 + eps), clamped for stability
+
+    - add: weighted sum :math:`\sum_i w_i x_i`
+    - sub: ordered weighted subtraction :math:`w_0x_0 - w_1x_1 - \cdots`
+    - mul: weighted product :math:`\prod_i (w_i x_i)`
+    - div: weighted division :math:`(w_0x_0) / (w_1x_1 + \varepsilon)`
     """
 
     def __init__(

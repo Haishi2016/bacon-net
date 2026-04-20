@@ -268,31 +268,48 @@
 <p>LSP Softmax Aggregator</p>
 <p>A differentiable aggregator that combines 5 canonical LSP operators using
 softmax-weighted mixing based on the tree’s andness parameter ‘a’:</p>
-<blockquote>
-<div><p>A0(x,y) = x*y           (product / pure t-norm)
-A1(x,y) = min(x,y)      (minimum / weak AND)
-A2(x,y) = (x+y)/2       (arithmetic mean)
-A3(x,y) = max(x,y)      (maximum / weak OR)
-A4(x,y) = x+y-x*y       (probabilistic sum / pure t-conorm)</p>
-</div></blockquote>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A_0(x, y) = x y \quad\text{(product / pure t-norm)}\]</div>
+</div>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A_1(x, y) = \min(x, y) \quad\text{(minimum / weak AND)}\]</div>
+</div>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A_2(x, y) = \frac{x + y}{2} \quad\text{(arithmetic mean)}\]</div>
+</div>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A_3(x, y) = \max(x, y) \quad\text{(maximum / weak OR)}\]</div>
+</div>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A_4(x, y) = x + y - xy \quad\text{(probabilistic sum / pure t-conorm)}\]</div>
+</div>
 <p>The weights are computed via softmax based on distance from the tree’s ‘a’ parameter
 to each operator’s canonical andness value (configurable, default evenly-spaced).</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.aggregators.lsp.softmax_lsp.</span></span><span class="sig-name descname"><span class="pre">LspSoftmaxAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tau</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">centers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator" title="Link to this definition">¶</a></dt>
 <dd><p>LSP Softmax Aggregator using 5 canonical operators.</p>
-<p>Computes F(x,y) = sum_i w_i * A_i(x,y) where weights are determined
+<p>Computes <span class="math notranslate nohighlight">\(F(x, y) = \sum_i w_i A_i(x, y)\)</span> where weights are determined
 by the tree’s andness parameter ‘a’:</p>
-<blockquote>
-<div><p>w = softmax(-<a href="#id1"><span class="problematic" id="id2">|</span></a>a - center_i|^2 / tau)</p>
-</div></blockquote>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[w_i = \operatorname{softmax}\left(-\frac{(a - c_i)^2}{\tau}\right)\]</div>
+</div>
+<p>Each operator has a canonical “center” andness value (default evenly-spaced):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[A_0\,(\text{product})\!:\; a=1.5,\;
+A_1\,(\min)\!:\; a=1.0,\;
+A_2\,(\text{avg})\!:\; a=0.5,\;
+A_3\,(\max)\!:\; a=0.0,\;
+A_4\,(\text{prob\_sum})\!:\; a=-0.5\]</div>
+</div>
 <dl class="simple">
-<dt>Each operator has a canonical “center” andness value (default evenly-spaced):</dt><dd><p>A0 (product):   a = 1.5   (pure t-norm)
-A1 (min):       a = 1.0   (weak AND)
-A2 (avg):       a = 0.5   (neutral)
-A3 (max):       a = 0.0   (weak OR)
-A4 (prob_sum):  a = -0.5  (pure t-conorm)</p>
-</dd>
 <dt>Concentration can be encouraged via:</dt><dd><ol class="arabic simple">
 <li><p>Tau annealing: decrease tau over training (use anneal_tau() or set_tau())</p></li>
 <li><p>Entropy regularization: add entropy_loss(a) to training loss to push
@@ -571,5 +588,6 @@ Creates operator logits for each node.</p>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </body>
 </html>

@@ -1,9 +1,11 @@
-"""
+r"""
 Generic Graded Logic (GL) Aggregator
 
 Implements the canonical aggregation form from the GL aggregator paper:
 
-    A(x | c) = sum_i  alpha_i(psi(u, c)) * F_i(u),    u = II(x)
+.. math::
+
+    A(x \mid c) = \sum_i \alpha_i(\psi(u, c))\,F_i(u), \quad u = II(x)
 
 where:
     - x = (x1, ..., xn) are the original inputs in [0, 1]
@@ -46,7 +48,7 @@ def _n_min(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
 
 
 def _n_harmonic_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
-    """Harmonic mean: N / sum(1/x_i).  Strong quasi-conjunction."""
+    r"""Harmonic mean: :math:`N / \sum_i (1/x_i)`. Strong quasi-conjunction."""
     N = u.size(0)
     # Clamp inputs away from zero to prevent 1/x explosion and gradient blow-up.
     u_safe = u.clamp(min=eps)
@@ -54,7 +56,7 @@ def _n_harmonic_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
 
 
 def _n_geometric_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
-    """Geometric mean: exp(mean(log(x_i))).  Medium quasi-conjunction.
+    r"""Geometric mean: :math:`\exp(\operatorname{mean}(\log(x_i)))`.
 
     Uses log-space computation to avoid product underflow and provide
     numerically stable gradients.
@@ -69,7 +71,7 @@ def _n_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
 
 
 def _n_quadratic_mean(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
-    """Quadratic (RMS) mean: sqrt(mean(x_i^2)).  Medium quasi-disjunction."""
+    r"""Quadratic (RMS) mean: :math:`\sqrt{\operatorname{mean}(x_i^2)}`."""
     return (u ** 2).mean(dim=0).clamp(min=eps * eps).sqrt()
 
 
@@ -86,7 +88,7 @@ def _n_product(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
 
 
 def _n_prob_sum(u: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
-    """Probabilistic sum (t-conorm): 1 - prod(1 - x_i).  Stronger than max."""
+    r"""Probabilistic sum (t-conorm): :math:`1 - \prod_i (1 - x_i)`."""
     return 1.0 - (1.0 - u).prod(dim=0)
 
 
@@ -171,19 +173,26 @@ def _expand_anchors_with_interpolation(
 
 
 class GenericGLAggregator(AggregatorBase, nn.Module):
-    """Generic Graded Logic aggregator — N-ary canonical form.
+    r"""Generic Graded Logic aggregator - N-ary canonical form.
 
     Implements the canonical GL aggregation (paper Section 4.5):
 
-        A(x | c) = Σ αᵢ(ψ(u, c)) · Fᵢ(u),   u = R · x
+    .. math::
+
+       A(x \mid c) = \sum_i \alpha_i(\psi(u, c))\,F_i(u), \quad u = R x
 
     where Fᵢ are anchor operators from the generalized-mean family and
     the convex weights αᵢ are controlled by the Mean Andness Theorem.
 
-    The six core anchors from the paper are::
+     The six core anchors from the paper are:
 
-        min  →  harmonic  →  geometric  →  mean  →  quadratic  →  max
-        (α=1)   (α=3/4)     (α=5/8)      (α=1/2)  (α=3/8)      (α=0)
+     .. math::
+
+         	ext{min} \rightarrow \text{harmonic} \rightarrow \text{geometric} \rightarrow \text{mean} \rightarrow \text{quadratic} \rightarrow \text{max}
+
+     .. math::
+
+         (\alpha=1),\ (\alpha=3/4),\ (\alpha=5/8),\ (\alpha=1/2),\ (\alpha=3/8),\ (\alpha=0)
 
     Two additional t-norm / t-conorm anchors (``product``, ``prob_sum``)
     are available as extensions but are not part of the standard GL set.
