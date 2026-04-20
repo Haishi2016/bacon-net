@@ -592,15 +592,23 @@ class binaryTreeLogicNet(nn.Module):
             # 🔹 Compute input-to-leaf values
             leaf_values = self.input_to_leaf(x)
 
-            if torch.isnan(leaf_values).any():
-                raise ValueError("[DEBUG] NaNs detected in leaf_values!")
+            if torch.isnan(leaf_values).any() or torch.isinf(leaf_values).any():
+                raise ValueError(
+                    f"[DEBUG] Bad values in leaf_values! "
+                    f"NaN={torch.isnan(leaf_values).sum().item()}, "
+                    f"Inf={torch.isinf(leaf_values).sum().item()}"
+                )
             
             # 🔹 Apply transformation layer if enabled
             if self.transformation_layer is not None:
                 leaf_values = self.transformation_layer(leaf_values)
                 
-                if torch.isnan(leaf_values).any():
-                    raise ValueError("[DEBUG] NaNs detected after transformation layer!")
+                if torch.isnan(leaf_values).any() or torch.isinf(leaf_values).any():
+                    raise ValueError(
+                        f"[DEBUG] Bad values after transformation layer! "
+                        f"NaN={torch.isnan(leaf_values).sum().item()}, "
+                        f"Inf={torch.isinf(leaf_values).sum().item()}"
+                    )
 
             if self.use_constant_input:
                 constant_leaf = torch.ones((leaf_values.shape[0], 1), device=leaf_values.device, dtype=leaf_values.dtype)
