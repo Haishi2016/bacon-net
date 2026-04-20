@@ -201,6 +201,7 @@
   <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="introduction/introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction/sample_report.html">Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="dev-guide/dev-guide.html">Developer Guide</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">BACON Module</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="aggregators/index.html">Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
@@ -319,553 +320,53 @@
 <dt class="sig sig-object py" id="bacon.MinMaxAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.</span></span><span class="sig-name descname"><span class="pre">MinMaxAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.MinMaxAggregator" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AggregatorBase</span></code></p>
+<p>Aggregate a sequence of inputs with min/max interpolation.</p>
+<p>The aggregator computes:</p>
+<ul class="simple">
+<li><p>elementwise minimum when <code class="docutils literal notranslate"><span class="pre">andness</span></code> is near 1</p></li>
+<li><p>elementwise maximum when <code class="docutils literal notranslate"><span class="pre">andness</span></code> is near 0</p></li>
+</ul>
+<p>with a straight-through hard gating step so gradients can still flow
+through the continuous proxy during training.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="bacon.MinMaxAggregator.aggregate_float">
 <span class="sig-name descname"><span class="pre">aggregate_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#bacon.MinMaxAggregator.aggregate_float" title="Link to this definition">¶</a></dt>
-<dd><p>Aggregate N scalar values with scalar andness a and N weights.</p>
+<dd><p>Float-friendly wrapper around <a class="reference internal" href="#bacon.MinMaxAggregator.aggregate_tensor" title="bacon.MinMaxAggregator.aggregate_tensor"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate_tensor()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>values</strong> – Input scalar values to aggregate.</p></li>
+<li><p><strong>a</strong> – Andness control value.</p></li>
+<li><p><strong>weights</strong> – Optional per-input weights used as soft gates.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Python float result.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="bacon.MinMaxAggregator.aggregate_tensor">
 <span class="sig-name descname"><span class="pre">aggregate_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">andness</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.MinMaxAggregator.aggregate_tensor" title="Link to this definition">¶</a></dt>
-<dd><p>Aggregates two tensors using the Min-Max method.</p>
+<dd><p>Aggregate one or more tensor-like values.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x1</strong> (<em>torch.Tensor</em>) – First input tensor.</p></li>
-<li><p><strong>x2</strong> (<em>torch.Tensor</em>) – Second input tensor.</p></li>
-<li><p><strong>andness</strong> (<em>float</em>) – Andness.</p></li>
-<li><p><strong>w0</strong> (<em>float</em>) – Not used in this implementation, but kept for compatibility.</p></li>
-<li><p><strong>w1</strong> (<em>float</em>) – Not used in this implementation, but kept for compatibility.</p></li>
+<li><p><strong>values</strong> – Non-empty sequence of tensors with compatible shapes.</p></li>
+<li><p><strong>andness</strong> – Control signal where larger values bias toward min/AND and
+smaller values bias toward max/OR.</p></li>
+<li><p><strong>weights</strong> – Optional per-input gates in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>. When provided,
+each input is blended with a neutral baseline before reduction.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Resulting tensor after aggregation.</p>
+<dd class="field-even"><p>Tensor with the same broadcast-compatible shape as each input.</p>
 </dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="bacon.baconNet">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.</span></span><span class="sig-name descname"><span class="pre">baconNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tree_layout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'left'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_amplifier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_penalty_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'trainable'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_normalization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'minmax'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aggregator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'lsp.full_weight'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_andness</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_frozen</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_transformation_layer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformation_temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformation_use_gumbel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">early_stop_threshold_large_inputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">permutation_initial_temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">permutation_final_temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformation_initial_temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformation_final_temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_main</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_perm_entropy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_trans_entropy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_perm_sparsity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_operator_sparsity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_operator_l2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lr_permutation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lr_transformation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lr_aggregator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lr_other</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_class_weighting</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_trim_percentile</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_trim_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'drop_high'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_trim_start_epoch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">training_policy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'triangle'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_temperature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_final_temperature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_max_egress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_concentrate_ingress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_use_sinkhorn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_full_tree_egress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_full_tree_ingress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_full_tree_ingress_balance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_full_tree_scale_reg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_learn_first_routing</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_learn_subsequent_routing</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_learn_exponents</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_min_exponent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_max_exponent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_max_egress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_use_straight_through</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_alternating_balance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">50.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_alternating_egress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_alternating_exponent_reg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_constant_input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_permutation_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regression_loss_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'mse'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
-<p>Represents a BACON network for interpretable decision-making using graded logic.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>input_size</strong> (<em>int</em>) – Number of input features. This is likely to be removed in the future.</p></li>
-<li><p><strong>tree_layout</strong> (<em>str</em><em>, </em><em>optional</em>) – Layout of the tree. Defaults to “left”. Other layouts are not supported yet.</p></li>
-<li><p><strong>loss_amplifier</strong> (<em>float</em><em>, </em><em>optional</em>) – Amplifier for the loss. Defaults to 1.</p></li>
-<li><p><strong>weight_penalty_strength</strong> (<em>float</em><em>, </em><em>optional</em>) – Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).</p></li>
-<li><p><strong>normalize_andness</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to normalize andness. Defaults to True. This should set to False if the chosen aggregator, such as <cite>bool.min_max</cite>, already normalizes the andness.</p></li>
-<li><p><strong>weight_mode</strong> (<em>str</em><em>, </em><em>optional</em>) – Mode for weight configuration. Defaults to “trainable”. Use “fixed” for fixed weights (set to 0.5).</p></li>
-<li><p><strong>aggregator</strong> (<em>str</em><em>, </em><em>optional</em>) – Aggregator to be used. Defaults to “lsp.full_weight”.</p></li>
-<li><p><strong>is_frozen</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to freeze the structure. Defaults to False.</p></li>
-<li><p><strong>early_stop_threshold_large_inputs</strong> (<em>float</em><em>, </em><em>optional</em>) – Early stop threshold for transformation layers with 10+ inputs. Defaults to 0.1. Lower values require more training but achieve higher accuracy.</p></li>
-<li><p><strong>transformations</strong> (<em>list</em><em>, </em><em>optional</em>) – List of transformation objects to use. If None, uses all 6 default transformations.
-Example: [IdentityTransformation(n), NegationTransformation(n)] for identity+negation only.</p></li>
-<li><p><strong>permutation_initial_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Starting temperature for permutation annealing. Defaults to 5.0. Higher = more initial exploration.</p></li>
-<li><p><strong>permutation_final_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Final temperature for permutation annealing. Defaults to 0.1. Lower = harder final permutation.</p></li>
-<li><p><strong>transformation_initial_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Starting temperature for transformation layer. Defaults to 1.0. Should be lower than permutation since transformation is simpler (2^n vs n! states).</p></li>
-<li><p><strong>transformation_final_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Final temperature for transformation layer. Defaults to 0.1. Same as permutation final temp.</p></li>
-<li><p><strong>loss_weight_main</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for main BCE loss. Defaults to 1.0.</p></li>
-<li><p><strong>loss_weight_perm_entropy</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for permutation entropy regularization. Defaults to 0.0. Higher = encourage exploration. Typical range: 0.0-0.1.</p></li>
-<li><p><strong>loss_weight_trans_entropy</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for transformation entropy regularization. Defaults to 0.0. Higher = encourage decisive transformation selection. Typical range: 0.0-0.1.</p></li>
-<li><p><strong>loss_weight_perm_sparsity</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for permutation sparsity loss. Defaults to 0.01. Penalizes high entropy (flat distributions) to encourage peaked/sparse permutations. Higher = stronger push toward confident or clear multi-modal distributions. Typical range: 0.0-0.1.</p></li>
-<li><p><strong>loss_weight_operator_sparsity</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for operator selection sparsity loss. Defaults to 1.0. Penalizes uncertain operator choices to encourage commitment. Higher = faster operator decision.</p></li>
-<li><p><strong>loss_weight_operator_l2</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for L2 regularization on operator logits. Defaults to 0.0. Keeps logits bounded so tau can control commitment timing. Use &gt; 0 when operators commit too early.</p></li>
-<li><p><strong>lr_permutation</strong> (<em>float</em><em>, </em><em>optional</em>) – Learning rate for permutation layer. Defaults to 0.3. Higher = faster exploration of feature orderings.</p></li>
-<li><p><strong>lr_transformation</strong> (<em>float</em><em>, </em><em>optional</em>) – Learning rate for transformation layer. Defaults to 0.5. Higher = faster transformation selection.</p></li>
-<li><p><strong>lr_aggregator</strong> (<em>float</em><em>, </em><em>optional</em>) – Learning rate for aggregator weights. Defaults to 0.1. Lower = more stable tree structure.</p></li>
-<li><p><strong>lr_other</strong> (<em>float</em><em>, </em><em>optional</em>) – Learning rate for other parameters. Defaults to 0.1.</p></li>
-<li><p><strong>use_class_weighting</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to apply class weighting for imbalanced data. Defaults to True. When True, penalizes minority class errors more heavily (pos_weight = neg_count/pos_count). When False, uses standard BCE loss (original behavior).</p></li>
-<li><p><strong>full_tree_depth</strong> (<em>int</em><em>, </em><em>optional</em>) – Depth of the fully connected tree. Only used when tree_layout=”full”. Defaults to None (uses input_size - 1).</p></li>
-<li><p><strong>full_tree_shape</strong> (<em>str</em><em>, </em><em>optional</em>) – Shape of the fully connected tree. “triangle” (default) or “square”.</p></li>
-<li><p><strong>full_tree_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Initial temperature for sigmoid edge weights. Defaults to 3.0.</p></li>
-<li><p><strong>full_tree_final_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Final temperature after annealing. Defaults to 0.1.</p></li>
-<li><p><strong>full_tree_max_egress</strong> (<em>int</em><em>, </em><em>optional</em>) – Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).</p></li>
-<li><p><strong>loss_weight_full_tree_egress</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for full tree egress constraint loss. Defaults to 0.0.</p></li>
-<li><p><strong>loss_weight_full_tree_ingress</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for full tree ingress constraint loss (max 2 inputs per node). Defaults to 0.5.</p></li>
-<li><p><strong>use_permutation_layer</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to use the permutation layer. Defaults to True.
-Set to False for full tree layout to let the tree learn input routing directly.</p></li>
-<li><p><strong>regression_loss_type</strong> (<em>str</em><em>, </em><em>optional</em>) – <p>Loss type for regression mode. Defaults to “mse”.
-- “mse”: Standard MSE loss. Simple but scale-sensitive (mul at root dominates gradients).
-- “correlation”: Pearson correlation loss (1 - r²). Scale-invariant but too lenient.
-- “normalized_mse”: Z-score both pred and target, then MSE. Best for arithmetic -</p>
-<blockquote>
-<div><p>scale-invariant but requires correct pattern matching.</p>
-</div></blockquote>
-</p></li>
-</ul>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ValueError</strong> – If <code class="docutils literal notranslate"><span class="pre">values</span></code> is empty.</p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.evaluate">
-<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.evaluate" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.find_best_model">
-<span class="sig-name descname"><span class="pre">find_best_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attempts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">acceptance_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./assembler.pth'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">annealing_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frozen_training_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convergence_patience</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convergence_delta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freeze_confidence_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freeze_min_confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.85</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weight_perm_sparsity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sparsity_schedule</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freeze_aggregation_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_hierarchical_permutation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_freeze</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hierarchical_group_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hierarchical_epochs_per_attempt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hierarchical_bleed_ratio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hierarchical_bleed_decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sinkhorn_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">binary_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'classification'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">operator_initial_tau</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">operator_final_tau</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">operator_freeze_min_confidence</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">operator_freeze_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_frozen_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.99</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_egress_warmup_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_egress_ramp_epochs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_egress_start_metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.99</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_egress_drop_tolerance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_egress_adapt_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.find_best_model" title="Link to this definition">¶</a></dt>
-<dd><p>Find the best model by training multiple times and evaluating accuracy.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor for training.</p></li>
-<li><p><strong>y</strong> (<em>torch.Tensor</em>) – Target tensor for training.</p></li>
-<li><p><strong>x_test</strong> (<em>torch.Tensor</em>) – Input tensor for testing.</p></li>
-<li><p><strong>y_test</strong> (<em>torch.Tensor</em>) – Target tensor for testing.</p></li>
-<li><p><strong>attempts</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of attempts to find the best model. Defaults to 100.</p></li>
-<li><p><strong>acceptance_threshold</strong> (<em>float</em><em>, </em><em>optional</em>) – Minimum accuracy to accept a model. Defaults to 0.95.</p></li>
-<li><p><strong>save_path</strong> (<em>str</em><em>, </em><em>optional</em>) – Path to save the best model. Defaults to “./assembler.pth”.</p></li>
-<li><p><strong>max_epochs</strong> (<em>int</em><em>, </em><em>optional</em>) – Maximum epochs for training (safety limit). Defaults to 12000.</p></li>
-<li><p><strong>annealing_epochs</strong> (<em>int</em><em>, </em><em>optional</em>) – Epochs for temperature annealing. Defaults to None.</p></li>
-<li><p><strong>frozen_training_epochs</strong> (<em>int</em><em>, </em><em>optional</em>) – Epochs to train after freezing. Defaults to 200.</p></li>
-<li><p><strong>convergence_patience</strong> (<em>int</em><em>, </em><em>optional</em>) – Epochs without improvement before considering converged. Defaults to 500.</p></li>
-<li><p><strong>convergence_delta</strong> (<em>float</em><em>, </em><em>optional</em>) – Minimum loss improvement to reset patience. Defaults to 0.001.</p></li>
-<li><p><strong>freeze_confidence_threshold</strong> (<em>float</em><em>, </em><em>optional</em>) – Mean max probability threshold for high-confidence freezing. Defaults to 0.95.</p></li>
-<li><p><strong>freeze_min_confidence</strong> (<em>float</em><em>, </em><em>optional</em>) – Minimum confidence for early freeze when combined with low loss. Defaults to 0.85 (raised from 0.75 to be more conservative).</p></li>
-<li><p><strong>sinkhorn_iters</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of Sinkhorn normalization iterations for soft permutation convergence. Higher values improve doubly-stochastic property but increase compute time. Defaults to 100.</p></li>
-<li><p><strong>loss_weight_perm_sparsity</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for permutation sparsity loss (encourages peaked distributions). If None, uses instance default. Defaults to None.</p></li>
-<li><p><strong>sparsity_schedule</strong> (<em>tuple</em><em>, </em><em>optional</em>) – Dynamic sparsity weight scheduling as (initial_weight, final_weight, transition_epochs). Example: (10.0, 0.1, 1000) starts with high sparsity emphasis (10.0) and linearly decreases to 0.1 over 1000 epochs. Defaults to None (uses constant loss_weight_perm_sparsity).</p></li>
-<li><p><strong>freeze_aggregation_epochs</strong> (<em>int</em><em>, </em><em>optional</em>) – Freeze aggregation parameters for first N epochs, allowing only permutation to learn. Useful for giving permutation undiluted classification signal. Defaults to 0 (no freezing).</p></li>
-<li><p><strong>save_model</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to save the best model. Defaults to True.</p></li>
-<li><p><strong>use_hierarchical_permutation</strong> (<em>bool</em><em>, </em><em>optional</em>) – Use coarse-grained permutation exploration. Defaults to False.</p></li>
-<li><p><strong>hierarchical_group_size</strong> (<em>int</em><em>, </em><em>optional</em>) – Group size for hierarchical permutation (e.g., 3 for 10 inputs → 4x4 coarse matrix). Defaults to 3.</p></li>
-<li><p><strong>hierarchical_epochs_per_attempt</strong> (<em>int</em><em>, </em><em>optional</em>) – Epochs to run for each coarse permutation. If None, uses max_epochs. Defaults to None.</p></li>
-<li><p><strong>hierarchical_bleed_ratio</strong> (<em>float</em><em>, </em><em>optional</em>) – Ratio of std for adjacent blocks (0.0=hard blocks, 0.1=10% bleed, 1.0=full bleed). Defaults to 0.1.</p></li>
-<li><p><strong>hierarchical_bleed_decay</strong> (<em>float</em><em>, </em><em>optional</em>) – How quickly bleeding decays with distance (higher=faster decay). Defaults to 2.0.</p></li>
-<li><p><strong>operator_freeze_min_confidence</strong> (<em>float</em><em>, </em><em>optional</em>) – Minimum average operator selection confidence required before
-freezing permutation. Blocks freeze until operators commit to their choices. 0.0 disables the requirement
-(legacy behavior), 0.7 requires 70% average operator confidence. Defaults to 0.7.</p></li>
-<li><p><strong>operator_freeze_epochs</strong> (<em>int</em><em>, </em><em>optional</em>) – Freeze operator selection for first N epochs, allowing only
-edge/routing to learn. This decouples structure discovery from operator selection. After N epochs,
-operators unfreeze and start learning. Defaults to 0 (no operator freeze).</p></li>
-<li><p><strong>skip_frozen_threshold</strong> (<em>float</em><em>, </em><em>optional</em>) – Minimum metric required to skip frozen training after freeze.
-Only skips frozen training if freeze improves metric AND we’re above this threshold.
-For regression tasks, this should be very high (e.g., 0.99) to ensure weights fully converge.
-Defaults to 0.99.</p></li>
-<li><p><strong>full_tree_egress_warmup_epochs</strong> (<em>int</em><em>, </em><em>optional</em>) – In full-tree mode, keep egress concentration disabled
-for the first N epochs so structure can be learned first. Defaults to 0.</p></li>
-<li><p><strong>full_tree_egress_ramp_epochs</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of epochs to ramp egress loss weight from 0
-to target after warmup. Defaults to 0 (immediate application after warmup).</p></li>
-<li><p><strong>full_tree_egress_start_metric</strong> (<em>float</em><em>, </em><em>optional</em>) – Minimum training metric required before egress
-concentration begins. This lets the full tree learn the task first before sparsifying
-edges. Defaults to 0.99.</p></li>
-<li><p><strong>full_tree_egress_drop_tolerance</strong> (<em>float</em><em>, </em><em>optional</em>) – Maximum allowed training-metric drop from warmup
-baseline before reducing egress pressure. Defaults to 0.02.</p></li>
-<li><p><strong>full_tree_egress_adapt_rate</strong> (<em>float</em><em>, </em><em>optional</em>) – Fractional backoff/adjustment rate for dynamic egress
-weight when metric drop exceeds tolerance. Defaults to 0.2.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Best model state dictionary and its metric (accuracy or R²).</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>tuple</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.forward">
-<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.forward" title="Link to this definition">¶</a></dt>
-<dd><p>Define the computation performed at every call.</p>
-<p>Should be overridden by all subclasses.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Although the recipe for forward pass needs to be defined within
-this function, one should call the <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code> instance afterwards
-instead of this since the former takes care of running the
-registered hooks while the latter silently ignores them.</p>
-</div>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.inference">
-<span class="sig-name descname"><span class="pre">inference</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.inference" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.inference_raw">
-<span class="sig-name descname"><span class="pre">inference_raw</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.inference_raw" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.load_model">
-<span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.load_model" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.make_param_groups">
-<span class="sig-name descname"><span class="pre">make_param_groups</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.make_param_groups" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.prune_features">
-<span class="sig-name descname"><span class="pre">prune_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">features</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.prune_features" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.save_model">
-<span class="sig-name descname"><span class="pre">save_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.save_model" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.baconNet.train_model">
-<span class="sig-name descname"><span class="pre">train_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.baconNet.train_model" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.</span></span><span class="sig-name descname"><span class="pre">binaryTreeLogicNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'trainable'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_normalization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'minmax'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0.0,</span> <span class="pre">1.0)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_choices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_increase</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_decrease</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.95</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_amplifier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_andness</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_frozen</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tree_layout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'left'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_penalty_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aggregator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'lsp.full_weight'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">early_stop_patience</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">early_stop_min_delta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">early_stop_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_transformation_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformation_temperature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformation_use_gumbel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sinkhorn_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'triangle'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_temperature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_final_temperature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_max_egress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_concentrate_ingress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_tree_use_sinkhorn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_learn_first_routing</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_learn_subsequent_routing</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_learn_exponents</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_min_exponent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_max_exponent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_max_egress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_use_straight_through</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_balance_weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">50.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternating_egress_weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_constant_input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_permutation_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
-<p>Represents a binary tree logic network for interpretable decision-making using graded logic.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>input_size</strong> (<em>int</em>) – Number of input features.</p></li>
-<li><p><strong>weight_mode</strong> (<em>str</em><em>, </em><em>optional</em>) – Mode for weight configuration. Defaults to “trainable”.</p></li>
-<li><p><strong>weight_value</strong> (<em>float</em><em>, </em><em>optional</em>) – Initial value for fixed weights. Defaults to 0.5.</p></li>
-<li><p><strong>weight_range</strong> (<em>tuple</em><em>, </em><em>optional</em>) – Range for random weights. Defaults to (0.0, 1.0).</p></li>
-<li><p><strong>weight_choices</strong> (<em>list</em><em>, </em><em>optional</em>) – Choices for discrete weights. Defaults to None.</p></li>
-<li><p><strong>noise_increase</strong> (<em>float</em><em>, </em><em>optional</em>) – Factor to increase noise. Defaults to 1.05.</p></li>
-<li><p><strong>noise_decrease</strong> (<em>float</em><em>, </em><em>optional</em>) – Factor to decrease noise. Defaults to 0.95.</p></li>
-<li><p><strong>loss_amplifier</strong> (<em>float</em><em>, </em><em>optional</em>) – Amplifier for the loss. Defaults to 1000.0.</p></li>
-<li><p><strong>min_noise</strong> (<em>float</em><em>, </em><em>optional</em>) – Minimum noise level. Defaults to 0.0.</p></li>
-<li><p><strong>max_noise</strong> (<em>float</em><em>, </em><em>optional</em>) – Maximum noise level. Defaults to 2.0.</p></li>
-<li><p><strong>is_frozen</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to freeze the structure. Defaults to False.</p></li>
-<li><p><strong>tree_layout</strong> (<em>str</em><em>, </em><em>optional</em>) – Layout of the tree. Defaults to “left”. Options: “left”, “balanced”, “paired”, “full”, “alternating”.</p></li>
-<li><p><strong>weight_penalty_strength</strong> (<em>float</em><em>, </em><em>optional</em>) – Penalty strength on weights. Defaults to 1e-3. A strong penalty leads to more balaned weights (closer to 0.5).</p></li>
-<li><p><strong>aggregator</strong> (<em>callable</em><em>, </em><em>optional</em>) – Aggregator to be used. Defaults to “lsp.full_weight”.</p></li>
-<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – Device to run the model on. Defaults to None (uses CUDA if available).</p></li>
-<li><p><strong>full_tree_depth</strong> (<em>int</em><em>, </em><em>optional</em>) – Depth of the fully connected tree. Only used when tree_layout=”full”. Defaults to None (uses input_size - 1).</p></li>
-<li><p><strong>full_tree_shape</strong> (<em>str</em><em>, </em><em>optional</em>) – Shape of the fully connected tree. “triangle” (default) or “square”.</p></li>
-<li><p><strong>full_tree_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Initial temperature for sigmoid edge weights. Defaults to 3.0.</p></li>
-<li><p><strong>full_tree_final_temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Final temperature after annealing. Defaults to 0.1.</p></li>
-<li><p><strong>full_tree_max_egress</strong> (<em>int</em><em>, </em><em>optional</em>) – Each source concentrates on top-K destinations (via loss). Defaults to None (no constraint).</p></li>
-<li><p><strong>use_permutation_layer</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to use the permutation layer. Defaults to True.
-Set to False for full tree layout to let the tree learn input routing directly.</p></li>
-</ul>
-</dd>
-</dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.anneal_alternating_tree_gumbel">
-<span class="sig-name descname"><span class="pre">anneal_alternating_tree_gumbel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">final</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.anneal_alternating_tree_gumbel" title="Link to this definition">¶</a></dt>
-<dd><p>Anneal the Gumbel noise scale of the alternating tree.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>progress</strong> – Training progress from 0.0 to 1.0</p></li>
-<li><p><strong>initial</strong> – Initial noise scale</p></li>
-<li><p><strong>final</strong> – Final noise scale</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.anneal_alternating_tree_temperature">
-<span class="sig-name descname"><span class="pre">anneal_alternating_tree_temperature</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.anneal_alternating_tree_temperature" title="Link to this definition">¶</a></dt>
-<dd><p>Anneal the temperature of the alternating tree.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>progress</strong> – Training progress from 0.0 to 1.0</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.anneal_full_tree_gumbel">
-<span class="sig-name descname"><span class="pre">anneal_full_tree_gumbel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">final</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.anneal_full_tree_gumbel" title="Link to this definition">¶</a></dt>
-<dd><p>Anneal the Gumbel noise scale of the fully connected tree.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>progress</strong> – Training progress from 0.0 to 1.0</p></li>
-<li><p><strong>initial</strong> – Initial noise scale</p></li>
-<li><p><strong>final</strong> – Final noise scale</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.anneal_full_tree_temperature">
-<span class="sig-name descname"><span class="pre">anneal_full_tree_temperature</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.anneal_full_tree_temperature" title="Link to this definition">¶</a></dt>
-<dd><p>Anneal the temperature of the fully connected tree.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>progress</strong> – Training progress from 0.0 to 1.0</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.build_balanced_tree">
-<span class="sig-name descname"><span class="pre">build_balanced_tree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node_outputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">biases</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.build_balanced_tree" title="Link to this definition">¶</a></dt>
-<dd><p>Build a balanced binary tree from node outputs.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>node_outputs</strong> (<em>list</em>) – List of node outputs.</p></li>
-<li><p><strong>weights</strong> (<em>list</em>) – List of weights for the nodes.</p></li>
-<li><p><strong>biases</strong> (<em>list</em>) – List of biases for the nodes.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Final output of the balanced tree.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.build_paired_tree">
-<span class="sig-name descname"><span class="pre">build_paired_tree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node_outputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">biases</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.build_paired_tree" title="Link to this definition">¶</a></dt>
-<dd><p>Build a two-stage ‘paired’ tree: first pair inputs (0,1), (2,3), … then fold pairs.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>node_outputs</strong> (<em>list</em>) – Leaf outputs.</p></li>
-<li><p><strong>weights</strong> (<em>list</em>) – Aggregator weights per node.</p></li>
-<li><p><strong>biases</strong> (<em>list</em>) – Aggregator biases per node.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Final aggregated output.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.forward">
-<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.forward" title="Link to this definition">¶</a></dt>
-<dd><p>Forward pass through the binary tree logic network.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor of shape (batch_size, input_size).</p></li>
-<li><p><strong>targets</strong> (<em>torch.Tensor</em><em>|</em><em>None</em>) – Optional target tensor [batch,1] in {0,1};
-if provided and auto_refine is enabled during training, the model may
-run a light-weight permutation search and freeze the best permutation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Output tensor of shape (batch_size, 1).</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_alternating_tree_balance_loss">
-<span class="sig-name descname"><span class="pre">get_alternating_tree_balance_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_alternating_tree_balance_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Get balance loss for alternating tree routing.</p>
-<p>Encourages balanced distribution of inputs across destinations.
-Returns 0 if not using “alternating” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_alternating_tree_egress_loss">
-<span class="sig-name descname"><span class="pre">get_alternating_tree_egress_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_alternating_tree_egress_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Get egress loss for alternating tree routing.</p>
-<p>Encourages peaked row distributions (clear winner per source).
-Returns 0 if not using “alternating” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_alternating_tree_exponent_regularization_loss">
-<span class="sig-name descname"><span class="pre">get_alternating_tree_exponent_regularization_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_alternating_tree_exponent_regularization_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Get exponent regularization loss for alternating coefficient layers.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_alternating_tree_num_nodes">
-<span class="sig-name descname"><span class="pre">get_alternating_tree_num_nodes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_alternating_tree_num_nodes" title="Link to this definition">¶</a></dt>
-<dd><p>Get number of aggregation nodes in alternating tree.</p>
-<p>Returns 0 if not using “alternating” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_alternating_tree_structure_description">
-<span class="sig-name descname"><span class="pre">get_alternating_tree_structure_description</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_alternating_tree_structure_description" title="Link to this definition">¶</a></dt>
-<dd><p>Get human-readable structure description for alternating tree.</p>
-<p>Returns empty string if not using “alternating” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_full_tree_confidence">
-<span class="sig-name descname"><span class="pre">get_full_tree_confidence</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_full_tree_confidence" title="Link to this definition">¶</a></dt>
-<dd><p>Get confidence score for fully connected tree edge selections.</p>
-<p>Higher values indicate more peaked edge weight distributions.
-Returns 0 if not using “full” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_full_tree_egress_loss">
-<span class="sig-name descname"><span class="pre">get_full_tree_egress_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_full_tree_egress_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Get egress constraint loss for fully connected tree.</p>
-<p>Encourages each source node to concentrate outgoing edges to top-K destinations,
-where K is controlled by full_tree_max_egress parameter.
-Returns 0 if not using “full” layout or max_egress is None.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_full_tree_ingress_balance_loss">
-<span class="sig-name descname"><span class="pre">get_full_tree_ingress_balance_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_full_tree_ingress_balance_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Get ingress balance loss for fully connected tree.</p>
-<p>Encourages balanced distribution of inputs across destinations.
-Prevents all sources from routing to the same destination.
-Returns 0 if not using “full” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_full_tree_ingress_loss">
-<span class="sig-name descname"><span class="pre">get_full_tree_ingress_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_full_tree_ingress_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Get ingress constraint loss for fully connected tree.</p>
-<p>Discourages each destination node from receiving more than 2 inputs.
-Binary operators (add, mul) work best with exactly 2 inputs.
-Returns 0 if not using “full” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_full_tree_scale_regularization_loss">
-<span class="sig-name descname"><span class="pre">get_full_tree_scale_regularization_loss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_full_tree_scale_regularization_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Get scale regularization loss for fully connected tree.</p>
-<p>Penalizes extreme scale coefficients to prevent coefficient hacking.
-Returns 0 if not using “full” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_full_tree_structure">
-<span class="sig-name descname"><span class="pre">get_full_tree_structure</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_full_tree_structure" title="Link to this definition">¶</a></dt>
-<dd><p>Get the learned structure of the fully connected tree.</p>
-<p>Returns dictionary with layer widths, significant edges, and biases.
-Returns empty dict if not using “full” layout.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.get_input_labels">
-<span class="sig-name descname"><span class="pre">get_input_labels</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">variable_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.get_input_labels" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.harden_alternating_tree">
-<span class="sig-name descname"><span class="pre">harden_alternating_tree</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.harden_alternating_tree" title="Link to this definition">¶</a></dt>
-<dd><p>Harden the alternating tree to discrete edge selections.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.harden_full_tree">
-<span class="sig-name descname"><span class="pre">harden_full_tree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'argmax'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.harden_full_tree" title="Link to this definition">¶</a></dt>
-<dd><p>Harden the fully connected tree to discrete edge selections.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>mode</strong> – Hardening mode.
-- “argmax”: destination-wise argmax by default; if max_egress==1, uses row-wise argmax.
-- “auto”: row-wise argmax when max_egress==1, otherwise “smart”.
-- Other modes are forwarded to FullyConnectedTree.harden(…).</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.load_model">
-<span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.load_model" title="Link to this definition">¶</a></dt>
-<dd><p>Load the model state from a file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>file_name</strong> (<em>str</em>) – Path to load the model from.</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>ValueError</strong> – If there’s an architecture mismatch that would cause random reinitialization.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.prune_features">
-<span class="sig-name descname"><span class="pre">prune_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">feature_index</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.prune_features" title="Link to this definition">¶</a></dt>
-<dd><p>Prune a single feature by adjusting its corresponding aggregator weight.</p>
-<p>In a left-associative tree:
-- Feature 0 (left input of agg 0)
-- Feature 1 (right input of agg 0)
-- Feature 2 (right input of agg 1) - uses aggregator at index 1
-- Feature k (k&gt;=2) uses aggregator at index k-1</p>
-<p>This is designed to be called incrementally from outside to build up cumulative pruning.
-Does NOT clear existing pruning state - adds to it.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>feature_index</strong> (<em>int</em>) – Index of the feature to prune (0 to num_leaves-1).</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.reset_optimizer">
-<span class="sig-name descname"><span class="pre">reset_optimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.reset_optimizer" title="Link to this definition">¶</a></dt>
-<dd><p>Reset the optimizer for the model.
-:param learning_rate: Learning rate for the optimizer. Defaults to 0.2.
-:type learning_rate: float, optional</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.save_model">
-<span class="sig-name descname"><span class="pre">save_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.save_model" title="Link to this definition">¶</a></dt>
-<dd><p>Save the model state to a file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>file_name</strong> (<em>str</em>) – Path to save the model.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.train_model">
-<span class="sig-name descname"><span class="pre">train_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epochs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_frozen</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.binaryTreeLogicNet.train_model" title="Link to this definition">¶</a></dt>
-<dd><p>Train the binary tree logic network.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor of shape (batch_size, input_size).</p></li>
-<li><p><strong>y</strong> (<em>torch.Tensor</em>) – Target tensor of shape (batch_size, 1).</p></li>
-<li><p><strong>epochs</strong> (<em>int</em>) – Number of training epochs.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>History of loss values during training.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>list</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.unharden_alternating_tree">
-<span class="sig-name descname"><span class="pre">unharden_alternating_tree</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.unharden_alternating_tree" title="Link to this definition">¶</a></dt>
-<dd><p>Revert alternating tree hardening to allow continued training.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="bacon.binaryTreeLogicNet.unharden_full_tree">
-<span class="sig-name descname"><span class="pre">unharden_full_tree</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#bacon.binaryTreeLogicNet.unharden_full_tree" title="Link to this definition">¶</a></dt>
-<dd><p>Revert full tree hardening to allow continued training.</p>
 </dd></dl>
 
 </dd></dl>
@@ -1087,14 +588,11 @@ Example: [IdentityTransformation(n), NegationTransformation(n)] for identity+neg
 <li><p><strong>loss_weight_full_tree_ingress</strong> (<em>float</em><em>, </em><em>optional</em>) – Weight for full tree ingress constraint loss (max 2 inputs per node). Defaults to 0.5.</p></li>
 <li><p><strong>use_permutation_layer</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to use the permutation layer. Defaults to True.
 Set to False for full tree layout to let the tree learn input routing directly.</p></li>
-<li><p><strong>regression_loss_type</strong> (<em>str</em><em>, </em><em>optional</em>) – <p>Loss type for regression mode. Defaults to “mse”.
-- “mse”: Standard MSE loss. Simple but scale-sensitive (mul at root dominates gradients).
-- “correlation”: Pearson correlation loss (1 - r²). Scale-invariant but too lenient.
-- “normalized_mse”: Z-score both pred and target, then MSE. Best for arithmetic -</p>
-<blockquote>
-<div><p>scale-invariant but requires correct pattern matching.</p>
-</div></blockquote>
-</p></li>
+<li><p><strong>regression_loss_type</strong> (<em>str</em><em>, </em><em>optional</em>) – Loss type for regression mode. Defaults to “mse”.
+Supported values are “mse” (standard MSE, scale-sensitive),
+“correlation” (Pearson correlation loss, scale-invariant), and
+“normalized_mse” (z-score normalized MSE for scale-invariant
+pattern matching).</p></li>
 </ul>
 </dd>
 </dl>
@@ -1640,50 +1138,6 @@ Does NOT clear existing pruning state - adds to it.</p>
 <li><a class="reference internal" href="#bacon.MinMaxAggregator"><code class="docutils literal notranslate"><span class="pre">MinMaxAggregator</span></code></a><ul>
 <li><a class="reference internal" href="#bacon.MinMaxAggregator.aggregate_float"><code class="docutils literal notranslate"><span class="pre">MinMaxAggregator.aggregate_float()</span></code></a></li>
 <li><a class="reference internal" href="#bacon.MinMaxAggregator.aggregate_tensor"><code class="docutils literal notranslate"><span class="pre">MinMaxAggregator.aggregate_tensor()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#bacon.baconNet"><code class="docutils literal notranslate"><span class="pre">baconNet</span></code></a><ul>
-<li><a class="reference internal" href="#bacon.baconNet.evaluate"><code class="docutils literal notranslate"><span class="pre">baconNet.evaluate()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.find_best_model"><code class="docutils literal notranslate"><span class="pre">baconNet.find_best_model()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.forward"><code class="docutils literal notranslate"><span class="pre">baconNet.forward()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.inference"><code class="docutils literal notranslate"><span class="pre">baconNet.inference()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.inference_raw"><code class="docutils literal notranslate"><span class="pre">baconNet.inference_raw()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.load_model"><code class="docutils literal notranslate"><span class="pre">baconNet.load_model()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.make_param_groups"><code class="docutils literal notranslate"><span class="pre">baconNet.make_param_groups()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.prune_features"><code class="docutils literal notranslate"><span class="pre">baconNet.prune_features()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.save_model"><code class="docutils literal notranslate"><span class="pre">baconNet.save_model()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.baconNet.train_model"><code class="docutils literal notranslate"><span class="pre">baconNet.train_model()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet</span></code></a><ul>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.anneal_alternating_tree_gumbel"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.anneal_alternating_tree_gumbel()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.anneal_alternating_tree_temperature"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.anneal_alternating_tree_temperature()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.anneal_full_tree_gumbel"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.anneal_full_tree_gumbel()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.anneal_full_tree_temperature"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.anneal_full_tree_temperature()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.build_balanced_tree"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.build_balanced_tree()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.build_paired_tree"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.build_paired_tree()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.forward"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.forward()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_alternating_tree_balance_loss"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_alternating_tree_balance_loss()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_alternating_tree_egress_loss"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_alternating_tree_egress_loss()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_alternating_tree_exponent_regularization_loss"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_alternating_tree_exponent_regularization_loss()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_alternating_tree_num_nodes"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_alternating_tree_num_nodes()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_alternating_tree_structure_description"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_alternating_tree_structure_description()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_full_tree_confidence"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_full_tree_confidence()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_full_tree_egress_loss"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_full_tree_egress_loss()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_full_tree_ingress_balance_loss"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_full_tree_ingress_balance_loss()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_full_tree_ingress_loss"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_full_tree_ingress_loss()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_full_tree_scale_regularization_loss"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_full_tree_scale_regularization_loss()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_full_tree_structure"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_full_tree_structure()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.get_input_labels"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.get_input_labels()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.harden_alternating_tree"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.harden_alternating_tree()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.harden_full_tree"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.harden_full_tree()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.load_model"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.load_model()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.prune_features"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.prune_features()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.reset_optimizer"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.reset_optimizer()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.save_model"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.save_model()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.train_model"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.train_model()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.unharden_alternating_tree"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.unharden_alternating_tree()</span></code></a></li>
-<li><a class="reference internal" href="#bacon.binaryTreeLogicNet.unharden_full_tree"><code class="docutils literal notranslate"><span class="pre">binaryTreeLogicNet.unharden_full_tree()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#baconnet">baconNet</a><ul>

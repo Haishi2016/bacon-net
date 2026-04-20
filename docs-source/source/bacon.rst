@@ -3,6 +3,7 @@ BACON Module
 
 .. automodule:: bacon
    :members:
+   :exclude-members: baconNet, binaryTreeLogicNet
    :undoc-members:
    :show-inheritance:
 

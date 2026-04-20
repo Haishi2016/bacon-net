@@ -201,6 +201,7 @@
   <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../../introduction/introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction/sample_report.html">Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../dev-guide/dev-guide.html">Developer Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../bacon.html">BACON Module</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">Aggregators</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
@@ -260,31 +261,51 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="bacon.aggregators.bool.min_max.MinMaxAggregator">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.aggregators.bool.min_max.</span></span><span class="sig-name descname"><span class="pre">MinMaxAggregator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.bool.min_max.MinMaxAggregator" title="Link to this definition">¶</a></dt>
-<dd><dl class="py method">
+<dd><p>Aggregate a sequence of inputs with min/max interpolation.</p>
+<p>The aggregator computes:</p>
+<ul class="simple">
+<li><p>elementwise minimum when <code class="docutils literal notranslate"><span class="pre">andness</span></code> is near 1</p></li>
+<li><p>elementwise maximum when <code class="docutils literal notranslate"><span class="pre">andness</span></code> is near 0</p></li>
+</ul>
+<p>with a straight-through hard gating step so gradients can still flow
+through the continuous proxy during training.</p>
+<dl class="py method">
 <dt class="sig sig-object py" id="bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_float">
 <span class="sig-name descname"><span class="pre">aggregate_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_float" title="Link to this definition">¶</a></dt>
-<dd><p>Aggregate N scalar values with scalar andness a and N weights.</p>
+<dd><p>Float-friendly wrapper around <a class="reference internal" href="#bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_tensor" title="bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_tensor"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate_tensor()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>values</strong> – Input scalar values to aggregate.</p></li>
+<li><p><strong>a</strong> – Andness control value.</p></li>
+<li><p><strong>weights</strong> – Optional per-input weights used as soft gates.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Python float result.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_tensor">
 <span class="sig-name descname"><span class="pre">aggregate_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">andness</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_tensor" title="Link to this definition">¶</a></dt>
-<dd><p>Aggregates two tensors using the Min-Max method.</p>
+<dd><p>Aggregate one or more tensor-like values.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x1</strong> (<em>torch.Tensor</em>) – First input tensor.</p></li>
-<li><p><strong>x2</strong> (<em>torch.Tensor</em>) – Second input tensor.</p></li>
-<li><p><strong>andness</strong> (<em>float</em>) – Andness.</p></li>
-<li><p><strong>w0</strong> (<em>float</em>) – Not used in this implementation, but kept for compatibility.</p></li>
-<li><p><strong>w1</strong> (<em>float</em>) – Not used in this implementation, but kept for compatibility.</p></li>
+<li><p><strong>values</strong> – Non-empty sequence of tensors with compatible shapes.</p></li>
+<li><p><strong>andness</strong> – Control signal where larger values bias toward min/AND and
+smaller values bias toward max/OR.</p></li>
+<li><p><strong>weights</strong> – Optional per-input gates in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>. When provided,
+each input is blended with a neutral baseline before reduction.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Resulting tensor after aggregation.</p>
+<dd class="field-even"><p>Tensor with the same broadcast-compatible shape as each input.</p>
 </dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ValueError</strong> – If <code class="docutils literal notranslate"><span class="pre">values</span></code> is empty.</p>
 </dd>
 </dl>
 </dd></dl>

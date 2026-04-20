@@ -8,6 +8,7 @@ Welcome to BACON, a neural symbolic network for decision-making problems using G
    :caption: Contents:
 
    introduction/introduction.md
+   introduction/sample_report.md
    dev-guide/dev-guide.md
    bacon
    aggregators/index

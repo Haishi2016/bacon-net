@@ -104,10 +104,10 @@ class baconNet(nn.Module):
         use_permutation_layer (bool, optional): Whether to use the permutation layer. Defaults to True.
             Set to False for full tree layout to let the tree learn input routing directly.
         regression_loss_type (str, optional): Loss type for regression mode. Defaults to "mse".
-            - "mse": Standard MSE loss. Simple but scale-sensitive (mul at root dominates gradients).
-            - "correlation": Pearson correlation loss (1 - r²). Scale-invariant but too lenient.
-            - "normalized_mse": Z-score both pred and target, then MSE. Best for arithmetic - 
-              scale-invariant but requires correct pattern matching.
+            Supported values are "mse" (standard MSE, scale-sensitive),
+            "correlation" (Pearson correlation loss, scale-invariant), and
+            "normalized_mse" (z-score normalized MSE for scale-invariant
+            pattern matching).
     """
     def __init__(self, input_size, 
                  tree_layout="left", 
