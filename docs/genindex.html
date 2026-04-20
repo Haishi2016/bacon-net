@@ -203,13 +203,20 @@
 <li class="toctree-l1"><a class="reference internal" href="dev-guide/dev-guide.html">Developer Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="bacon.html">BACON Module</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="aggregators/index.html">Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="aggregators/base.html">Aggregator Base Interfaces</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="aggregators/lsp/index.html">LSP Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of LSP Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/full_weight.html">Full-Weight Aggregator</a></li>
 <li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/half_weight.html">Half-Weight Aggregator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/softmax_lsp.html">LSP Softmax Aggregator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="aggregators/lsp/generic_gl.html">Generic GL Aggregator</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="aggregators/boolean/index.html">Boolean Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Boolean Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="aggregators/boolean/min_max.html">Min-Max Aggregator</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="aggregators/math/index.html">Math Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of Math Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="aggregators/math/operator_set.html">Operator-Set Aggregators</a></li>
 </ul>
 </li>
 </ul>
@@ -251,7 +258,7 @@
           
 <section class="genindex-section">
   <h1 id="index">Index</h1>
-  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#H"><strong>H</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#O"><strong>O</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a></div>
+  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#H"><strong>H</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#O"><strong>O</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a></div>
 </section>
 <section id="A" class="genindex-section">
   <h2>A</h2>
@@ -261,12 +268,28 @@
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.actual_max_epochs">actual_max_epochs (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
-        <li><a href="aggregators/boolean/min_max.html#bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_float">aggregate_float() (bacon.aggregators.bool.min_max.MinMaxAggregator method)</a>
+        <li><a href="aggregators/base.html#bacon.aggregators.base.AggregatorBase.aggregate">aggregate() (bacon.aggregators.base.AggregatorBase method)</a>
 
         <ul>
+          <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator.aggregate">(bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator method)</a>
+</li>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.aggregate">(bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
+</li>
+        </ul></li>
+        <li><a href="aggregators/base.html#bacon.aggregators.base.AggregatorBase.aggregate_float">aggregate_float() (bacon.aggregators.base.AggregatorBase method)</a>
+
+        <ul>
+          <li><a href="aggregators/boolean/min_max.html#bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_float">(bacon.aggregators.bool.min_max.MinMaxAggregator method)</a>
+</li>
           <li><a href="aggregators/lsp/full_weight.html#bacon.aggregators.lsp.full_weight.FullWeightAggregator.aggregate_float">(bacon.aggregators.lsp.full_weight.FullWeightAggregator method)</a>
 </li>
+          <li><a href="aggregators/lsp/generic_gl.html#bacon.aggregators.lsp.generic_gl.GenericGLAggregator.aggregate_float">(bacon.aggregators.lsp.generic_gl.GenericGLAggregator method)</a>
+</li>
           <li><a href="aggregators/lsp/half_weight.html#bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_float">(bacon.aggregators.lsp.half_weight.HalfWeightAggregator method)</a>
+</li>
+          <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.aggregate_float">(bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+</li>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.aggregate_float">(bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
 </li>
           <li><a href="bacon.html#bacon.FullWeightAggregator.aggregate_float">(bacon.FullWeightAggregator method)</a>
 </li>
@@ -275,12 +298,20 @@
           <li><a href="bacon.html#bacon.MinMaxAggregator.aggregate_float">(bacon.MinMaxAggregator method)</a>
 </li>
         </ul></li>
-        <li><a href="aggregators/boolean/min_max.html#bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_tensor">aggregate_tensor() (bacon.aggregators.bool.min_max.MinMaxAggregator method)</a>
+        <li><a href="aggregators/base.html#bacon.aggregators.base.AggregatorBase.aggregate_tensor">aggregate_tensor() (bacon.aggregators.base.AggregatorBase method)</a>
 
         <ul>
+          <li><a href="aggregators/boolean/min_max.html#bacon.aggregators.bool.min_max.MinMaxAggregator.aggregate_tensor">(bacon.aggregators.bool.min_max.MinMaxAggregator method)</a>
+</li>
           <li><a href="aggregators/lsp/full_weight.html#bacon.aggregators.lsp.full_weight.FullWeightAggregator.aggregate_tensor">(bacon.aggregators.lsp.full_weight.FullWeightAggregator method)</a>
 </li>
+          <li><a href="aggregators/lsp/generic_gl.html#bacon.aggregators.lsp.generic_gl.GenericGLAggregator.aggregate_tensor">(bacon.aggregators.lsp.generic_gl.GenericGLAggregator method)</a>
+</li>
           <li><a href="aggregators/lsp/half_weight.html#bacon.aggregators.lsp.half_weight.HalfWeightAggregator.aggregate_tensor">(bacon.aggregators.lsp.half_weight.HalfWeightAggregator method)</a>
+</li>
+          <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.aggregate_tensor">(bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+</li>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.aggregate_tensor">(bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
 </li>
           <li><a href="bacon.html#bacon.FullWeightAggregator.aggregate_tensor">(bacon.FullWeightAggregator method)</a>
 </li>
@@ -293,6 +324,8 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.aggregation_frozen">aggregation_frozen (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
+        <li><a href="aggregators/base.html#bacon.aggregators.base.AggregatorBase">AggregatorBase (class in bacon.aggregators.base)</a>
+</li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.anneal_alternating_tree_gumbel">anneal_alternating_tree_gumbel() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.anneal_alternating_tree_temperature">anneal_alternating_tree_temperature() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
@@ -303,6 +336,16 @@
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.anneal_over_epochs">anneal_over_epochs (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.anneal_tau">anneal_tau() (bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+</li>
+        <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.ArithmeticOperatorSet">ArithmeticOperatorSet (class in bacon.aggregators.math.operator_set)</a>
+</li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator.attach_to_tree">attach_to_tree() (bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator method)</a>
+
+        <ul>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.attach_to_tree">(bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
+</li>
+        </ul></li>
     </ul></td>
   </tr></table>
 </section>
@@ -316,6 +359,13 @@
 
         <ul>
           <li><a href="bacon.html#module-bacon">module</a>
+</li>
+        </ul></li>
+        <li>
+    bacon.aggregators.base
+
+        <ul>
+          <li><a href="aggregators/base.html#module-bacon.aggregators.base">module</a>
 </li>
         </ul></li>
         <li>
@@ -333,10 +383,31 @@
 </li>
         </ul></li>
         <li>
+    bacon.aggregators.lsp.generic_gl
+
+        <ul>
+          <li><a href="aggregators/lsp/generic_gl.html#module-bacon.aggregators.lsp.generic_gl">module</a>
+</li>
+        </ul></li>
+        <li>
     bacon.aggregators.lsp.half_weight
 
         <ul>
           <li><a href="aggregators/lsp/half_weight.html#module-bacon.aggregators.lsp.half_weight">module</a>
+</li>
+        </ul></li>
+        <li>
+    bacon.aggregators.lsp.softmax_lsp
+
+        <ul>
+          <li><a href="aggregators/lsp/softmax_lsp.html#module-bacon.aggregators.lsp.softmax_lsp">module</a>
+</li>
+        </ul></li>
+        <li>
+    bacon.aggregators.math.operator_set
+
+        <ul>
+          <li><a href="aggregators/math/operator_set.html#module-bacon.aggregators.math.operator_set">module</a>
 </li>
         </ul></li>
         <li>
@@ -346,6 +417,8 @@
           <li><a href="bacon.html#module-bacon.baconNet">module</a>
 </li>
         </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li>
     bacon.binaryTreeLogicNet
 
@@ -353,8 +426,6 @@
           <li><a href="bacon.html#module-bacon.binaryTreeLogicNet">module</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="bacon.html#bacon.baconNet.baconNet">baconNet (class in bacon.baconNet)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.best_confidence">best_confidence (bacon.baconNet.TrainingSetup attribute)</a>
@@ -375,6 +446,10 @@
 </li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet">binaryTreeLogicNet (class in bacon.binaryTreeLogicNet)</a>
 </li>
+        <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.BoolOperatorSet">BoolOperatorSet (class in bacon.aggregators.math.operator_set)</a>
+</li>
+        <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.BoolOperatorSetWithIdentity">BoolOperatorSetWithIdentity (class in bacon.aggregators.math.operator_set)</a>
+</li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.build_balanced_tree">build_balanced_tree() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.build_paired_tree">build_paired_tree() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
@@ -393,16 +468,38 @@
   </tr></table>
 </section>
 
+<section id="D" class="genindex-section">
+  <h2>D</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.describe">describe() (bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+
+        <ul>
+          <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator.describe">(bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
 <section id="E" class="genindex-section">
   <h2>E</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="bacon.html#bacon.baconNet.TrainingSetup.epoch_when_frozen">epoch_when_frozen (bacon.baconNet.TrainingSetup attribute)</a>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.entropy">entropy() (bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+
+        <ul>
+          <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator.entropy">(bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator method)</a>
 </li>
-        <li><a href="bacon.html#bacon.baconNet.TrainingSetup.epochs_since_improvement">epochs_since_improvement (bacon.baconNet.TrainingSetup attribute)</a>
+        </ul></li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.entropy_loss">entropy_loss() (bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+</li>
+        <li><a href="bacon.html#bacon.baconNet.TrainingSetup.epoch_when_frozen">epoch_when_frozen (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="bacon.html#bacon.baconNet.TrainingSetup.epochs_since_improvement">epochs_since_improvement (bacon.baconNet.TrainingSetup attribute)</a>
+</li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.epochs_without_confidence_improvement">epochs_without_confidence_improvement (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.epochs_without_improvement">epochs_without_improvement (bacon.baconNet.TrainingSetup attribute)</a>
@@ -419,9 +516,13 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="bacon.html#bacon.baconNet.baconNet.find_best_model">find_best_model() (bacon.baconNet.baconNet method)</a>
 </li>
-        <li><a href="bacon.html#bacon.baconNet.baconNet.forward">forward() (bacon.baconNet.baconNet method)</a>
+        <li><a href="aggregators/lsp/generic_gl.html#bacon.aggregators.lsp.generic_gl.GenericGLAggregator.forward">forward() (bacon.aggregators.lsp.generic_gl.GenericGLAggregator method)</a>
 
         <ul>
+          <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.forward">(bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+</li>
+          <li><a href="bacon.html#bacon.baconNet.baconNet.forward">(bacon.baconNet.baconNet method)</a>
+</li>
           <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.forward">(bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
         </ul></li>
@@ -445,6 +546,10 @@
   <h2>G</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="aggregators/lsp/generic_gl.html#bacon.aggregators.lsp.generic_gl.GenericGLAggregator">GenericGLAggregator (class in bacon.aggregators.lsp.generic_gl)</a>
+</li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator.get_alpha">get_alpha() (bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator method)</a>
+</li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_alternating_tree_balance_loss">get_alternating_tree_balance_loss() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_alternating_tree_egress_loss">get_alternating_tree_egress_loss() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
@@ -455,10 +560,20 @@
 </li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_alternating_tree_structure_description">get_alternating_tree_structure_description() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
-        <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_full_tree_confidence">get_full_tree_confidence() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
+        <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.ArithmeticOperatorSet.get_default_op_names">get_default_op_names() (bacon.aggregators.math.operator_set.ArithmeticOperatorSet method)</a>
+
+        <ul>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.BoolOperatorSet.get_default_op_names">(bacon.aggregators.math.operator_set.BoolOperatorSet method)</a>
 </li>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.BoolOperatorSetWithIdentity.get_default_op_names">(bacon.aggregators.math.operator_set.BoolOperatorSetWithIdentity method)</a>
+</li>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.get_default_op_names">(bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
+</li>
+        </ul></li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_full_tree_confidence">get_full_tree_confidence() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
+</li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_full_tree_egress_loss">get_full_tree_egress_loss() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_full_tree_ingress_balance_loss">get_full_tree_ingress_balance_loss() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
@@ -470,6 +585,12 @@
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_full_tree_structure">get_full_tree_structure() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.get_input_labels">get_input_labels() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
+</li>
+        <li><a href="aggregators/lsp/generic_gl.html#bacon.aggregators.lsp.generic_gl.GenericGLAggregator.get_transform_matrix">get_transform_matrix() (bacon.aggregators.lsp.generic_gl.GenericGLAggregator method)</a>
+</li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator.get_weights">get_weights() (bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator method)</a>
+</li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.get_weights_for_andness">get_weights_for_andness() (bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -485,11 +606,13 @@
           <li><a href="aggregators/lsp/half_weight.html#bacon.aggregators.lsp.half_weight.HalfWeightAggregator">(class in bacon.aggregators.lsp.half_weight)</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.harden_alternating_tree">harden_alternating_tree() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.harden_full_tree">harden_full_tree() (bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
+</li>
+        <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.harden_operators">harden_operators() (bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.has_converged_before_freeze">has_converged_before_freeze (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
@@ -525,6 +648,8 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.loss_history">loss_history (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator">LspSoftmaxAggregator (class in bacon.aggregators.lsp.softmax_lsp)</a>
+</li>
     </ul></td>
   </tr></table>
 </section>
@@ -547,11 +672,19 @@
         <ul>
           <li><a href="bacon.html#module-bacon">bacon</a>
 </li>
+          <li><a href="aggregators/base.html#module-bacon.aggregators.base">bacon.aggregators.base</a>
+</li>
           <li><a href="aggregators/boolean/min_max.html#module-bacon.aggregators.bool.min_max">bacon.aggregators.bool.min_max</a>
 </li>
           <li><a href="aggregators/lsp/full_weight.html#module-bacon.aggregators.lsp.full_weight">bacon.aggregators.lsp.full_weight</a>
 </li>
+          <li><a href="aggregators/lsp/generic_gl.html#module-bacon.aggregators.lsp.generic_gl">bacon.aggregators.lsp.generic_gl</a>
+</li>
           <li><a href="aggregators/lsp/half_weight.html#module-bacon.aggregators.lsp.half_weight">bacon.aggregators.lsp.half_weight</a>
+</li>
+          <li><a href="aggregators/lsp/softmax_lsp.html#module-bacon.aggregators.lsp.softmax_lsp">bacon.aggregators.lsp.softmax_lsp</a>
+</li>
+          <li><a href="aggregators/math/operator_set.html#module-bacon.aggregators.math.operator_set">bacon.aggregators.math.operator_set</a>
 </li>
           <li><a href="bacon.html#module-bacon.baconNet">bacon.baconNet</a>
 </li>
@@ -572,6 +705,8 @@
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator">OperatorSetAggregator (class in bacon.aggregators.math.operator_set)</a>
+</li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.optimizer">optimizer (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.original_sparsity_weight">original_sparsity_weight (bacon.baconNet.TrainingSetup attribute)</a>
@@ -587,6 +722,8 @@
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.param_groups">param_groups (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.perm_temp_decay_rate">perm_temp_decay_rate (bacon.baconNet.TrainingSetup attribute)</a>
+</li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator">PerNodeLspSoftmaxAggregator (class in bacon.aggregators.lsp.softmax_lsp)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
@@ -626,6 +763,18 @@
           <li><a href="bacon.html#bacon.binaryTreeLogicNet.binaryTreeLogicNet.save_model">(bacon.binaryTreeLogicNet.binaryTreeLogicNet method)</a>
 </li>
         </ul></li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.set_tau">set_tau() (bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator method)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.soften_operators">soften_operators() (bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
+</li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator.start_forward">start_forward() (bacon.aggregators.lsp.softmax_lsp.PerNodeLspSoftmaxAggregator method)</a>
+
+        <ul>
+          <li><a href="aggregators/math/operator_set.html#bacon.aggregators.math.operator_set.OperatorSetAggregator.start_forward">(bacon.aggregators.math.operator_set.OperatorSetAggregator method)</a>
+</li>
+        </ul></li>
     </ul></td>
   </tr></table>
 </section>
@@ -635,6 +784,8 @@
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.task_type">task_type (bacon.baconNet.TrainingSetup attribute)</a>
+</li>
+        <li><a href="aggregators/lsp/softmax_lsp.html#bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator.tau">tau (bacon.aggregators.lsp.softmax_lsp.LspSoftmaxAggregator property)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.temp_paused">temp_paused (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
@@ -649,6 +800,10 @@
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup">TrainingSetup (class in bacon.baconNet)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.trans_temp_decay_rate">trans_temp_decay_rate (bacon.baconNet.TrainingSetup attribute)</a>
+</li>
+        <li><a href="aggregators/lsp/generic_gl.html#bacon.aggregators.lsp.generic_gl.GenericGLAggregator.transform">transform() (bacon.aggregators.lsp.generic_gl.GenericGLAggregator method)</a>
+</li>
+        <li><a href="aggregators/lsp/generic_gl.html#bacon.aggregators.lsp.generic_gl.GenericGLAggregator.transform_regularization">transform_regularization() (bacon.aggregators.lsp.generic_gl.GenericGLAggregator method)</a>
 </li>
         <li><a href="bacon.html#bacon.baconNet.TrainingSetup.transformation_converged">transformation_converged (bacon.baconNet.TrainingSetup attribute)</a>
 </li>
