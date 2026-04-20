@@ -3,10 +3,10 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Aggregator Base Interfaces" href="base.html" /><link rel="prev" title="BACON Module" href="../bacon.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="LSP Aggregators" href="lsp/index.html" /><link rel="prev" title="Aggregators" href="index.html" />
 
     <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
-        <title>Aggregators - BACON documentation</title>
+        <title>Aggregator Base Interfaces - BACON documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -178,7 +178,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -204,8 +204,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../introduction/sample_report.html">Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../dev-guide/dev-guide.html">Developer Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../bacon.html">BACON Module</a></li>
-<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">Aggregators</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="base.html">Aggregator Base Interfaces</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Aggregators</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Aggregator Base Interfaces</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="lsp/index.html">LSP Aggregators</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of LSP Aggregators</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="lsp/full_weight.html">Full-Weight Aggregator</a></li>
 <li class="toctree-l3"><a class="reference internal" href="lsp/half_weight.html">Half-Weight Aggregator</a></li>
@@ -243,7 +243,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/aggregators/index.rst.txt" title="View this page">
+  <a class="muted-link" href="../_sources/aggregators/base.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -257,38 +257,45 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="aggregators">
-<h1>Aggregators<a class="headerlink" href="#aggregators" title="Link to this heading">¶</a></h1>
-<p>BACON supports different aggregators for various tasks. An aggregator takes weighted inputs and combines them into a single output following specific rules.</p>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="base.html">Aggregator Base Interfaces</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="base.html#bacon.aggregators.base.AggregatorBase"><code class="docutils literal notranslate"><span class="pre">AggregatorBase</span></code></a></li>
+          <section id="module-bacon.aggregators.base">
+<span id="aggregator-base-interfaces"></span><h1>Aggregator Base Interfaces<a class="headerlink" href="#module-bacon.aggregators.base" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="bacon.aggregators.base.AggregatorBase">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bacon.aggregators.base.</span></span><span class="sig-name descname"><span class="pre">AggregatorBase</span></span><a class="headerlink" href="#bacon.aggregators.base.AggregatorBase" title="Link to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="bacon.aggregators.base.AggregatorBase.aggregate">
+<span class="sig-name descname"><span class="pre">aggregate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bacon.aggregators.base.AggregatorBase.aggregate" title="Link to this definition">¶</a></dt>
+<dd><p>Dispatch aggregation for either Python floats or torch.Tensors.
+Expects:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>values: Sequence[float] or Sequence[Tensor]</p></li>
+<li><p>a: float or Tensor</p></li>
+<li><p>weights: Sequence[float] or Sequence[Tensor] or Tensor</p></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="lsp/index.html">LSP Aggregators</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="lsp/full_weight.html">Full-Weight Aggregator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="lsp/half_weight.html">Half-Weight Aggregator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="lsp/softmax_lsp.html">LSP Softmax Aggregator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="lsp/generic_gl.html">Generic GL Aggregator</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="boolean/index.html">Boolean Aggregators</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="boolean/min_max.html">Min-Max Aggregator</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="math/index.html">Math Aggregators</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="math/operator_set.html">Operator-Set Aggregators</a></li>
-</ul>
-</li>
-</ul>
-</div>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bacon.aggregators.base.AggregatorBase.aggregate_float">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">aggregate_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#bacon.aggregators.base.AggregatorBase.aggregate_float" title="Link to this definition">¶</a></dt>
+<dd><p>Aggregate N scalar values with scalar andness a and N weights.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bacon.aggregators.base.AggregatorBase.aggregate_tensor">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">aggregate_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#bacon.aggregators.base.AggregatorBase.aggregate_tensor" title="Link to this definition">¶</a></dt>
+<dd><p>Aggregate N tensors with andness a and N weights.</p>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 
         </article>
@@ -296,23 +303,23 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="base.html">
+          <a class="next-page" href="lsp/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Aggregator Base Interfaces</div>
+                <div class="title">LSP Aggregators</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../bacon.html">
+          <a class="prev-page" href="index.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">BACON Module</div>
+                <div class="title">Aggregators</div>
                 
               </div>
             </a>
@@ -334,8 +341,32 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Aggregator Base Interfaces</a><ul>
+<li><a class="reference internal" href="#bacon.aggregators.base.AggregatorBase"><code class="docutils literal notranslate"><span class="pre">AggregatorBase</span></code></a><ul>
+<li><a class="reference internal" href="#bacon.aggregators.base.AggregatorBase.aggregate"><code class="docutils literal notranslate"><span class="pre">AggregatorBase.aggregate()</span></code></a></li>
+<li><a class="reference internal" href="#bacon.aggregators.base.AggregatorBase.aggregate_float"><code class="docutils literal notranslate"><span class="pre">AggregatorBase.aggregate_float()</span></code></a></li>
+<li><a class="reference internal" href="#bacon.aggregators.base.AggregatorBase.aggregate_tensor"><code class="docutils literal notranslate"><span class="pre">AggregatorBase.aggregate_tensor()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

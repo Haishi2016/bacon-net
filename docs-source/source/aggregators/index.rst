@@ -6,5 +6,7 @@ BACON supports different aggregators for various tasks. An aggregator takes weig
 .. toctree::
    :maxdepth: 2
 
+   base
    lsp/index
    boolean/index
+   math/index

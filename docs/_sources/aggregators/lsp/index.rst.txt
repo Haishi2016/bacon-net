@@ -10,3 +10,5 @@ BACON uses a Generic Conjunctive/Disjunctive (GCD) aggregator, whose andness par
    
    full_weight
    half_weight
+   softmax_lsp
+   generic_gl
