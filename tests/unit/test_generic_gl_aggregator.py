@@ -405,6 +405,69 @@ class TestFullMode:
         assert (out >= 0).all() and (out <= 1).all()
 
 
+# ---- AIGCD combined mode ----
+
+class TestAigcdMode:
+    def test_routing_gating_and_transform_coexist(self):
+        agg = GenericGLAggregator(
+            anchors=('min', 'mean', 'max'),
+            weight_mode='aigcd',
+            use_transform=True,
+            use_routing=True,
+            use_gating=True,
+            gating_use_values=True,
+            gating_use_context=False,
+            hidden_dim=16,
+        )
+        assert hasattr(agg, 'alpha_logits')
+        assert hasattr(agg, 'gate_net')
+        assert hasattr(agg, 'r_logits')
+
+        x = torch.rand(2, 12)
+        out = agg(x)
+        assert out.shape == torch.Size([12])
+        assert (out >= 0).all() and (out <= 1).all()
+
+    def test_neutral_gate_matches_static_at_init(self):
+        static = GenericGLAggregator(
+            anchors=('min', 'mean', 'max'),
+            weight_mode='static',
+            tau=0.2,
+        )
+        aigcd = GenericGLAggregator(
+            anchors=('min', 'mean', 'max'),
+            weight_mode='aigcd',
+            use_routing=True,
+            use_gating=True,
+            gating_use_values=True,
+            gating_use_context=False,
+            tau=0.2,
+        )
+
+        with torch.no_grad():
+            logits = torch.tensor([1.2, -0.3, 0.7])
+            static.alpha_logits.copy_(logits)
+            aigcd.alpha_logits.copy_(logits)
+
+        x = torch.rand(2, 25)
+        out_static = static(x)
+        out_aigcd = aigcd(x)
+        torch.testing.assert_close(out_aigcd, out_static, atol=1e-6, rtol=1e-6)
+
+    def test_context_required_when_configured(self):
+        agg = GenericGLAggregator(
+            anchors=('min', 'mean', 'max'),
+            weight_mode='aigcd',
+            use_routing=True,
+            use_gating=True,
+            gating_use_values=False,
+            gating_use_context=True,
+            context_dim=1,
+        )
+        with pytest.raises(ValueError, match="requires context"):
+            agg(torch.rand(2, 8))
+
+
 # ---- AggregatorBase interface ----
 
 class TestAggregatorBaseInterface:
