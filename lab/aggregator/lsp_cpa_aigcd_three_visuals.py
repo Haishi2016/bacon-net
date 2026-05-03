@@ -48,8 +48,13 @@ def _build_cpa_agg(
 ) -> GenericGLAggregator:
     agg = GenericGLAggregator(
         anchors=ANCHORS,
-        weight_mode="static",
+        # AIGCD mode keeps routing + gating + transform available together.
+        weight_mode="aigcd",
         use_transform=True,
+        use_routing=True,
+        use_gating=True,
+        gating_use_values=True,
+        gating_use_context=False,
         tau=tau,
     )
     _set_anchor_probs(agg, probs)
@@ -192,7 +197,7 @@ def inferred_andness(probs: np.ndarray) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Three-panel CPA visuals: AG, AH, and hybrid AIGCD profile")
     parser.add_argument("--show", action="store_true", help="Show matplotlib figure")
-    parser.add_argument("--save", type=str, default="lab/aggregator/lsp_cpa_aigcd_three_visuals.png", help="Save figure path")
+    parser.add_argument("--save", type=str, default=str(pathlib.Path(__file__).with_suffix(".png")), help="Save figure path")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for hybrid-profile search")
     args = parser.parse_args()
 

@@ -1,14 +1,13 @@
-"""conditional-aggregator.py
+"""conditional-aggregator-full-aigcd.py
 
-Demo of context-dependent aggregation using GenericGLAggregator
-in AIGCD mode with context gating enabled.
+Test of AIGCD mode with ALL components enabled simultaneously:
+  - Routing logits (static anchor routing)
+  - Gating network (context-dependent)
+  - Value-dependent gating (input feature-based adjustment)
+  - Coordinate transformation R
 
-Ground-truth rule (two bands):
-    c < 0.5           -> y = min(a, b)
-    c >= 0.5          -> y = max(a, b)
-
-The model receives (a, b) as aggregation inputs and c as external context.
-It learns alpha(c) -- the convex anchor weights -- via a small gate network.
+Tests whether the model can learn the conditional two-band target
+(min when c<0.5, max when c>=0.5) while juggling all components.
 """
 
 import pathlib
@@ -20,9 +19,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-# ---------------------------------------------------------------------------
-# Repo import
-# ---------------------------------------------------------------------------
+# Ensure local repo package imports work when running this script directly.
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -32,7 +29,6 @@ from bacon.aggregators.lsp.generic_gl import GenericGLAggregator
 SEED = 42
 EPS = 1e-8
 ANCHORS = ("min", "mean", "max")
-# Context boundary
 C_SWITCH = 0.5
 
 
@@ -42,9 +38,7 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
-# ---------------------------------------------------------------------------
-# Dataset
-# ---------------------------------------------------------------------------
+# ---- Dataset ----
 
 def make_dataset(n: int = 3000):
     """Generate (a, b, c) with two-band conditional target."""
@@ -61,29 +55,25 @@ def make_dataset(n: int = 3000):
     return x_ab, c, y
 
 
-# ---------------------------------------------------------------------------
-# Forward helper (AIGCD with context-gating)
-# ---------------------------------------------------------------------------
+# ---- Forward pass ----
 
 def predict(
     model: GenericGLAggregator,
     x_ab: torch.Tensor,
     c: torch.Tensor,
 ):
-    """Run forward pass and return (y_hat [N,1], alpha [N,k])."""
-    # GenericGL forward expects x [N_inputs, batch].
+    """Run forward pass and return (y_hat [N,1], alpha [N,k], R)."""
     x_nary = x_ab.T                                  # [2, N]
     u = model.transform(x_nary) if model.use_transform else x_nary
     ops = model._compute_anchors(u)                  # [k, N]
     w   = model._compute_weights(u, c=c)             # [k, N]
     y   = (w * ops).sum(dim=0, keepdim=True).T       # [N, 1]
     alpha = w.T                                      # [N, k]
-    return y, alpha
+    R = model.get_transform_matrix() if model.use_transform else None
+    return y, alpha, R
 
 
-# ---------------------------------------------------------------------------
-# Training
-# ---------------------------------------------------------------------------
+# ---- Training ----
 
 def train_model(
     model: GenericGLAggregator,
@@ -103,19 +93,20 @@ def train_model(
         model.train()
         optimizer.zero_grad()
 
-        y_hat, alpha = predict(model, x_train, c_train)
+        y_hat, alpha, _ = predict(model, x_train, c_train)
         mse = torch.mean((y_hat - y_train) ** 2)
 
-        # Light entropy penalty for crisper routing.
+        # Light entropy penalty + transform regularization (identity prior).
         entropy = -(alpha * torch.log(alpha + EPS)).sum(dim=1).mean()
-        loss = mse + 1e-4 * entropy
+        reg = model.transform_regularization()
+        loss = mse + 1e-4 * entropy + reg
 
         loss.backward()
         optimizer.step()
 
         model.eval()
         with torch.no_grad():
-            val_hat, _ = predict(model, x_val, c_val)
+            val_hat, _, _ = predict(model, x_val, c_val)
             val_loss = torch.mean((val_hat - y_val) ** 2)
 
         history["train"].append(float(mse.item()))
@@ -131,9 +122,7 @@ def train_model(
     return history
 
 
-# ---------------------------------------------------------------------------
-# Evaluation
-# ---------------------------------------------------------------------------
+# ---- Evaluation ----
 
 def evaluate(
     model: GenericGLAggregator,
@@ -144,30 +133,31 @@ def evaluate(
 ):
     model.eval()
     with torch.no_grad():
-        y_hat, alpha = predict(model, x, c)
+        y_hat, alpha, R = predict(model, x, c)
         mse = torch.mean((y_hat - y) ** 2).item()
         mae = torch.mean(torch.abs(y_hat - y)).item()
 
     print(f"\n{split_name} metrics:")
     print(f"  MSE: {mse:.6f}")
     print(f"  MAE: {mae:.6f}")
+    
+    if R is not None:
+        print(f"\nTransform matrix R (first 2x2, identity-initialized):")
+        print(R.detach().cpu().numpy())
+    
     return y_hat, alpha
 
 
-# ---------------------------------------------------------------------------
-# Visualisation
-# ---------------------------------------------------------------------------
+# ---- Plots ----
 
-def plot_gating(model: GenericGLAggregator, anchors: tuple[str, ...]):
-    """Reproduce and extend the original chart: anchor weights vs context c.
-    Shows two bands (c<0.5 -> min, c>=0.5 -> max).
-    """
+def plot_gating_bands(model: GenericGLAggregator, anchors: tuple[str, ...]):
+    """Show learned anchor weights vs context c (with all components active)."""
     model.eval()
     with torch.no_grad():
         c_grid = torch.linspace(0, 1, 400).unsqueeze(1)   # [400, 1]
-        # Dummy a=b=0.5 inputs (this demo's gating reads context c only).
+        # Use representative input values (e.g., center of [0,1]^2).
         x_dummy = torch.full((400, 2), 0.5)
-        _, alpha = predict(model, x_dummy, c_grid)
+        _, alpha, _ = predict(model, x_dummy, c_grid)
 
     c_np = c_grid.squeeze().numpy()
     alpha_np = alpha.numpy()
@@ -177,40 +167,15 @@ def plot_gating(model: GenericGLAggregator, anchors: tuple[str, ...]):
     for i, (name, col) in enumerate(zip(anchors, colors)):
         ax.plot(c_np, alpha_np[:, i], label=f"alpha_{name}", color=col, linewidth=2)
 
-    # Band boundary
     ax.axvline(C_SWITCH, linestyle="--", linewidth=1, color="gray", alpha=0.7)
-
-    # Shaded band labels
     ax.axvspan(0.0, C_SWITCH, alpha=0.06, color="#3a86ff", label=f"min zone (c<{C_SWITCH})")
     ax.axvspan(C_SWITCH, 1.0, alpha=0.06, color="#ef476f", label=f"max zone (c>={C_SWITCH})")
 
     ax.set_xlabel("context c")
     ax.set_ylabel("anchor weight")
-    ax.set_title("Learned conditional anchor weights α(c)")
+    ax.set_title("AIGCD Full Mode: Learned anchor weights α(c) with all components active")
     ax.legend(fontsize=8)
     ax.set_ylim(-0.05, 1.05)
-    fig.tight_layout()
-    plt.show()
-
-
-def plot_predictions(model: GenericGLAggregator, n: int = 400):
-    """Scatter plot of true vs predicted y."""
-    model.eval()
-    with torch.no_grad():
-        x_vis, c_vis, y_vis = make_dataset(n)
-        y_hat, _ = predict(model, x_vis, c_vis)
-
-    y_true = y_vis[:, 0].numpy()
-    y_pred = y_hat[:, 0].numpy()
-
-    fig, ax = plt.subplots(figsize=(5.5, 5.5))
-    ax.scatter(y_true, y_pred, s=14, alpha=0.6)
-    lo = min(y_true.min(), y_pred.min())
-    hi = max(y_true.max(), y_pred.max())
-    ax.plot([lo, hi], [lo, hi], "k--", linewidth=1)
-    ax.set_xlabel("True y")
-    ax.set_ylabel("Predicted y")
-    ax.set_title("Prediction quality")
     fig.tight_layout()
     plt.show()
 
@@ -221,15 +186,13 @@ def plot_training(history: dict):
     ax.plot(history["val"],   label="val")
     ax.set_xlabel("epoch")
     ax.set_ylabel("MSE")
-    ax.set_title("Training history")
+    ax.set_title("AIGCD Full Mode: Training history (conditional target)")
     ax.legend()
     fig.tight_layout()
     plt.show()
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+# ---- Main ----
 
 def main():
     set_seed(SEED)
@@ -247,21 +210,23 @@ def main():
     x_val,   c_val,   y_val   = x[n_train:n_train+n_val], c[n_train:n_train+n_val], y[n_train:n_train+n_val]
     x_test,  c_test,  y_test  = x[n_train+n_val:],    c[n_train+n_val:],    y[n_train+n_val:]
 
-    # ---- Model ----
+    # ---- Model: ALL AIGCD components enabled ----
     model = GenericGLAggregator(
         anchors=ANCHORS,
         weight_mode="aigcd",
-        use_routing=False,
-        use_gating=True,
-        gating_use_values=False,
-        gating_use_context=True,
+        use_routing=True,                  # static routing logits
+        use_gating=True,                   # gating network
+        gating_use_values=True,            # input-dependent gating
+        gating_use_context=True,           # context-dependent gating
+        use_transform=True,                # coordinate transformation R
         context_dim=1,
-        use_transform=False,   # no coordinate transform needed; a,b are already clean inputs
         hidden_dim=24,
         tau=1.0,
+        identity_reg=0.01,                 # light regularization toward identity R
     )
     print(model)
-    print(f"\nTwo-band target: min(c<{C_SWITCH})  max(c>={C_SWITCH})\n")
+    print(f"\nTwo-band conditional target: min(c<{C_SWITCH})  max(c>={C_SWITCH})")
+    print("All AIGCD components active: routing + gating(context+values) + transform R\n")
 
     # ---- Train ----
     history = train_model(
@@ -275,10 +240,20 @@ def main():
     # ---- Evaluate ----
     evaluate(model, x_test, c_test, y_test, split_name="Test")
 
+    # ---- Diagnostics ----
+    # For AIGCD with full components, we need to provide u and c for describe()
+    with torch.no_grad():
+        u_sample = torch.full((2, 1), 0.5)  # representative input [N=2, batch=1]
+        c_sample = torch.tensor([[0.5]])     # context at switching point
+        info = model.describe(u=u_sample, c=c_sample)
+    print("\nModel diagnostics (at u=0.5, c=0.5):")
+    print(f"  Effective andness: {info['effective_andness']:.4f}")
+    print(f"  Dominant anchor: {info['dominant_op']}")
+    print(f"  Anchor weights: {', '.join(f'{n}={w:.4f}' for n, w in zip(info['anchors'], info['weights']))}")
+
     # ---- Plots ----
     plot_training(history)
-    plot_gating(model, ANCHORS)
-    plot_predictions(model)
+    plot_gating_bands(model, ANCHORS)
 
 
 if __name__ == "__main__":

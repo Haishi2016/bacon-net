@@ -15,7 +15,7 @@ where:
     - alpha_i are weights (static, conditional, or value-dependent)
     - c is an optional external context variable
 
-The architecture supports **N-ary** inputs and four weight modes:
+The architecture supports **N-ary** inputs and five weight modes:
 
     1. **Static**: fixed convex combination of anchors (classical MAT).
     2. **Composite**: coordinate transformation R enables composite operators
@@ -23,6 +23,8 @@ The architecture supports **N-ary** inputs and four weight modes:
     3. **Conditional**: weights depend on external context c via neural gating.
     4. **Value-dependent**: weights depend on input features psi(u) via neural
        gating, enabling joint-condition aggregation.
+     5. **AIGCD**: combines static routing logits and dynamic gating logits,
+         while optionally using coordinate transformation R.
 """
 
 import torch
@@ -215,8 +217,17 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         * ``'conditional'``  — weights from context *c*.
         * ``'value_dependent'``  — weights from input features ψ(u).
         * ``'full'``  — weights from both inputs and context.
+        * ``'aigcd'``  — combines routing logits and gating logits.
     use_transform : bool
         Learn a row-stochastic N×N coordinate transformation R.
+    use_routing : bool
+        Only for ``weight_mode='aigcd'``. Learn static routing logits.
+    use_gating : bool
+        Only for ``weight_mode='aigcd'``. Enable neural gating logits.
+    gating_use_values : bool
+        Only for ``weight_mode='aigcd'``. Use ψ(u) as gating features.
+    gating_use_context : bool
+        Only for ``weight_mode='aigcd'``. Use context *c* as gating features.
     context_dim : int
         Dimension of external context *c*.
     hidden_dim : int
@@ -236,6 +247,10 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         anchor_interpolation: int = 0,
         weight_mode: str = 'static',
         use_transform: bool = False,
+        use_routing: bool = True,
+        use_gating: bool = True,
+        gating_use_values: bool = True,
+        gating_use_context: bool = False,
         context_dim: int = 0,
         hidden_dim: int = 16,
         tau: float = 0.5,
@@ -277,6 +292,10 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         self._initial_tau = self._tau
         self.identity_reg = identity_reg
         self.eps = eps
+        self.use_routing = False
+        self.use_gating = False
+        self.gating_use_values = False
+        self.gating_use_context = False
 
         # Transform R is lazily sized on first use because N is unknown
         # until the tree calls aggregate().  Pre-allocate 2×2 for the
@@ -299,10 +318,45 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
                 nn.ReLU(),
                 nn.Linear(hidden_dim, self.k),
             )
+        elif weight_mode == 'aigcd':
+            self.use_routing = bool(use_routing)
+            self.use_gating = bool(use_gating)
+            self.gating_use_values = bool(gating_use_values)
+            self.gating_use_context = bool(gating_use_context)
+
+            if not self.use_routing and not self.use_gating:
+                raise ValueError(
+                    "weight_mode='aigcd' requires at least one of "
+                    "use_routing/use_gating to be True"
+                )
+
+            if self.use_routing:
+                self.alpha_logits = nn.Parameter(torch.zeros(self.k))
+
+            if self.use_gating:
+                feature_dim = 0
+                if self.gating_use_values:
+                    feature_dim += _PSI_DIM
+                if self.gating_use_context:
+                    feature_dim += max(context_dim, 1)
+                if feature_dim == 0:
+                    raise ValueError(
+                        "weight_mode='aigcd' with use_gating=True requires "
+                        "gating_use_values and/or gating_use_context"
+                    )
+                self._feature_dim = feature_dim
+                self.gate_net = nn.Sequential(
+                    nn.Linear(feature_dim, hidden_dim),
+                    nn.ReLU(),
+                    nn.Linear(hidden_dim, self.k),
+                )
+                # Keep gating neutral at init so routing logits dominate by default.
+                nn.init.zeros_(self.gate_net[-1].weight)
+                nn.init.zeros_(self.gate_net[-1].bias)
         else:
             raise ValueError(
                 f"Unknown weight_mode '{weight_mode}'. "
-                "Choose from: 'static', 'conditional', 'value_dependent', 'full'."
+                "Choose from: 'static', 'conditional', 'value_dependent', 'full', 'aigcd'."
             )
 
     # ------------------------------------------------------------------
@@ -441,6 +495,54 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         if self.weight_mode == 'static':
             return F.softmax(self.alpha_logits / self._tau, dim=0)
 
+        if self.weight_mode == 'aigcd':
+            logits = None
+            if self.use_routing:
+                logits = self.alpha_logits
+
+            if self.use_gating:
+                parts = []
+                if self.gating_use_values:
+                    parts.append(self._psi(u))
+                if self.gating_use_context:
+                    if c is None:
+                        raise ValueError(
+                            "weight_mode='aigcd' with gating_use_context=True "
+                            "requires context c"
+                        )
+                    if c.dim() == 0:
+                        c = c.unsqueeze(-1)
+                    parts.append(c)
+                features = torch.cat(parts, dim=-1)  # [..., feature_dim]
+                gate_logits = self.gate_net(features)  # [..., k]
+                # If batched, gate_logits is [batch, k]; transpose to [k, batch]
+                if gate_logits.dim() > 1:
+                    gate_logits = gate_logits.T  # [k, batch]
+                    if logits is None:
+                        logits = gate_logits
+                    else:
+                        # logits is [k], expand to [k, batch]
+                        logits = logits.unsqueeze(-1).expand_as(gate_logits)
+                        logits = gate_logits + logits
+                else:
+                    # Unbatched: [k]
+                    if logits is None:
+                        logits = gate_logits
+                    else:
+                        logits = gate_logits + logits
+
+            if logits is None:
+                raise RuntimeError("No logits available for weight computation")
+
+            # Softmax over anchor dimension (dim=0 for [k, batch], dim=-2 for other shapes)
+            if logits.dim() == 1:
+                # Unbatched: [k]
+                weights = F.softmax(logits / self._tau, dim=0)
+            else:
+                # Batched: [k, batch]
+                weights = F.softmax(logits / self._tau, dim=0)
+            return weights
+
         parts = []
         if self.weight_mode in ('value_dependent', 'full'):
             parts.append(self._psi(u))
@@ -538,6 +640,13 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         with torch.no_grad():
             if self.weight_mode == 'static':
                 w = self._compute_weights(torch.zeros(1))
+            elif self.weight_mode == 'aigcd' and self.use_gating and not self.gating_use_values:
+                # In this mode, weights can be computed from context alone.
+                dummy_u = torch.zeros(1)
+                w = self._compute_weights(dummy_u, c)
+            elif self.weight_mode == 'aigcd' and self.use_routing and not self.use_gating:
+                # In this mode, only routing logits (no gating), no u needed.
+                w = self._compute_weights(torch.zeros(1), c)
             else:
                 if u is None:
                     raise ValueError("u is required for non-static weight modes")
@@ -550,6 +659,9 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         c: Optional[torch.Tensor] = None,
     ) -> float:
         w = self.get_weights(u, c)
+        # If w has batch dimension, take the mean across batch.
+        if w.ndim > 1:
+            w = w.mean(axis=1)  # Average across batch dimension (axis=1)
         a = np.array(self._anchor_andness)
         return float(np.dot(w, a))
 
@@ -559,6 +671,9 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         c: Optional[torch.Tensor] = None,
     ) -> float:
         w = self.get_weights(u, c)
+        # If w has batch dimension, take the mean across batch.
+        if w.ndim > 1:
+            w = w.mean(axis=1)  # Average across batch dimension (axis=1)
         return float(-np.sum(w * np.log(w + self.eps)))
 
     def entropy_loss(
@@ -578,16 +693,24 @@ class GenericGLAggregator(AggregatorBase, nn.Module):
         c: Optional[torch.Tensor] = None,
     ) -> dict:
         w = self.get_weights(u, c)
+        # If w is batched, take the mean across batch dimension for diagnostics
+        if w.ndim > 1:
+            w_avg = w.mean(axis=1)  # Average across batch (axis=1)
+        else:
+            w_avg = w
+        
         info = {
             'tau': self._tau,
             'anchors': self._anchor_names,
-            'weights': w.tolist(),
-            'dominant_op': self._anchor_names[int(np.argmax(w))],
-            'dominant_weight': float(np.max(w)),
+            'weights': w_avg.tolist(),
+            'dominant_op': self._anchor_names[int(np.argmax(w_avg))],
+            'dominant_weight': float(np.max(w_avg)),
             'effective_andness': self.effective_andness(u, c),
             'entropy': self.entropy(u, c),
             'weight_mode': self.weight_mode,
             'use_transform': self.use_transform,
+            'use_routing': self.use_routing,
+            'use_gating': self.use_gating,
         }
         if self.use_transform and hasattr(self, 'r_logits') and self.r_logits is not None:
             info['R'] = self.get_transform_matrix().detach().cpu().numpy().tolist()
