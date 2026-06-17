@@ -1,6 +1,62 @@
 from bacon.aggregators.base import AggregatorBase
 from typing import Sequence, Any
 
+
+def lsp_power_mean(X, a, w_norm, eps: float = 1e-6):
+    r"""Element-wise GL/LSP andness-parameterised power mean (N-ary).
+
+    This is the head-vectorizable core of the LSP ``full_weight`` / ``half_weight``
+    aggregators. It computes the same function as the original scalar branching
+    implementation, but selects the andness regime with ``torch.where`` instead
+    of Python ``if`` statements, so ``a`` (andness) may be a **tensor** of any
+    shape broadcastable against the reduced inputs. This is what lets a single
+    call evaluate many independent logic nodes / heads at once (each carrying its
+    own andness), exactly mirroring the scalar tree node-by-node.
+
+    Parameters
+    ----------
+    X : torch.Tensor
+        Inputs stacked on dim 0: ``(N, ...)`` with values in ``[0, 1]``.
+    a : float or torch.Tensor
+        Andness in ``[-1, 2]``, broadcastable against ``X.sum(dim=0)``.
+    w_norm : torch.Tensor
+        Per-input weights summing to 1 over dim 0, broadcastable against ``X``.
+    eps : float
+        Numerical-stability clamp.
+
+    Notes
+    -----
+    Regimes (identical to the paper / scalar code):
+
+    * ``a in [0.5, 2]``  -> blend of weighted arithmetic mean ``A`` and the
+      weighted geometric power term ``P = G ** (sqrt(3/(2-a)) - 1)``:
+      ``(3-4a)A + (4a-2)P`` for ``a < 0.75`` and ``P`` for ``a >= 0.75``
+      (continuous at ``a = 0.75``; reduces to ``A`` at ``a = 0.5``).
+    * ``a in [-1, 0.5)`` -> De Morgan dual ``1 - F(1 - X, 1 - a)`` (which maps
+      ``1 - a`` into ``[0.5, 2]``, so a single non-recursive evaluation suffices).
+    """
+    import torch
+    X = torch.where(torch.isnan(X), torch.full_like(X, eps), X)
+    X = torch.clamp(X, min=eps, max=1.0 - eps)
+    if not torch.is_tensor(a):
+        a = torch.as_tensor(a, dtype=X.dtype, device=X.device)
+    a = torch.nan_to_num(a, nan=-1.0, posinf=2.0, neginf=-1.0).clamp(-1.0, 2.0)
+
+    # Map the disjunctive regime (a < 0.5) to the conjunctive one via De Morgan.
+    use_dual = a < 0.5
+    a_eff = torch.where(use_dual, 1.0 - a, a)                     # in [0.5, 2]
+    X_eff = torch.where(use_dual, 1.0 - X, X)                     # broadcasts on dim 0
+
+    A = (w_norm * X_eff).sum(dim=0)                               # weighted arithmetic mean
+    G = torch.pow(X_eff, 2.0 * w_norm).prod(dim=0)                # weighted geometric term
+    denom = (2.0 - a_eff).clamp(min=eps)
+    r = torch.sqrt(3.0 / denom) - 1.0
+    P = G ** r
+    blend = (3.0 - 4.0 * a_eff) * A + (4.0 * a_eff - 2.0) * P
+    upper = torch.where(a_eff < 0.75, blend, P)
+    return torch.where(use_dual, 1.0 - upper, upper)
+
+
 class FullWeightAggregator(AggregatorBase):   
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)        
@@ -111,37 +167,7 @@ class FullWeightAggregator(AggregatorBase):
     def _F_many(self, X, a, w_norm):
         import torch
         try:
-            epsilon = torch.as_tensor(1e-6, dtype=X.dtype, device=X.device)
-            # Clamp and sanitize
-            X = torch.where(torch.isnan(X), epsilon, X)
-            X = torch.clamp(X, min=epsilon.item(), max=1 - epsilon.item())
-            if not torch.is_tensor(a):
-                a = torch.tensor(a, dtype=X.dtype, device=X.device)
-            # Note: FullWeight version kept a checks slightly different originally;
-            # preserve core branches analogous to half-weight for N-ary generalization.
-            x0 = X.select(dim=0, index=0)
-            # a == 2
-            if torch.any(torch.abs(a - 2) < epsilon):
-                all_ones = torch.all(torch.abs(X - 1) < epsilon, dim=0)
-                return torch.where(all_ones, torch.ones_like(x0), torch.zeros_like(x0))
-            # Weighted arithmetic mean
-            A = (w_norm * X).sum(dim=0)
-            # Weighted geometric term
-            geo_exp = 2.0 * w_norm
-            G = torch.pow(X, geo_exp).prod(dim=0)
-            # 0.75 <= a < 2
-            if torch.logical_and(a >= 0.75, a < 2):
-                return G ** (torch.sqrt(torch.as_tensor(3.0, dtype=X.dtype, device=X.device) / (2.0 - a)) - 1.0)
-            # 0.5 < a < 0.75
-            if torch.logical_and(a > 0.5, a < 0.75):
-                return (3.0 - 4.0 * a) * A + (4.0 * a - 2.0) * (G ** (torch.sqrt(torch.as_tensor(3.0, dtype=X.dtype, device=X.device) / (2.0 - a)) - 1.0))
-            # a == 0.5
-            if torch.any(torch.abs(a - 0.5) < epsilon):
-                return A
-            # -1 <= a < 0.5
-            if torch.logical_and(a >= -1, a < 0.5):
-                return 1.0 - self._F_many(1.0 - X, (1.0 - a), w_norm)
-            raise ValueError(f"Invalid value for a: {a}. Must be in [-1, 2].")
+            return lsp_power_mean(X, a, w_norm, eps=1e-6)
         except Exception as e:
             print(f"[ERROR] Exception in F_many: {e}")
             raise e

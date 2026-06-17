@@ -94,7 +94,9 @@ class binaryTreeLogicNet(nn.Module):
                  alternating_balance_weight: float = 50.0,
                  alternating_egress_weight: float = 0.5,
                  use_constant_input: bool = False,
-                 use_permutation_layer: bool = True):
+                 use_permutation_layer: bool = True,
+                 head_type: str = "binary",
+                 num_heads: int = 1):
         super(binaryTreeLogicNet, self).__init__()
         
         # Store full tree parameters
@@ -145,6 +147,13 @@ class binaryTreeLogicNet(nn.Module):
         self.weight_penalty_strength = weight_penalty_strength
         self.sinkhorn_iters = sinkhorn_iters  # Sinkhorn iteration count for convergence
         self.layer_outputs = None  # For storing layer outputs during forward pass
+        # When True (default) the forward pass caches per-node outputs for
+        # visualization. The cache is only read by ``visualization.py`` (which
+        # triggers its own forward), so callers running many trees purely for
+        # training/inference (e.g. the multi-tree CBM head) can set this False to
+        # skip ~N per-node ``.detach().clone()`` copies per forward. Results are
+        # identical either way; only the viz cache is affected.
+        self.cache_layer_outputs = True
         self.pruned_aggregators = set()  # Track which aggregators have been pruned
         self.evaluation_limit = None  # For growing analysis: stop evaluation after N aggregators (None = full tree)
         
@@ -192,6 +201,87 @@ class binaryTreeLogicNet(nn.Module):
             self.add_module("aggregator", self.aggregator)
             # Ensure aggregator is on the correct device after attach_to_tree creates parameters
             self.aggregator.to(self.device)
+
+        # Optional vectorized multi-head path. When head_type == "vector",
+        # forward() evaluates ``num_heads`` independent logic trees in one pass
+        # and returns (batch, num_heads). The default "binary" path is left
+        # completely unchanged.
+        self.head_type = head_type
+        self.num_heads = num_heads
+        self.vector_head = None
+        if head_type == "vector":
+            self._build_vector_head()
+
+    def _build_vector_head(self):
+        """Construct the vectorized multi-head logic head.
+
+        Two engines are supported, chosen by the configured aggregator:
+
+        * **LSP power-mean aggregators** (``lsp.full_weight`` / ``lsp.half_weight``,
+          detected by an ``_F_many`` method) use :class:`VectorTreeLogicHead`, a
+          faithful multi-head lift of the scalar ``left`` tree: every per-node
+          scalar (input permutation, andness, pair weights) gains a head axis and
+          the identical fold + aggregator math runs across all heads at once.
+          ``use_permutation_layer`` enables the per-head soft input permutation
+          and ``use_transformation_layer`` the per-head identity/negation gate.
+          Currently the ``left`` layout is supported for this engine.
+
+        * **gl.generic** (static anchor blend) uses :class:`VectorLogicHead`. Its
+          ``use_permutation_layer`` maps to per-concept GL relevance gates, which
+          form a single weighted aggregation and require ``tree_layout='full'``.
+        """
+        from bacon.vectorizedLogicHead import (
+            VectorLogicHead,
+            VectorTreeLogicHead,
+            DEFAULT_ANCHORS,
+            SUPPORTED_LAYOUTS,
+        )
+
+        # LSP power-mean family: faithful per-head tree lift using real andness.
+        if hasattr(self.aggregator, "_F_many"):
+            if self.tree_layout != "left":
+                raise NotImplementedError(
+                    "The LSP vector head (lsp.full_weight / lsp.half_weight) "
+                    f"currently supports tree_layout='left', got "
+                    f"'{self.tree_layout}'. Use tree_layout='left', or switch to "
+                    "aggregator='gl.generic' for the full/alternating anchor head."
+                )
+            self.vector_head = VectorTreeLogicHead(
+                input_size=self.original_input_size,
+                num_heads=self.num_heads,
+                aggregator=self.aggregator,
+                normalize_andness=self.normalize_andness,
+                use_permutation_layer=self.use_permutation_layer,
+                use_transformation_layer=self.use_transformation_layer,
+                sinkhorn_iters=self.sinkhorn_iters,
+            ).to(self.device)
+            self.add_module("vector_head", self.vector_head)
+            return
+
+        if self.tree_layout not in SUPPORTED_LAYOUTS:
+            raise NotImplementedError(
+                f"head_type='vector' supports tree_layout in {SUPPORTED_LAYOUTS}, "
+                f"got '{self.tree_layout}'."
+            )
+        if self.use_permutation_layer and self.tree_layout != "full":
+            raise NotImplementedError(
+                "The vectorized head expresses use_permutation_layer=True as "
+                "per-concept GL relevance weights, which form a single weighted "
+                "aggregation and require tree_layout='full'. Either set "
+                "tree_layout='full', or set use_permutation_layer=False to use "
+                "the unweighted vector tree for this layout."
+            )
+        anchors = getattr(self.aggregator, "_anchor_names", DEFAULT_ANCHORS)
+        tau = getattr(self.aggregator, "tau", 0.5)
+        self.vector_head = VectorLogicHead(
+            input_size=self.original_input_size,
+            num_heads=self.num_heads,
+            anchors=anchors,
+            tau=tau,
+            layout=self.tree_layout,
+            use_input_weights=self.use_permutation_layer,
+        ).to(self.device)
+        self.add_module("vector_head", self.vector_head)
 
     def __deepcopy__(self, memo):
         """Custom deepcopy to preserve transformation configuration.
@@ -561,7 +651,8 @@ class binaryTreeLogicNet(nn.Module):
                 a, w = get_a_w(idx)
                 out = self.aggregator.aggregate([node_outputs[j], node_outputs[j + 1]], a, [w[0], w[1]])
                 pair_outputs.append(out)
-                self.layer_outputs.append(out.detach().clone())
+                if self.cache_layer_outputs:
+                    self.layer_outputs.append(out.detach().clone())
                 idx += 1
             else:
                 # Odd leftover passes through to next stage
@@ -573,7 +664,8 @@ class binaryTreeLogicNet(nn.Module):
         for k in range(1, len(pair_outputs)):
             a, w = get_a_w(idx)
             current = self.aggregator.aggregate([current, pair_outputs[k]], a, [w[0], w[1]])
-            self.layer_outputs.append(current.detach().clone())
+            if self.cache_layer_outputs:
+                self.layer_outputs.append(current.detach().clone())
             idx += 1
         return current
 
@@ -588,6 +680,11 @@ class binaryTreeLogicNet(nn.Module):
         Returns:
             torch.Tensor: Output tensor of shape (batch_size, 1).
         """
+        # Vectorized multi-head path: evaluate num_heads logic trees at once
+        # and return (batch, num_heads). The binary path below is untouched.
+        if self.head_type == "vector":
+            return self.vector_head(x)
+
         try:
             # 🔹 Compute input-to-leaf values
             leaf_values = self.input_to_leaf(x)
@@ -694,7 +791,8 @@ class binaryTreeLogicNet(nn.Module):
                         nres = torch.where(torch.isnan(nres), bias, nres)
                     node_outputs.append(nres)
                     # node_outputs.append(self.generalized_gcd(left, right, bias, w_soft[0], w_soft[1]))
-                    self.layer_outputs.append(nres.detach().clone())
+                    if self.cache_layer_outputs:
+                        self.layer_outputs.append(nres.detach().clone())
                     
                     # Check if we should stop early for growing analysis
                     if self.evaluation_limit is not None and i == self.evaluation_limit - 1:
@@ -920,7 +1018,73 @@ class binaryTreeLogicNet(nn.Module):
         """
         if self.tree_layout == "full" and self.fully_connected_tree is not None:
             self.fully_connected_tree.anneal_gumbel_noise(progress, initial, final)
-    
+
+    def anneal_vector_tree(self, progress: float) -> None:
+        """Anneal the vectorized left-tree head's Sinkhorn schedule.
+
+        Drives the per-head soft-permutation exploration the same way BACON's
+        scalar tree does: broad/soft routing first (high temperature, full Gumbel
+        noise) sharpened toward a near-permutation (low temperature, no noise) as
+        ``progress`` runs 0.0 -> 1.0. No-op unless the vector head is a
+        :class:`VectorTreeLogicHead`.
+
+        Args:
+            progress: Training progress from 0.0 to 1.0.
+        """
+        head = getattr(self, "vector_head", None)
+        if head is not None and hasattr(head, "anneal"):
+            head.anneal(progress)
+
+    def anneal_routing(self, progress: float,
+                       sinkhorn_temperature: float = 3.0,
+                       sinkhorn_final_temperature: float = 0.1) -> None:
+        """Unified per-layout routing anneal driven by training ``progress``.
+
+        Dispatches to the existing per-layout schedules so a host training loop
+        can drive routing exploration with a single call per epoch (broad/soft
+        routing first, sharpened toward a discrete structure as ``progress`` runs
+        ``0.0 -> 1.0``):
+
+        * ``full``        -> :meth:`anneal_full_tree_temperature` + Gumbel.
+        * ``alternating`` -> :meth:`anneal_alternating_tree_temperature` + Gumbel.
+        * ``vector`` head -> :meth:`anneal_vector_tree`.
+        * ``left`` / ``balanced`` / ``paired`` -> linearly interpolate the
+          ``input_to_leaf`` Sinkhorn ``temperature`` from ``sinkhorn_temperature``
+          down to ``sinkhorn_final_temperature`` and decay its Gumbel noise scale
+          to 0 (the same exploration schedule ``train_model`` applies, but
+          progress-driven instead of step-driven).
+
+        This only adjusts non-learned exploration buffers/temperatures; it does
+        not change any learnable parameters and is a no-op for layouts that do
+        not expose a schedule.
+
+        Args:
+            progress: Training progress from 0.0 to 1.0.
+            sinkhorn_temperature: Initial input_to_leaf temperature (left family).
+            sinkhorn_final_temperature: Final input_to_leaf temperature.
+        """
+        p = min(max(float(progress), 0.0), 1.0)
+        if self.head_type == "vector":
+            self.anneal_vector_tree(p)
+            return
+        if self.tree_layout == "full":
+            self.anneal_full_tree_temperature(p)
+            self.anneal_full_tree_gumbel(p)
+            return
+        if self.tree_layout == "alternating":
+            self.anneal_alternating_tree_temperature(p)
+            self.anneal_alternating_tree_gumbel(p)
+            return
+        # left / balanced / paired: anneal the soft input permutation.
+        leaf = getattr(self, "input_to_leaf", None)
+        if leaf is not None and hasattr(leaf, "temperature"):
+            leaf.temperature = (
+                sinkhorn_temperature
+                - p * (sinkhorn_temperature - sinkhorn_final_temperature)
+            )
+        if leaf is not None and hasattr(leaf, "gumbel_noise_scale"):
+            leaf.gumbel_noise_scale = 1.0 - p
+
     def harden_full_tree(self, mode: str = "argmax") -> None:
         """Harden the fully connected tree to discrete edge selections.
         

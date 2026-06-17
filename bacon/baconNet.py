@@ -167,7 +167,9 @@ class baconNet(nn.Module):
                  loss_weight_alternating_exponent_reg: float = 0.0,
                  use_constant_input: bool = False,
                  use_permutation_layer: bool = True,
-                 regression_loss_type: str = "mse"):
+                 regression_loss_type: str = "mse",
+                 head_type: str = "binary",
+                 num_heads: int = 1):
         super(baconNet, self).__init__()        
         if isinstance(aggregator, str):
             if aggregator not in _aggregator_registry:
@@ -292,7 +294,9 @@ class baconNet(nn.Module):
                                             alternating_balance_weight=loss_weight_alternating_balance,
                                             alternating_egress_weight=loss_weight_alternating_egress,
                                             use_constant_input=use_constant_input,
-                                            use_permutation_layer=use_permutation_layer)
+                                            use_permutation_layer=use_permutation_layer,
+                                            head_type=head_type,
+                                            num_heads=num_heads)
         
         if self.assembler.transformation_layer:
             actual_trans = self.assembler.transformation_layer.transformations

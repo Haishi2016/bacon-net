@@ -1,0 +1,69 @@
+# CUB-200-2011 + one-vs-rest BACON CBM -- PAPER-ALIGNED COMPARISON.
+#
+# Same DATA and BACKBONE setup as the paper reproduction configs
+# (cub_baseline_paper.yaml / cub_cibm_ibe_paper.yaml) so BACON is evaluated on
+# the exact same footing: ResNet18 backbone, the frozen 112-concept set, the
+# canonical CBM augmentation, and the seeded 20% validation split.
+#
+# What is INTENTIONALLY kept from the tuned harness config (cub_bacon.yaml) and
+# NOT taken from the paper:
+#   optimizer / lr / head_lr_mult / scheduler / epochs / anneal_epochs / batch
+# These are BACON-method-specific. BACON's fresh graded-logic head needs a high
+# effective learning rate (lr * head_lr_mult) to escape the chance-accuracy
+# collapse; the routing also needs the broad->sharp Sinkhorn anneal schedule.
+# Swapping in the paper's Adam 0.003 (a CBM-tuned optimizer with no head LR
+# multiplier and no routing anneal) starves the logic head and is a separate
+# tuning exercise. See /memories/repo/cbm-vector-head.md.
+#
+# Differences vs the harness comparison config (cub_bacon.yaml):
+#   backbone           resnet34  -> resnet18      (match paper backbone)
+#   concept selection  min_class_count 10 (~93) -> canonical112 (exact 112 set)
+#   augmentation       imagenet  -> paper         (canonical CBM transforms)
+#   val split          none      -> 20% seeded    (paper-style val selection)
+
+experiment: cub_bacon_paper
+seed: 42
+device: auto          # auto | cpu | cuda
+
+dataset:
+  name: cub
+  root: C:\School\datasets\cub\CUB_200_2011
+  image_size: 299
+  concept_mode: class_majority      # class_majority (denoised) | instance (raw)
+  concept_selection: canonical112   # frozen 112-index CBM/CIBM concept set
+  augmentation: paper               # canonical CBM transforms (mean 0.5/std 2.0)
+  val_fraction: 0.2                 # 20% of official train -> validation (paper)
+  val_seed: 42
+
+model:
+  name: bacon_cbm
+  backbone: resnet18            # match paper backbone (resnet18, feat_dim 512)
+  pretrained: true
+  aggregator: lsp.full_weight   # LSP power-mean tree head (faithful per-head BACON fold)
+  tree_layout: left             # required for the LSP tree head (left fold)
+  weight_mode: trainable        # trainable | fixed
+  normalize_andness: true       # per-node andness = sigmoid(bias)*3-1 in [-1, 2]
+  use_permutation_layer: true   # per-head Sinkhorn routing of concepts into leaves
+  use_transformation_layer: true # per-head identity/negation gate (breaks monotonicity -> can use absent concepts)
+  # Sinkhorn routing is annealed broad -> sharp over training (BACON schedule).
+  sinkhorn_temperature: 3.0
+  sinkhorn_final_temperature: 0.1
+  head_type: vector             # binary (200 serial heads) | vector (1 batched pass, faster)
+  warm_start_gates: false       # prototype gate warm-start only applies to the gl.generic anchor head; ignored here
+  concept_loss_weight: 1.0      # equal weighting of the concept CE terms (eq. 6)
+  concept_dropout: 0.0
+
+train:
+  # BACON-specific schedule (kept from cub_bacon.yaml -- see header note).
+  epochs: 180
+  anneal_epochs: 120
+  batch_size: 64
+  num_workers: 4
+  optimizer: sgd        # adam | sgd
+  lr: 0.01
+  head_lr_mult: 40      # fresh concept+logic heads train at lr*mult; backbone stays at lr
+  weight_decay: 0.00004
+  scheduler: cosine     # step | cosine | none
+
+output:
+  dir: runs

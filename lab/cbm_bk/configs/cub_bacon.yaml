@@ -1,0 +1,62 @@
+# CUB-200-2011 + one-vs-rest BACON Concept Bottleneck Model.
+# 200 graded-logic heads (one per class) share a single concept bottleneck and
+# are trained one-vs-rest (per-class BCE). See lab/cbm/README.md.
+
+experiment: cub_bacon
+seed: 42
+device: auto          # auto | cpu | cuda
+
+dataset:
+  name: cub
+  root: C:\School\datasets\cub\CUB_200_2011
+  image_size: 299
+  concept_mode: class_majority   # class_majority (denoised) | instance (raw)
+  min_class_count: 10            # keep attrs present in >=10 class prototypes (~93)
+
+model:
+  name: bacon_cbm
+  backbone: resnet34            # resnet18 | resnet34 | resnet50
+  pretrained: true
+  aggregator: lsp.full_weight   # LSP power-mean tree head (faithful per-head BACON fold)
+  tree_layout: left             # required for the LSP tree head (left fold)
+  weight_mode: trainable        # trainable | fixed
+  normalize_andness: true       # per-node andness = sigmoid(bias)*3-1 in [-1, 2]
+  use_permutation_layer: true   # per-head Sinkhorn routing of concepts into leaves
+  use_transformation_layer: true # per-head identity/negation gate (breaks monotonicity -> can use absent concepts)
+  # Sinkhorn routing is annealed broad -> sharp over training (BACON schedule):
+  # temperature falls linearly from `sinkhorn_temperature` to
+  # `sinkhorn_final_temperature` as epochs progress. High temperature early =
+  # near-uniform routing (broad exploration, every concept blended); low
+  # temperature late = a near-permutation that commits each leaf to one concept.
+  # Lower the start (e.g. 2.0) to sharpen sooner under a tight epoch budget.
+  sinkhorn_temperature: 3.0
+  sinkhorn_final_temperature: 0.1
+  head_type: vector             # binary (200 serial heads) | vector (1 batched pass, faster)
+  warm_start_gates: false       # prototype gate warm-start only applies to the gl.generic anchor head; ignored here
+  concept_loss_weight: 1.0
+  # Neutral concept dropout (head regularization). During training, this fraction
+  # of concept truths is replaced with 0.5 (graded-logic "unknown") before the
+  # logic head, so the hardened per-class routing cannot memorize the exact
+  # concept signatures of the ~30 training images/class. Keeps train accuracy
+  # (head capacity is unchanged) while closing the train/test gap. Sweep 0.1-0.3;
+  # 0.0 disables. Concept supervision is unaffected (loss uses pre-dropout logits).
+  # NOTE: 0.1 closed the gap (train 0.79->0.61) but lowered test too (0.53->0.49)
+  # -> the limiter is the bottleneck/head expressiveness, not memorization. Off.
+  concept_dropout: 0.0
+
+train:
+  epochs: 180
+  # Anneal the routing schedule over the first ~2/3 of training, then hold at
+  # the sharp regime so the head trains under its committed near-permutation
+  # (epochs 1-60 ~ broad/soft exploration, 60-120 sharpening, 120-180 exploit).
+  anneal_epochs: 120
+  batch_size: 64
+  num_workers: 4
+  optimizer: sgd        # adam | sgd
+  lr: 0.01
+  head_lr_mult: 40      # fresh concept+logic heads train at lr*mult; backbone stays at lr
+  weight_decay: 0.00004
+  scheduler: cosine     # step | cosine | none
+
+output:
+  dir: runs

@@ -1,4 +1,5 @@
 from bacon.aggregators.base import AggregatorBase
+from bacon.aggregators.lsp.full_weight import lsp_power_mean
 from typing import Sequence, Any
 
 class HalfWeightAggregator(AggregatorBase):
@@ -115,46 +116,7 @@ class HalfWeightAggregator(AggregatorBase):
     def _F_many(self, X, a, w_norm):
         import torch
         try:
-            epsilon = torch.as_tensor(1e-6, dtype=X.dtype, device=X.device)
-            # Clamp and sanitize
-            X = torch.where(torch.isnan(X), epsilon, X)
-            X = torch.clamp(X, min=epsilon.item(), max=1 - epsilon.item())
-            if not torch.is_tensor(a):
-                a = torch.tensor(a, dtype=X.dtype, device=X.device)
-            a = torch.nan_to_num(a, nan=-1.0, posinf=2.0 - epsilon.item(), neginf=-1.0 + epsilon.item())
-            a = a.clamp(-1.0 + epsilon.item(), 2.0 - epsilon.item())
-
-            x0 = X.select(dim=0, index=0)
-
-            # a == 2 case: return 1 if all xi==1 else 0
-            if torch.abs(a - 2) < epsilon:
-                all_ones = torch.all(torch.abs(X - 1) < epsilon, dim=0)
-                return torch.where(all_ones, torch.ones_like(x0), torch.zeros_like(x0))
-
-            # Weighted arithmetic mean: sum_i w_i * x_i
-            A = (w_norm * X).sum(dim=0)
-
-            # Weighted geometric mean analog: prod_i x_i^(2 w_i)
-            geo_exp = 2.0 * w_norm
-            G = torch.pow(X, geo_exp).prod(dim=0)
-
-            # 0.75 <= a < 2 -> (G)^(sqrt(3/(2-a)) - 1)
-            if torch.logical_and(a >= 0.75, a < 2):
-                return G ** (torch.sqrt(torch.as_tensor(3.0, dtype=X.dtype, device=X.device) / (2.0 - a)) - 1.0)
-
-            # 0.5 < a < 0.75 -> (3-4a)*A + (4a-2)*G^(sqrt(3/(2-a))-1)
-            if torch.logical_and(a > 0.5, a < 0.75):
-                return (3.0 - 4.0 * a) * A + (4.0 * a - 2.0) * (G ** (torch.sqrt(torch.as_tensor(3.0, dtype=X.dtype, device=X.device) / (2.0 - a)) - 1.0))
-
-            # a == 0.5 -> A
-            if torch.abs(a - 0.5) < epsilon:
-                return A
-
-            # -1 <= a < 0.5 -> 1 - F(1 - X, 1 - a)
-            if torch.logical_and(a >= -1.0, a < 0.5):
-                return 1.0 - self._F_many(1.0 - X, (1.0 - a).clamp(-1.0 + epsilon.item(), 2.0 - epsilon.item()), w_norm)
-
-            raise ValueError(f"Invalid value for a: {a}. Must be in [-1, 2].")
+            return lsp_power_mean(X, a, w_norm, eps=1e-6)
         except Exception as e:
             print(f"[ERROR] Exception in F_many: {e}")
             raise e

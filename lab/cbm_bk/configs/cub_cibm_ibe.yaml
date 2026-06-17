@@ -1,0 +1,73 @@
+# CUB-200-2011 + CIBM (IBE) -- faithful constrained dual-beta reproduction.
+#
+# Ports the OFFICIAL CIBM mechanism (github.com/dsb-ifi/cibm, src/train.py). The
+# IBE variant is a CONSTRAINED Information-Bottleneck, NOT a fixed penalty:
+#
+#   MI         = est_MI(...)                      # I(X;C), summed Gaussian MC
+#   constraint = mi_const - MI
+#   loss      += beta * constraint                # IBE term
+#   beta      += beta_lr * constraint.item()      # Lagrangian DUAL update
+#
+# i.e. beta is a Lagrange multiplier that adapts every step to hold I(X;C) at the
+# target level `mi_const` (nats), regulating leakage to a chosen budget instead
+# of driving it monotonically to zero. (A fixed-beta sweep cannot reproduce this
+# adaptive constrained objective -- it only trades accuracy for ~0 purity gain.)
+#
+# The MI estimator is byte-identical to the official log_marg_prob (full in-batch
+# Gaussian mixture incl. self, normalised by 1/B; raw summed-over-concepts MI),
+# so `mi_const` is on exactly their nats scale.
+#
+# Harness adaptations (independent of the IB mechanism) because we train ResNet18
+# END-TO-END rather than on the paper's frozen Inception embeddings: backbone
+# resnet18, adam lr 0.003, cosine, wd 1e-4, augmentation imagenet_strong,
+# label_smoothing 0.1.
+#
+# TUNING NOTE: `mi_const` is the interpretable knob -- the allowed leakage budget
+# in nats (their value is 1.0). The meaningful experiment is to SWEEP mi_const
+# and read off the accuracy/purity tradeoff curve.
+
+experiment: cub_cibm_ibe
+seed: 42
+device: auto
+
+dataset:
+  name: cub
+  root: C:\School\datasets\cub\CUB_200_2011
+  image_size: 224
+  concept_mode: class_majority
+  concept_selection: canonical112
+  augmentation: imagenet_strong
+  val_fraction: 0.2
+  val_seed: 42
+
+model:
+  name: cibm_cbm
+  backbone: resnet18
+  pretrained: true
+  variant: ibe
+  # Faithful: raw sampled concept logits z -> linear task head (no sigmoid gate);
+  # the official StochasticMLP cls = Linear(z).
+  concept_activation: identity
+  # --- Constrained dual-beta IB (faithful to dsb-ifi/cibm src/train.py) ------
+  beta: 0.5            # INITIAL Lagrange multiplier (adapts during training)
+  beta_lr: -0.01       # dual ascent rate; beta += beta_lr * (mi_const - I(X;C))
+  mi_const: 1.0        # target I(X;C) in nats -- SWEEP THIS (see TUNING NOTE)
+  # Faithful concept loss: SUM over concepts, weight 1 -> every CE term enters
+  # equally (their BCE.sum(dim=1).mean()). sum+weight1 is STRONG (~112x a mean
+  # term), so concepts do not stall.
+  concept_loss_weight: 1.0
+  concept_reduction: sum
+
+train:
+  epochs: 100
+  batch_size: 128
+  num_workers: 4
+  optimizer: adam
+  lr: 0.003
+  weight_decay: 0.0001
+  scheduler: cosine
+  grad_clip: null
+  label_smoothing: 0.1
+
+output:
+  dir: runs

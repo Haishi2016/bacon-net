@@ -134,3 +134,7 @@ dmypy.json
 
 # Ignore local lab files
 local-lab/
+
+**/outputs/
+**/outputs_*/
+**/runs/

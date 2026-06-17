@@ -1,0 +1,54 @@
+# CUB-200-2011 + vanilla soft-joint CBM -- baseline reference point.
+#
+# Same backbone / data / training recipe as the CIBM configs but with NO
+# information-bottleneck term: the vanilla number the IB variants are measured
+# against. Validated: task acc ~0.647 / concept acc ~0.942.
+#
+# Keep every shared field (backbone / optimizer / lr / wd / batch / grad_clip /
+# concept_selection / augmentation) aligned with cub_cibm_ibe.yaml so the only
+# difference between baseline and CIBM is the IB regulariser.
+
+experiment: cub_baseline
+seed: 42
+device: auto
+
+dataset:
+  name: cub
+  root: C:\School\datasets\cub\CUB_200_2011
+  image_size: 224                   # ProbCBM ResNet18 input (the paper's code base)
+  concept_mode: class_majority
+  concept_selection: canonical112   # frozen 112-index CBM/CIBM concept set
+  augmentation: imagenet_strong     # ImageNet mean/std + HEAVY train aug (crop
+                                    # scale 0.5-1.0, jitter+hue, RandomErasing) to
+                                    # curb ResNet18 overfit on ~24 img/class CUB.
+  val_fraction: 0.2                 # 20% of official train -> validation (paper)
+  val_seed: 42
+
+model:
+  name: baseline_cbm
+  backbone: resnet18
+  pretrained: true
+  bottleneck: true          # task head reads only the concept layer (soft-joint)
+  # Loss balance: 200-class task CE ~ln(200)=5.3 vs 112-concept MEAN BCE ~ln(2)=0.69.
+  # weight ~5 balances the aggregate concept gradient against the task CE; at
+  # weight 1.0 concepts stall just above the 0.80 all-absent prior.
+  concept_loss_weight: 5.0
+  concept_reduction: mean   # MEAN of per-concept BCEs (App. D.7), NOT sum
+  # Soft-joint = bounded sigmoid concept PROBS to the task head (standard soft
+  # CBM); an identity/logit head lets the task memorise via leaked logit
+  # magnitude.
+  concept_activation: sigmoid
+
+train:
+  epochs: 100
+  batch_size: 128
+  num_workers: 4
+  optimizer: adam
+  lr: 0.003
+  weight_decay: 0.0001      # sweet spot; overfit gap handled by augmentation
+  scheduler: cosine         # ProbCBM-based code anneals LR; no-schedule underfits
+  grad_clip: null           # paper does not clip
+  label_smoothing: 0.1      # task-CE regulariser; closes part of the val-peak gap
+
+output:
+  dir: runs

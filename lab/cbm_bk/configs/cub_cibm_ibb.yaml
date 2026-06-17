@@ -1,0 +1,62 @@
+# CUB-200-2011 + CIBM (IBB / L_S-CIBM) -- faithful entropy-surrogate reproduction.
+#
+# The IBB term  -(1 - beta) * H(C)  *maximises* the concept entropy
+# H(C) = sum_i log sigma_i (the raw *summed* per-concept log-sigma of App. D.4,
+# matching the official est_HC). Its gradient is stopped from reaching the
+# backbone (App. D.7) so only the sigma head is updated. beta is FIXED (the
+# official code does not adapt beta for the entropy surrogate).
+#
+# Faithful to the official code: concept_activation identity (task head reads the
+# sampled concept logits z), concept loss SUM over concepts with weight 1
+# (BCE.sum(dim=1).mean()), summed entropy, no IB warmup.
+#
+# Harness adaptations (end-to-end ResNet18 instead of frozen embeddings):
+# backbone resnet18, adam lr 0.003, cosine, wd 1e-4, augmentation
+# imagenet_strong, label_smoothing 0.1.
+#
+# CAUTION (known limitation): the official entropy-surrogate is calibrated to a
+# FROZEN-embedding + MLP setup. End-to-end here the summed entropy term drives
+# the sigma head to its clamp from step 1, so sampled concepts become noise and
+# task accuracy degrades -- a genuine negative finding (entropy-surrogate IB does
+# not transfer cleanly to end-to-end backbones). The faithful IBE config above is
+# the working / meaningful CIBM variant.
+
+experiment: cub_cibm_ibb
+seed: 42
+device: auto
+
+dataset:
+  name: cub
+  root: C:\School\datasets\cub\CUB_200_2011
+  image_size: 224
+  concept_mode: class_majority
+  concept_selection: canonical112
+  augmentation: imagenet_strong
+  val_fraction: 0.2
+  val_seed: 42
+
+model:
+  name: cibm_cbm
+  backbone: resnet18
+  pretrained: true
+  variant: ibb
+  # Faithful: raw sampled concept logits z -> linear task head (no sigmoid gate).
+  concept_activation: identity
+  beta: 0.5                 # FIXED entropy weight; IBB does not adapt beta
+  # Faithful concept loss: SUM over concepts, weight 1 (BCE.sum(dim=1).mean()).
+  concept_loss_weight: 1.0
+  concept_reduction: sum
+
+train:
+  epochs: 100
+  batch_size: 128
+  num_workers: 4
+  optimizer: adam
+  lr: 0.003
+  weight_decay: 0.0001
+  scheduler: cosine
+  grad_clip: null
+  label_smoothing: 0.1
+
+output:
+  dir: runs
