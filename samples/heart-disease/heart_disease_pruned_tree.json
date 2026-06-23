@@ -1,0 +1,185 @@
+{
+  "model_type": "binaryTreeLogicNet",
+  "model_name": "Heart Disease",
+  "layout": "left",
+  "threshold": 0.5,
+  "total_samples": 60,
+  "num_features": 22,
+  "metrics": {
+    "baseline_accuracy": 0.866667,
+    "pruned_accuracy": 0.866667,
+    "optimal_num_pruned": 15
+  },
+  "critical_features": [
+    "cp_4",
+    "cp_3",
+    "exang",
+    "slope_2",
+    "ca",
+    "thal_7.0",
+    "oldpeak"
+  ],
+  "pruned_features": [
+    "chol",
+    "slope_3",
+    "sex",
+    "cp_1",
+    "restecg_2",
+    "fbs",
+    "slope_1",
+    "restecg_1",
+    "thal_3.0",
+    "thalach",
+    "restecg_0",
+    "age",
+    "cp_2",
+    "thal_6.0",
+    "trestbps"
+  ],
+  "baseline_features": [
+    "cp_4",
+    "cp_3"
+  ],
+  "nodes": [
+    {
+      "aggregator_index": 0,
+      "operator": "OR",
+      "andness": -0.44554,
+      "count": 60,
+      "right_feature": "cp_3"
+    },
+    {
+      "aggregator_index": 16,
+      "operator": "AND",
+      "andness": 1.976221,
+      "count": 60,
+      "right_feature": "exang"
+    },
+    {
+      "aggregator_index": 17,
+      "operator": "AND",
+      "andness": 1.967894,
+      "count": 30,
+      "right_feature": "slope_2"
+    },
+    {
+      "aggregator_index": 18,
+      "operator": "OR",
+      "andness": 0.00932,
+      "count": 60,
+      "right_feature": "ca"
+    },
+    {
+      "aggregator_index": 19,
+      "operator": "OR",
+      "andness": 0.152726,
+      "count": 60,
+      "right_feature": "thal_7.0"
+    },
+    {
+      "aggregator_index": 20,
+      "operator": "AND",
+      "andness": 1.926144,
+      "count": 32,
+      "right_feature": "oldpeak"
+    }
+  ],
+  "portalTree": [
+    {
+      "type": "aggregator",
+      "aggregator_index": 20,
+      "operator": "AND",
+      "andness": 1.926144,
+      "count": 32,
+      "children": [
+        {
+          "type": "aggregator",
+          "aggregator_index": 19,
+          "operator": "OR",
+          "andness": 0.152726,
+          "count": 60,
+          "children": [
+            {
+              "type": "aggregator",
+              "aggregator_index": 18,
+              "operator": "OR",
+              "andness": 0.00932,
+              "count": 60,
+              "children": [
+                {
+                  "type": "aggregator",
+                  "aggregator_index": 17,
+                  "operator": "AND",
+                  "andness": 1.967894,
+                  "count": 30,
+                  "children": [
+                    {
+                      "type": "aggregator",
+                      "aggregator_index": 16,
+                      "operator": "AND",
+                      "andness": 1.976221,
+                      "count": 60,
+                      "children": [
+                        {
+                          "type": "aggregator",
+                          "aggregator_index": 0,
+                          "operator": "OR",
+                          "andness": -0.44554,
+                          "count": 60,
+                          "children": [
+                            {
+                              "type": "feature",
+                              "position": 0,
+                              "label": "cp_4",
+                              "count": 60
+                            },
+                            {
+                              "type": "feature",
+                              "position": 1,
+                              "label": "cp_3",
+                              "count": 60
+                            }
+                          ]
+                        },
+                        {
+                          "type": "feature",
+                          "position": 17,
+                          "label": "exang",
+                          "count": 60
+                        }
+                      ]
+                    },
+                    {
+                      "type": "feature",
+                      "position": 18,
+                      "label": "slope_2",
+                      "count": 60
+                    }
+                  ]
+                },
+                {
+                  "type": "feature",
+                  "position": 19,
+                  "label": "ca",
+                  "count": 60
+                }
+              ]
+            },
+            {
+              "type": "feature",
+              "position": 20,
+              "label": "thal_7.0",
+              "count": 60
+            }
+          ]
+        },
+        {
+          "type": "feature",
+          "position": 21,
+          "label": "oldpeak",
+          "count": 60
+        }
+      ]
+    }
+  ]
+}

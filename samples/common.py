@@ -25,7 +25,10 @@ from bacon.utils import (
     find_best_threshold,
     analyze_bacon_tree_conjunctive_disjunctive,
     analyze_feature_importance_with_pruning,
-    save_tree_structure_to_json
+    save_tree_structure_to_json,
+    export_pruned_tree,
+    save_pruned_tree_to_json,
+    save_pruned_tree_to_xml
 )
 
 
@@ -807,7 +810,9 @@ def analyze_feature_importance(
     title_prefix="",
     threshold=0.5,
     baseline_enabled=True,
-    device=None
+    device=None,
+    save_pruned_tree=True,
+    pruned_tree_basename=None
 ):
     """Analyze feature importance through pruning with baseline detection.
     
@@ -821,6 +826,9 @@ def analyze_feature_importance(
         baseline_enabled: Enable baseline detection (default: True)
         baseline_drop_threshold: Threshold for baseline detection (default: 0.05)
         device: torch device (default: None, uses X_all.device)
+        save_pruned_tree: Save the critical (pruned) tree to JSON + XML (default: True)
+        pruned_tree_basename: Base path for the pruned-tree files (default: derived
+            from title_prefix; "{prefix}_pruned_tree").
         
     Returns:
         dict: Pruning results including accuracies and baseline features
@@ -863,6 +871,24 @@ def analyze_feature_importance(
         title=plot_title,
         filename=filename
     )
+    
+    # Save the critical (pruned) tree for downstream visualization. The pruning
+    # loop above identified the features that survive pruning without dropping
+    # accuracy; export that minimal tree to JSON + XML.
+    if save_pruned_tree:
+        if pruned_tree_basename is None:
+            safe_prefix = title_prefix.replace(" ", "_").lower() if title_prefix else "model"
+            pruned_tree_basename = f"{safe_prefix}_pruned_tree"
+        try:
+            pruned_tree = export_pruned_tree(
+                model, X_all, Y_all, feature_names, pruning_results,
+                threshold=threshold, model_name=title_prefix, device=device
+            )
+            save_pruned_tree_to_json(pruned_tree, f"{pruned_tree_basename}.json")
+            save_pruned_tree_to_xml(pruned_tree, f"{pruned_tree_basename}.xml")
+            print(f"   Critical features retained: {pruned_tree['critical_features']}")
+        except Exception as exc:
+            print(f"⚠️  Could not export pruned tree: {exc}")
     
     return pruning_results
 

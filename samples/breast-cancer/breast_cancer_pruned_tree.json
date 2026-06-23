@@ -1,0 +1,281 @@
+{
+  "model_type": "binaryTreeLogicNet",
+  "model_name": "Breast Cancer",
+  "layout": "left",
+  "threshold": 0.5,
+  "total_samples": 114,
+  "num_features": 30,
+  "metrics": {
+    "baseline_accuracy": 0.973684,
+    "pruned_accuracy": 0.973684,
+    "optimal_num_pruned": 19
+  },
+  "critical_features": [
+    "concavity2",
+    "symmetry1",
+    "smoothness3",
+    "texture3",
+    "radius2",
+    "perimeter3",
+    "concave_points1",
+    "radius3",
+    "area3",
+    "concavity3",
+    "concavity1"
+  ],
+  "pruned_features": [
+    "fractal_dimension2",
+    "smoothness2",
+    "area1",
+    "compactness2",
+    "texture2",
+    "symmetry2",
+    "radius1",
+    "perimeter1",
+    "area2",
+    "fractal_dimension1",
+    "symmetry3",
+    "smoothness1",
+    "compactness3",
+    "compactness1",
+    "perimeter2",
+    "concave_points2",
+    "fractal_dimension1",
+    "fractal_dimension3",
+    "radius2"
+  ],
+  "baseline_features": [
+    "concavity2",
+    "symmetry1"
+  ],
+  "nodes": [
+    {
+      "aggregator_index": 0,
+      "operator": "OR",
+      "andness": 0.300568,
+      "count": 110,
+      "right_feature": "symmetry1"
+    },
+    {
+      "aggregator_index": 20,
+      "operator": "AND",
+      "andness": 1.997187,
+      "count": 64,
+      "right_feature": "smoothness3"
+    },
+    {
+      "aggregator_index": 21,
+      "operator": "OR",
+      "andness": -0.13672,
+      "count": 99,
+      "right_feature": "texture3"
+    },
+    {
+      "aggregator_index": 22,
+      "operator": "OR",
+      "andness": 0.24239,
+      "count": 112,
+      "right_feature": "radius2"
+    },
+    {
+      "aggregator_index": 23,
+      "operator": "AND",
+      "andness": 1.979507,
+      "count": 46,
+      "right_feature": "perimeter3"
+    },
+    {
+      "aggregator_index": 24,
+      "operator": "AND",
+      "andness": 1.776951,
+      "count": 34,
+      "right_feature": "concave_points1"
+    },
+    {
+      "aggregator_index": 25,
+      "operator": "AND",
+      "andness": 1.24402,
+      "count": 34,
+      "right_feature": "radius3"
+    },
+    {
+      "aggregator_index": 26,
+      "operator": "AND",
+      "andness": 1.229607,
+      "count": 33,
+      "right_feature": "area3"
+    },
+    {
+      "aggregator_index": 27,
+      "operator": "AND",
+      "andness": 0.828369,
+      "count": 38,
+      "right_feature": "concavity3"
+    },
+    {
+      "aggregator_index": 28,
+      "operator": "AND",
+      "andness": 1.072178,
+      "count": 39,
+      "right_feature": "concavity1"
+    }
+  ],
+  "portalTree": [
+    {
+      "type": "aggregator",
+      "aggregator_index": 28,
+      "operator": "AND",
+      "andness": 1.072178,
+      "count": 39,
+      "children": [
+        {
+          "type": "aggregator",
+          "aggregator_index": 27,
+          "operator": "AND",
+          "andness": 0.828369,
+          "count": 38,
+          "children": [
+            {
+              "type": "aggregator",
+              "aggregator_index": 26,
+              "operator": "AND",
+              "andness": 1.229607,
+              "count": 33,
+              "children": [
+                {
+                  "type": "aggregator",
+                  "aggregator_index": 25,
+                  "operator": "AND",
+                  "andness": 1.24402,
+                  "count": 34,
+                  "children": [
+                    {
+                      "type": "aggregator",
+                      "aggregator_index": 24,
+                      "operator": "AND",
+                      "andness": 1.776951,
+                      "count": 34,
+                      "children": [
+                        {
+                          "type": "aggregator",
+                          "aggregator_index": 23,
+                          "operator": "AND",
+                          "andness": 1.979507,
+                          "count": 46,
+                          "children": [
+                            {
+                              "type": "aggregator",
+                              "aggregator_index": 22,
+                              "operator": "OR",
+                              "andness": 0.24239,
+                              "count": 112,
+                              "children": [
+                                {
+                                  "type": "aggregator",
+                                  "aggregator_index": 21,
+                                  "operator": "OR",
+                                  "andness": -0.13672,
+                                  "count": 99,
+                                  "children": [
+                                    {
+                                      "type": "aggregator",
+                                      "aggregator_index": 20,
+                                      "operator": "AND",
+                                      "andness": 1.997187,
+                                      "count": 64,
+                                      "children": [
+                                        {
+                                          "type": "aggregator",
+                                          "aggregator_index": 0,
+                                          "operator": "OR",
+                                          "andness": 0.300568,
+                                          "count": 110,
+                                          "children": [
+                                            {
+                                              "type": "feature",
+                                              "position": 0,
+                                              "label": "concavity2",
+                                              "count": 112
+                                            },
+                                            {
+                                              "type": "feature",
+                                              "position": 1,
+                                              "label": "symmetry1",
+                                              "count": 98
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "feature",
+                                          "position": 21,
+                                          "label": "smoothness3",
+                                          "count": 106
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "feature",
+                                      "position": 22,
+                                      "label": "texture3",
+                                      "count": 85
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "feature",
+                                  "position": 23,
+                                  "label": "radius2",
+                                  "count": 114
+                                }
+                              ]
+                            },
+                            {
+                              "type": "feature",
+                              "position": 24,
+                              "label": "perimeter3",
+                              "count": 99
+                            }
+                          ]
+                        },
+                        {
+                          "type": "feature",
+                          "position": 25,
+                          "label": "concave_points1",
+                          "count": 107
+                        }
+                      ]
+                    },
+                    {
+                      "type": "feature",
+                      "position": 26,
+                      "label": "radius3",
+                      "count": 100
+                    }
+                  ]
+                },
+                {
+                  "type": "feature",
+                  "position": 27,
+                  "label": "area3",
+                  "count": 108
+                }
+              ]
+            },
+            {
+              "type": "feature",
+              "position": 28,
+              "label": "concavity3",
+              "count": 99
+            }
+          ]
+        },
+        {
+          "type": "feature",
+          "position": 29,
+          "label": "concavity1",
+          "count": 107
+        }
+      ]
+    }
+  ]
+}

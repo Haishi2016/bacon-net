@@ -1,0 +1,71 @@
+<?xml version="1.0" ?>
+<prunedTree model="Breast Cancer" layout="left" threshold="0.5" totalSamples="114">
+  <metrics baseline_accuracy="0.973684" pruned_accuracy="0.973684" optimal_num_pruned="19"/>
+  <criticalFeatures>
+    <feature>concavity2</feature>
+    <feature>symmetry1</feature>
+    <feature>smoothness3</feature>
+    <feature>texture3</feature>
+    <feature>radius2</feature>
+    <feature>perimeter3</feature>
+    <feature>concave_points1</feature>
+    <feature>radius3</feature>
+    <feature>area3</feature>
+    <feature>concavity3</feature>
+    <feature>concavity1</feature>
+  </criticalFeatures>
+  <prunedFeatures>
+    <feature>fractal_dimension2</feature>
+    <feature>smoothness2</feature>
+    <feature>area1</feature>
+    <feature>compactness2</feature>
+    <feature>texture2</feature>
+    <feature>symmetry2</feature>
+    <feature>radius1</feature>
+    <feature>perimeter1</feature>
+    <feature>area2</feature>
+    <feature>fractal_dimension1</feature>
+    <feature>symmetry3</feature>
+    <feature>smoothness1</feature>
+    <feature>compactness3</feature>
+    <feature>compactness1</feature>
+    <feature>perimeter2</feature>
+    <feature>concave_points2</feature>
+    <feature>fractal_dimension1</feature>
+    <feature>fractal_dimension3</feature>
+    <feature>radius2</feature>
+  </prunedFeatures>
+  <tree>
+    <node operator="AND" andness="1.072178" count="39">
+      <node operator="AND" andness="0.828369" count="38">
+        <node operator="AND" andness="1.229607" count="33">
+          <node operator="AND" andness="1.24402" count="34">
+            <node operator="AND" andness="1.776951" count="34">
+              <node operator="AND" andness="1.979507" count="46">
+                <node operator="OR" andness="0.24239" count="112">
+                  <node operator="OR" andness="-0.13672" count="99">
+                    <node operator="AND" andness="1.997187" count="64">
+                      <node operator="OR" andness="0.300568" count="110">
+                        <leaf label="concavity2" count="112"/>
+                        <leaf label="symmetry1" count="98"/>
+                      </node>
+                      <leaf label="smoothness3" count="106"/>
+                    </node>
+                    <leaf label="texture3" count="85"/>
+                  </node>
+                  <leaf label="radius2" count="114"/>
+                </node>
+                <leaf label="perimeter3" count="99"/>
+              </node>
+              <leaf label="concave_points1" count="107"/>
+            </node>
+            <leaf label="radius3" count="100"/>
+          </node>
+          <leaf label="area3" count="108"/>
+        </node>
+        <leaf label="concavity3" count="99"/>
+      </node>
+      <leaf label="concavity1" count="107"/>
+    </node>
+  </tree>
+</prunedTree>

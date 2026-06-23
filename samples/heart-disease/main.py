@@ -42,10 +42,12 @@ train_bacon_model(
      binary_threshold=0.5
 )
 
-# Run standard analysis pipeline
+# Run standard analysis pipeline (using test data for both val and test)
 run_standard_analysis(
     bacon,
-    X_train, Y_train, X_test, Y_test,
+    X_train, Y_train,  # Training data
+    X_test, Y_test,    # Validation (using test data)
+    X_test, Y_test,    # Test data
     feature_names,
     title_prefix="Heart Disease",
     device=device,

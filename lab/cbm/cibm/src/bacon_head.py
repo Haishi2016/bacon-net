@@ -426,9 +426,9 @@ class MultiTreeBaconCBM(nn.Module):
             drop = torch.rand_like(probs) < self.concept_dropout
             probs = torch.where(drop, torch.full_like(probs, 0.5), probs)
         
-        # During training with targets: use negative sampling (2 trees per sample)
-        # During evaluation or without targets: evaluate all 200 trees
-        if self.training and targets is not None:
+        # During training with targets and enabled flag: use negative sampling.
+        # During evaluation, or when disabled: evaluate all trees.
+        if self.training and self.use_negative_sampling and targets is not None:
             truths = self._evaluate_negative_sampled(probs, targets)
         else:
             # Evaluation: evaluate all trees

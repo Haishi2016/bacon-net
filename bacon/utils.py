@@ -331,6 +331,7 @@ def analyze_feature_importance_with_pruning(
     feature_names, 
     threshold=0.5,
     baseline_enabled=False,
+    pruning_tolerance=0.0,
     device=None
 ):
     """Analyze feature importance through cumulative pruning.
@@ -469,14 +470,47 @@ def analyze_feature_importance_with_pruning(
     assembler.pruned_aggregators.clear()
     
     baseline_feature_names = [feature_names[assembler.locked_perm[i].item()] for i in baseline_features]
-    
+
+    # Detect the critical pruning knee: the largest number of features we can
+    # cumulatively prune (starting from start_feature) before accuracy drops
+    # below the full-tree baseline. Everything still present at that point is
+    # considered critical -- pruning any further degrades the model.
+    baseline_acc = accuracies[0]
+    optimal_num_pruned = 0
+    for t in range(1, len(accuracies)):
+        if accuracies[t] >= baseline_acc - pruning_tolerance:
+            optimal_num_pruned = t
+        else:
+            break
+
+    if optimal_num_pruned > 0:
+        knee_position = start_feature + optimal_num_pruned - 1
+        pruned_positions = list(range(start_feature, knee_position + 1))
+    else:
+        pruned_positions = []
+    pruned_position_set = set(pruned_positions)
+    critical_positions = [p for p in range(num_features) if p not in pruned_position_set]
+
+    def _name(p):
+        return feature_names[assembler.locked_perm[p].item()]
+
+    critical_feature_names = [_name(p) for p in critical_positions]
+    pruned_feature_names = [_name(p) for p in pruned_positions]
+
     return {
         'accuracies': accuracies,
         'f1_scores': f1_scores,
         'auprc_scores': auprc_scores,
         'baseline_features': baseline_features,
         'baseline_feature_names': baseline_feature_names,
-        'num_features_pruned': num_features - len(baseline_features) - 1  # -1 for the last feature
+        'num_features_pruned': num_features - len(baseline_features) - 1,  # -1 for the last feature
+        'start_feature': start_feature,
+        'optimal_num_pruned': optimal_num_pruned,
+        'optimal_accuracy': accuracies[optimal_num_pruned],
+        'critical_positions': critical_positions,
+        'pruned_positions': pruned_positions,
+        'critical_feature_names': critical_feature_names,
+        'pruned_feature_names': pruned_feature_names,
     }
 
 
@@ -838,6 +872,241 @@ def save_tree_structure_to_json(model, filename, feature_names=None):
         json.dump(tree_structure, f, indent=2, ensure_ascii=False)
     
     print(f"✅ Tree structure saved to: {filename}")
+    return filename
+
+
+# ============================================================================
+# Pruned Tree Export - critical subtree retained after pruning analysis
+# ============================================================================
+
+def _compute_display_leaf_names(model, feature_names=None):
+    """Return per-leaf display names for a binaryTreeLogicNet (permutation +
+    transformations applied), in tree-position order.
+
+    Returns:
+        list[str]: Display names such as "age", "NOT chol", "PEAK(thalach, t=0.5)".
+    """
+    if feature_names:
+        if model.locked_perm is not None:
+            leaf_names = [feature_names[i] for i in model.locked_perm.tolist()]
+        else:
+            leaf_names = list(feature_names)
+    else:
+        leaf_names = [f"feature{i}" for i in range(model.num_leaves)]
+
+    if not (hasattr(model, 'transformation_layer') and model.transformation_layer is not None):
+        return leaf_names
+
+    selected_transforms = model.transformation_layer.get_selected_transformations()
+    transformation_names = [
+        t.__class__.__name__.replace('Transformation', '').lower()
+        for t in model.transformation_layer.transformations
+    ]
+
+    display = []
+    for i, name in enumerate(leaf_names):
+        transform_idx = selected_transforms[i].item()
+        transform_name = transformation_names[transform_idx]
+        transform_obj = model.transformation_layer.transformations[transform_idx]
+
+        params = {}
+        if hasattr(transform_obj, 'get_param_summary'):
+            transform_params_dict = {}
+            for key, value in model.transformation_layer.transform_params.items():
+                if key.startswith(f"t{transform_idx}_"):
+                    transform_params_dict[key[len(f"t{transform_idx}_"):]] = value
+            if transform_params_dict:
+                params = transform_obj.get_param_summary(transform_params_dict, i)
+
+        if transform_name == 'negation':
+            display.append(f"NOT {name}")
+        elif transform_name == 'peak':
+            display.append(f"PEAK({name}, t={params.get('peak_location', '?')})")
+        elif transform_name == 'valley':
+            display.append(f"VALLEY({name}, t={params.get('valley_location', '?')})")
+        elif transform_name == 'step_up':
+            display.append(f"STEP_UP({name}, t={params.get('threshold', '?')})")
+        elif transform_name == 'step_down':
+            display.append(f"STEP_DOWN({name}, t={params.get('threshold', '?')})")
+        else:
+            display.append(name)
+    return display
+
+
+def export_pruned_tree(model, X, Y, feature_names, pruning_results,
+                       threshold=0.5, model_name="", device=None):
+    """Build a JSON-serializable description of the *pruned* (critical) tree.
+
+    Uses the critical/pruned feature sets discovered by
+    :func:`analyze_feature_importance_with_pruning` to assemble the minimal
+    left-associative tree of features that survive pruning, annotated with
+    per-node graded-logic operators and the number of samples each node
+    classifies positive. The result includes a ``portalTree`` field shaped for
+    the ScreenWise portal's tree visualization ({label, count, children}).
+
+    Args:
+        model: Trained baconNet model with a frozen structure.
+        X: Input tensor used to compute per-node sample counts.
+        Y: Target tensor (used only for the reported accuracy).
+        feature_names: Original (unpermuted) feature names.
+        pruning_results: dict returned by analyze_feature_importance_with_pruning.
+        threshold: Classification threshold for counting positive samples.
+        model_name: Optional identifier stored in the metadata.
+        device: torch device (defaults to X.device).
+
+    Returns:
+        dict: Pruned-tree structure with metadata and a ``portalTree`` field.
+    """
+    if device is None:
+        device = X.device
+
+    assembler = model.assembler
+    leaf_names = _compute_display_leaf_names(model.assembler, feature_names)
+
+    critical_positions = list(pruning_results.get('critical_positions', list(range(assembler.num_leaves))))
+    pruned_positions = list(pruning_results.get('pruned_positions', []))
+
+    a_vals = [(torch.sigmoid(b) * 3 - 1).item() for b in assembler.biases]
+
+    # Re-apply cumulative pruning up to the critical knee so the cached layer
+    # outputs reflect the pruned tree, then read per-node positive counts.
+    original_weights = [w.data.clone() for w in assembler.weights]
+    prev_cache_flag = getattr(assembler, 'cache_layer_outputs', False)
+    try:
+        assembler.pruned_aggregators.clear()
+        for p in pruned_positions:
+            assembler.prune_features(p)
+
+        assembler.cache_layer_outputs = True
+        with torch.no_grad():
+            leaf_values = assembler.input_to_leaf(X)
+            if assembler.transformation_layer is not None:
+                leaf_values = assembler.transformation_layer(leaf_values)
+            assembler(X)
+            layer_outputs = [lo.detach() for lo in assembler.layer_outputs]
+
+        total_samples = int(X.shape[0])
+        leaf_counts = [int((leaf_values[:, p] >= threshold).sum().item()) for p in range(assembler.num_leaves)]
+        agg_counts = [int((lo >= threshold).sum().item()) for lo in layer_outputs]
+    finally:
+        assembler.cache_layer_outputs = prev_cache_flag
+        for j, w in enumerate(assembler.weights):
+            w.data.copy_(original_weights[j])
+        assembler.pruned_aggregators.clear()
+
+    def _leaf_node(position):
+        return {
+            "type": "feature",
+            "position": position,
+            "label": leaf_names[position],
+            "count": leaf_counts[position],
+        }
+
+    def _operator(andness):
+        return "AND" if andness >= 0.5 else "OR"
+
+    # Assemble the critical tree by left-folding the surviving features. The
+    # aggregator that introduces feature at position p is aggregator p-1.
+    nodes_meta = []
+    if not critical_positions:
+        portal_tree = []
+    else:
+        current = _leaf_node(critical_positions[0])
+        for p in critical_positions[1:]:
+            agg_idx = max(p - 1, 0)
+            andness = round(a_vals[agg_idx], 6)
+            count = agg_counts[agg_idx] if agg_idx < len(agg_counts) else total_samples
+            current = {
+                "type": "aggregator",
+                "aggregator_index": agg_idx,
+                "operator": _operator(andness),
+                "andness": andness,
+                "count": count,
+                "children": [current, _leaf_node(p)],
+            }
+            nodes_meta.append({
+                "aggregator_index": agg_idx,
+                "operator": current["operator"],
+                "andness": andness,
+                "count": count,
+                "right_feature": leaf_names[p],
+            })
+        portal_tree = [current]
+
+    return {
+        "model_type": "binaryTreeLogicNet",
+        "model_name": model_name,
+        "layout": getattr(assembler, 'tree_layout', 'left'),
+        "threshold": round(float(threshold), 6),
+        "total_samples": total_samples,
+        "num_features": assembler.num_leaves,
+        "metrics": {
+            "baseline_accuracy": round(float(pruning_results['accuracies'][0]), 6),
+            "pruned_accuracy": round(float(pruning_results.get('optimal_accuracy', pruning_results['accuracies'][0])), 6),
+            "optimal_num_pruned": int(pruning_results.get('optimal_num_pruned', 0)),
+        },
+        "critical_features": list(pruning_results.get('critical_feature_names', [])),
+        "pruned_features": list(pruning_results.get('pruned_feature_names', [])),
+        "baseline_features": list(pruning_results.get('baseline_feature_names', [])),
+        "nodes": nodes_meta,
+        "portalTree": portal_tree,
+    }
+
+
+def save_pruned_tree_to_json(pruned_tree, filename):
+    """Write a pruned-tree structure (from :func:`export_pruned_tree`) to JSON."""
+    import json
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(pruned_tree, f, indent=2, ensure_ascii=False)
+    print(f"✅ Pruned tree saved to: {filename}")
+    return filename
+
+
+def save_pruned_tree_to_xml(pruned_tree, filename):
+    """Write a pruned-tree structure (from :func:`export_pruned_tree`) to XML."""
+    import xml.etree.ElementTree as ET
+    from xml.dom import minidom
+
+    root = ET.Element("prunedTree")
+    root.set("model", str(pruned_tree.get("model_name", "")))
+    root.set("layout", str(pruned_tree.get("layout", "left")))
+    root.set("threshold", str(pruned_tree.get("threshold", 0.5)))
+    root.set("totalSamples", str(pruned_tree.get("total_samples", 0)))
+
+    metrics = pruned_tree.get("metrics", {})
+    metrics_el = ET.SubElement(root, "metrics")
+    for key, value in metrics.items():
+        metrics_el.set(key, str(value))
+
+    def _add_feature_list(parent, tag, names):
+        container = ET.SubElement(parent, tag)
+        for name in names:
+            ET.SubElement(container, "feature").text = str(name)
+
+    _add_feature_list(root, "criticalFeatures", pruned_tree.get("critical_features", []))
+    _add_feature_list(root, "prunedFeatures", pruned_tree.get("pruned_features", []))
+
+    def _add_node(parent, node):
+        if node.get("type") == "feature" or "children" not in node:
+            el = ET.SubElement(parent, "leaf")
+            el.set("label", str(node.get("label", "")))
+            el.set("count", str(node.get("count", 0)))
+        else:
+            el = ET.SubElement(parent, "node")
+            el.set("operator", str(node.get("operator", "")))
+            el.set("andness", str(node.get("andness", "")))
+            el.set("count", str(node.get("count", 0)))
+            for child in node.get("children", []):
+                _add_node(el, child)
+
+    tree_el = ET.SubElement(root, "tree")
+    for node in pruned_tree.get("portalTree", []):
+        _add_node(tree_el, node)
+
+    pretty = minidom.parseString(ET.tostring(root, encoding="utf-8")).toprettyxml(indent="  ")
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(pretty)
+    print(f"✅ Pruned tree saved to: {filename}")
     return filename
 
 

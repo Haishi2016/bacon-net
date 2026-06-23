@@ -223,6 +223,15 @@ def train_model(dataloaders, model, optim, scheduler, verbose=0, MI_const=1, jen
     MI_ZY = []
     MI_XZ = []
     MI_ZC = []
+
+    # MI estimators run full forward passes over sampled points; with image backbones,
+    # large sample sizes can trigger CUDA/CUBLAS internal errors. Keep this bounded.
+    mi_sample_size = sz
+    if getattr(model, 'backbone', None) is not None:
+        mi_sample_size = min(sz, 32)
+        if mi_sample_size < sz:
+            logger.info(f"Capping MI sample size from {sz} to {mi_sample_size} for backbone training stability")
+
     pbar = range(epochs) if verbose == 0 else tqdm(range(epochs), desc='Progress')
     for epoch in pbar:
 
@@ -249,7 +258,11 @@ def train_model(dataloaders, model, optim, scheduler, verbose=0, MI_const=1, jen
             feats = batch[0].to(DEVICE)
             gt_concepts = batch[1].to(DEVICE)
             targets = batch[2].reshape(-1).to(DEVICE)
-            logits, max_prob, concept_preds = model(feats, targets)
+            # Only pass targets for multi-tree models which support it
+            if hasattr(model, 'trees'):
+                logits, max_prob, concept_preds = model(feats, targets)
+            else:
+                logits, max_prob, concept_preds = model(feats)
             
             # L = (1-beta) * KL[p(c|z) || q(c|z)] + H(p(y|c), q(y|c))
             if use_kl_ce_objective and not blackbox:
@@ -306,12 +319,12 @@ def train_model(dataloaders, model, optim, scheduler, verbose=0, MI_const=1, jen
                     mi_loss = None
                     if use_HC:
                         H_C = est_HC(model, train_dataloader.dataset,
-                                     sz=min(sz, len(train_dataloader.dataset)), jensen=jensen)
+                                     sz=min(mi_sample_size, len(train_dataloader.dataset)), jensen=jensen)
                         mi_loss = (1 - beta) * H_C
                         constraint_item = 0
                     else:
                         MI = est_MI(model, train_dataloader.dataset,
-                                    sz=min(sz, len(train_dataloader.dataset)), jensen=jensen)
+                                    sz=min(mi_sample_size, len(train_dataloader.dataset)), jensen=jensen)
                         constraint = (MI_const - MI)
                         mi_loss = beta * constraint
                         constraint_item = constraint.item()
@@ -458,6 +471,15 @@ def run_experiment(model_arch, dataset_name, is_blackbox=False, is_stochastic=Tr
     global label_metric
     set_seed(seed)
 
+    # Multi-tree BACON training intentionally avoids full test-time sweeps over all trees.
+    if head_type == 'bacon_multi':
+        if measure_intervention:
+            logger.info("Disabling intervention trials for bacon_multi to avoid full-tree test sweeps")
+        if measure_robustness:
+            logger.info("Disabling robustness tests for bacon_multi to avoid full-tree test sweeps")
+        measure_intervention = False
+        measure_robustness = False
+
     now = datetime.datetime.now()
     logdir = now.strftime("%m%d%H%M%S")
     logpath = os.path.join(log_base, logdir)
@@ -536,6 +558,10 @@ def run_experiment(model_arch, dataset_name, is_blackbox=False, is_stochastic=Tr
             test_label_losses[i] = test_losses[:, 0]
             test_concept_losses[i] = test_losses[:, 1]
 
+        # Skip expensive evaluations for multi-tree BACON (not applicable to per-class training)
+        if head_type == 'bacon_multi':
+            continue
+
         if measure_robustness:
             logger.info("Running robustness tests (noise injection)")
             for noise_level in noise_levels:
@@ -549,7 +575,7 @@ def run_experiment(model_arch, dataset_name, is_blackbox=False, is_stochastic=Tr
     logger.info("Label accuracies")
     logger.info(lo(test_accuracies))
     logger.info("Concept accuracies")
-    logger.info(f"{concepts_accs.mean()}±{concepts_accs.mean(1).std()}")
+    logger.info(f"{concepts_accs.mean()}±{concepts_accs.mean(1).std(unbiased=False)}")
 
     if measure_intervention:
         num_tti_groups_to_acc = measure_interventions(model, dataloaders['test'], device)
@@ -598,7 +624,10 @@ def run_experiment(model_arch, dataset_name, is_blackbox=False, is_stochastic=Tr
     if not merge_train_val:
         plot_losses(logpath, test_label_losses, test_concept_losses)
     if collect_MIs:
-        plot_mi(logpath, is_stochastic, MI_XC, MI_CY, MI_XZ, MI_ZY, MI_ZC)
+        if all(mi is not None for mi in (MI_XC, MI_CY, MI_XZ, MI_ZY, MI_ZC)):
+            plot_mi(logpath, is_stochastic, MI_XC, MI_CY, MI_XZ, MI_ZY, MI_ZC)
+        else:
+            logger.info("Skipping MI plots because MI tensors are unavailable for this head/training mode")
 
     with open(os.path.join(logpath, 'info.txt'), 'w') as f:
         config = dict(model_arch=model_arch, dataset_name=dataset_name, is_blackbox=is_blackbox,
@@ -624,7 +653,7 @@ def run_experiment(model_arch, dataset_name, is_blackbox=False, is_stochastic=Tr
         print("Label accuracies", file=f)
         print(lo(test_accuracies), file=f)
         print("Concept accuracies", file=f)
-        print(f"{concepts_accs.mean()}±{concepts_accs.mean(1).std()}", file=f)
+        print(f"{concepts_accs.mean()}±{concepts_accs.mean(1).std(unbiased=False)}", file=f)
 
     logger.info(f"Saved the plots, config and results to {logpath}")
 
@@ -636,7 +665,7 @@ def configure_training(train_backbone, is_stochastic, model_arch, num_concepts,
                        bacon_sinkhorn_final_temp=0.1, bacon_use_negative_sampling=False):
     backbone = None
     if train_backbone:
-        backbone = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50',
+        backbone = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18',
                                   pretrained=True)
         backbone.fc = torch.nn.Identity()
         backbone.to(device)

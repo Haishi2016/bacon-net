@@ -1,0 +1,51 @@
+<?xml version="1.0" ?>
+<prunedTree model="Heart Disease" layout="left" threshold="0.5" totalSamples="60">
+  <metrics baseline_accuracy="0.866667" pruned_accuracy="0.866667" optimal_num_pruned="15"/>
+  <criticalFeatures>
+    <feature>cp_4</feature>
+    <feature>cp_3</feature>
+    <feature>exang</feature>
+    <feature>slope_2</feature>
+    <feature>ca</feature>
+    <feature>thal_7.0</feature>
+    <feature>oldpeak</feature>
+  </criticalFeatures>
+  <prunedFeatures>
+    <feature>chol</feature>
+    <feature>slope_3</feature>
+    <feature>sex</feature>
+    <feature>cp_1</feature>
+    <feature>restecg_2</feature>
+    <feature>fbs</feature>
+    <feature>slope_1</feature>
+    <feature>restecg_1</feature>
+    <feature>thal_3.0</feature>
+    <feature>thalach</feature>
+    <feature>restecg_0</feature>
+    <feature>age</feature>
+    <feature>cp_2</feature>
+    <feature>thal_6.0</feature>
+    <feature>trestbps</feature>
+  </prunedFeatures>
+  <tree>
+    <node operator="AND" andness="1.926144" count="32">
+      <node operator="OR" andness="0.152726" count="60">
+        <node operator="OR" andness="0.00932" count="60">
+          <node operator="AND" andness="1.967894" count="30">
+            <node operator="AND" andness="1.976221" count="60">
+              <node operator="OR" andness="-0.44554" count="60">
+                <leaf label="cp_4" count="60"/>
+                <leaf label="cp_3" count="60"/>
+              </node>
+              <leaf label="exang" count="60"/>
+            </node>
+            <leaf label="slope_2" count="60"/>
+          </node>
+          <leaf label="ca" count="60"/>
+        </node>
+        <leaf label="thal_7.0" count="60"/>
+      </node>
+      <leaf label="oldpeak" count="60"/>
+    </node>
+  </tree>
+</prunedTree>
