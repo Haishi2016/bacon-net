@@ -1,0 +1,16 @@
+# Generated / downloaded artifacts for the concept-bacon-cbm experiments
+cache/
+quickdraw_data/
+checkpoint.pt
+cream_digit.pt
+*_preview*.png
+shapes_preview.png
+eight_scenes_preview.png
+_photos_out.txt
+cream/_*.txt
+cream/saved/
+cream/*.png
+cream/cache_clothing/
+cub/cache/
+cub/_*.txt
+**/__pycache__/
