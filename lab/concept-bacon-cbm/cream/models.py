@@ -49,6 +49,28 @@ def activate(logits: torch.Tensor, spec) -> torch.Tensor:
     return out
 
 
+def harden_concepts(c: torch.Tensor, spec=None) -> torch.Tensor:
+    """Binarize soft concepts to their hard decisions: one-hot argmax within each
+    mutex group, threshold 0.5 for independent binary concepts.  Feeding these
+    through the frozen task head measures how much task signal was carried in the
+    *continuous* concept values (soft-vs-hard concept leakage).
+    """
+    mutex = getattr(spec, "mutex_groups", None) if spec is not None else None
+    binc = getattr(spec, "binary_concepts", None) if spec is not None else None
+    if not mutex and not binc:
+        return (c > 0.5).float()
+    out = c.clone()
+    for g in (mutex or []):
+        sub = out[:, g]
+        oneh = torch.zeros_like(sub)
+        oneh[torch.arange(sub.shape[0], device=sub.device), sub.argmax(1)] = 1.0
+        out[:, g] = oneh
+    if binc:
+        cols = torch.as_tensor(list(binc), device=out.device, dtype=torch.long)
+        out[:, cols] = (out[:, cols] > 0.5).float()
+    return out
+
+
 class MaskedLinear(nn.Module):
     """Linear whose weight is fixed-masked to a 0/1 connectivity pattern (StrNN d=0)."""
 
@@ -79,10 +101,10 @@ class Backbone(nn.Module):
 
 
 class BlackBox(nn.Module):
-    def __init__(self, feat_dim=128):
+    def __init__(self, feat_dim=128, n_classes=10, backbone=None):
         super().__init__()
-        self.backbone = Backbone(feat_dim)
-        self.head = nn.Linear(feat_dim, 10)
+        self.backbone = backbone if backbone is not None else Backbone(feat_dim)
+        self.head = nn.Linear(feat_dim, n_classes)
 
     def forward(self, x):
         return self.head(self.backbone(x)), None
@@ -93,7 +115,7 @@ class CtrueY(nn.Module):
 
     def __init__(self, spec):
         super().__init__()
-        self.head = nn.Linear(spec.K, 10)
+        self.head = nn.Linear(spec.K, spec.A_Y.shape[0])
 
     def forward(self, concepts):
         return self.head(concepts), None
@@ -102,16 +124,17 @@ class CtrueY(nn.Module):
 class SoftCBM(nn.Module):
     """Vanilla soft CBM: INDEPENDENT sigmoid concepts (the leakage-prone baseline)."""
 
-    def __init__(self, spec, feat_dim=128):
+    def __init__(self, spec, feat_dim=128, backbone=None):
         super().__init__()
         self.spec = spec
-        self.backbone = Backbone(feat_dim)
+        self.backbone = backbone if backbone is not None else Backbone(feat_dim)
         self.concept = nn.Linear(feat_dim, spec.K)
-        self.head = nn.Linear(spec.K, 10)
+        self.head = nn.Linear(spec.K, spec.A_Y.shape[0])
 
-    def forward(self, x, use_side=True):
+    def forward(self, x, use_side=True, harden=False):
         c = torch.sigmoid(self.concept(self.backbone(x)))
-        return self.head(c), c
+        ch = harden_concepts(c, self.spec) if harden else c
+        return self.head(ch), c
 
 
 def _drop_channel(z: torch.Tensor, p: float, training: bool) -> torch.Tensor:
@@ -122,14 +145,45 @@ def _drop_channel(z: torch.Tensor, p: float, training: bool) -> torch.Tensor:
     return z * keep
 
 
+class SoftCBMSC(nn.Module):
+    """CBM + a CREAM-style regularized black-box side-channel (the CBM+SC row).
+
+    Identical to SoftCBM (independent sigmoid concepts -> linear head) plus a
+    dropout-p-regularized side-channel added to the logits, so the concept path
+    must stand on its own while the side-channel absorbs residual task signal.
+    """
+
+    def __init__(self, spec, feat_dim=128, d_y=20, dropout_p=0.9, backbone=None):
+        super().__init__()
+        self.spec = spec
+        self.p = dropout_p
+        self.d_y = d_y
+        L = spec.A_Y.shape[0]
+        self.backbone = backbone if backbone is not None else Backbone(feat_dim)
+        self.concept = nn.Linear(feat_dim, spec.K)
+        self.head = nn.Linear(spec.K, L)
+        self.side_in = nn.Linear(feat_dim, d_y)
+        self.side = nn.Linear(d_y, L)
+
+    def forward(self, x, use_side=True, harden=False):
+        feat = self.backbone(x)
+        c = torch.sigmoid(self.concept(feat))
+        ch = harden_concepts(c, self.spec) if harden else c
+        logits = self.head(ch)
+        z_y = self.side_in(feat)
+        z_y = _drop_channel(z_y, self.p, self.training) if use_side else torch.zeros_like(z_y)
+        return logits + self.side(z_y), c
+
+
 class CREAM(nn.Module):
-    def __init__(self, spec, feat_dim=128, d_c=7, d_y=20, dropout_p=0.9):
+    def __init__(self, spec, feat_dim=128, d_c=7, d_y=20, dropout_p=0.9, backbone=None):
         super().__init__()
         self.spec = spec
         self.p = dropout_p
         self.d_c = d_c
         self.d_y = d_y
-        self.backbone = Backbone(feat_dim)
+        L = spec.A_Y.shape[0]
+        self.backbone = backbone if backbone is not None else Backbone(feat_dim)
         self.splitter = nn.Linear(feat_dim, d_c * spec.K + d_y)
         # Concept-Concept block (StrNN d=0): masked linear (d_c*K -> K).
         # A_C = identity + hierarchy cliques (parent<->child within a class).
@@ -144,22 +198,23 @@ class CREAM(nn.Module):
         M_C = torch.kron(A_C.t().contiguous(), torch.ones(1, d_c))       # (K, d_c*K)
         self.ccb = MaskedLinear(d_c * spec.K, spec.K, M_C)
         # side-channel projection z_Y -> L
-        self.side = nn.Linear(d_y, 10)
+        self.side = nn.Linear(d_y, L)
         # Concept-Task block: masked linear [C (K) ; z_Y_hat (L)] -> L,
         # mask = [A_Y (L x K) | I_L].
-        mask = torch.cat([spec.A_Y, torch.eye(10)], dim=1)  # (10, K+10)
-        self.task = MaskedLinear(spec.K + 10, 10, mask)
+        mask = torch.cat([spec.A_Y, torch.eye(L)], dim=1)  # (L, K+L)
+        self.task = MaskedLinear(spec.K + L, L, mask)
 
-    def forward(self, x, use_side=True):
+    def forward(self, x, use_side=True, harden=False):
         z = self.splitter(self.backbone(x))
         z_c, z_y = z[:, :self.d_c * self.spec.K], z[:, self.d_c * self.spec.K:]
         c = activate(self.ccb(z_c), self.spec)
+        ch = harden_concepts(c, self.spec) if harden else c
         if use_side:
             z_y = _drop_channel(z_y, self.p, self.training)
         else:
             z_y = torch.zeros_like(z_y)
         y_side = self.side(z_y)
-        logits = self.task(torch.cat([c, y_side], dim=1))
+        logits = self.task(torch.cat([ch, y_side], dim=1))
         return logits, c
 
 
@@ -167,14 +222,14 @@ class BaconCBM(nn.Module):
     """Our approach: fixed per-class BACON AND-trees over softmax-mutex concepts."""
 
     def __init__(self, spec, feat_dim=128, logit_temp=6.0, d_y=0, dropout_p=0.9,
-                 finetune_logic=False, finetune_aggregator="gl.generic"):
+                 finetune_logic=False, finetune_aggregator="gl.generic", backbone=None):
         super().__init__()
         self.spec = spec
         self.feat_dim = feat_dim
         self.dropout_p = dropout_p
         self.finetune_logic = finetune_logic
         self.finetune_aggregator = finetune_aggregator
-        self.backbone = Backbone(feat_dim)
+        self.backbone = backbone if backbone is not None else Backbone(feat_dim)
         self.concept = nn.Linear(feat_dim, spec.K)
         if finetune_logic:
             # SAME fixed structure, but andness + input weights are trainable.
@@ -188,15 +243,17 @@ class BaconCBM(nn.Module):
                                         and_andness=1.0, or_andness=0.0)
         self.log_temp = nn.Parameter(torch.tensor(float(torch.log(torch.tensor(logit_temp)))))
         self.d_y = d_y
+        L = len(spec.formulas)
         if d_y > 0:                                    # optional CREAM-style side-channel
             self.p = dropout_p
             self.side_in = nn.Linear(feat_dim, d_y)
-            self.side = nn.Linear(d_y, 10)
+            self.side = nn.Linear(d_y, L)
 
-    def forward(self, x, use_side=True):
+    def forward(self, x, use_side=True, harden=False):
         feat = self.backbone(x)
         c = activate(self.concept(feat), self.spec)
-        truths = self.logic(c).clamp(1e-6, 1 - 1e-6)
+        ch = harden_concepts(c, self.spec) if harden else c
+        truths = self.logic(ch).clamp(1e-6, 1 - 1e-6)
         logits = self.log_temp.exp() * (torch.log(truths) - torch.log1p(-truths))
         if self.d_y > 0:
             z_y = self.side_in(feat)

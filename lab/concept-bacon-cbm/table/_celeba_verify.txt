@@ -1,0 +1,14 @@
+Black-box / CelebA   iters=1  epochs=40  K=7  lam=1.0  train_subset=5000  device=cuda
+  [iter 1/1]  ACC_Y = 90.80
+
+=== Black-box  /  CelebA   (n=1) ===
+  ACC_Y =  90.80 +/- 0.00   runs = [90.8]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $90.80_{\pm0.00}$   ACC_C --
+CBM / CelebA   iters=1  epochs=40  K=7  lam=1.0  train_subset=5000  device=cuda
+  [iter 1/1]  ACC_Y = 90.66  ACC_C = 82.67
+
+=== CBM  /  CelebA   (n=1) ===
+  ACC_Y =  90.66 +/- 0.00   runs = [90.66]
+  ACC_C =  82.67 +/- 0.00   runs = [82.67]
+  LaTeX cell ->  ACC_Y $90.66_{\pm0.00}$   ACC_C $82.67_{\pm0.00}$

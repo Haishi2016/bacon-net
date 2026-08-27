@@ -1,0 +1,64 @@
+OCBM / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 90.23  ACC_C = 85.89
+  [iter 2/10]  ACC_Y = 89.96  ACC_C = 85.75
+  [iter 3/10]  ACC_Y = 89.91  ACC_C = 85.90
+  [iter 4/10]  ACC_Y = 90.05  ACC_C = 85.79
+  [iter 5/10]  ACC_Y = 89.67  ACC_C = 85.80
+  [iter 6/10]  ACC_Y = 90.25  ACC_C = 85.63
+  [iter 7/10]  ACC_Y = 89.97  ACC_C = 85.98
+  [iter 8/10]  ACC_Y = 89.72  ACC_C = 85.78
+  [iter 9/10]  ACC_Y = 89.77  ACC_C = 85.96
+  [iter 10/10]  ACC_Y = 90.00  ACC_C = 85.94
+
+=== OCBM v1  /  CelebA   (n=10) ===
+  ACC_Y =  89.95 +/- 0.19   runs = [90.23, 89.96, 89.91, 90.05, 89.67, 90.25, 89.97, 89.72, 89.77, 90.0]
+  ACC_C =  85.84 +/- 0.10   runs = [85.89, 85.75, 85.9, 85.79, 85.8, 85.63, 85.98, 85.78, 85.96, 85.94]
+  LaTeX cell ->  ACC_Y $89.95_{\pm0.19}$   ACC_C $85.84_{\pm0.10}$
+OCBM (fine-tuned) / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 90.36  ACC_C = 86.68
+  [iter 2/10]  ACC_Y = 89.71  ACC_C = 86.52
+  [iter 3/10]  ACC_Y = 90.14  ACC_C = 86.43
+  [iter 4/10]  ACC_Y = 90.08  ACC_C = 86.59
+  [iter 5/10]  ACC_Y = 89.70  ACC_C = 86.41
+  [iter 6/10]  ACC_Y = 90.22  ACC_C = 86.41
+  [iter 7/10]  ACC_Y = 90.13  ACC_C = 86.62
+  [iter 8/10]  ACC_Y = 89.91  ACC_C = 86.40
+  [iter 9/10]  ACC_Y = 89.72  ACC_C = 86.59
+  [iter 10/10]  ACC_Y = 90.23  ACC_C = 86.64
+
+=== OCBM v3  /  CelebA   (n=10) ===
+  ACC_Y =  90.02 +/- 0.23   runs = [90.36, 89.71, 90.14, 90.08, 89.7, 90.22, 90.13, 89.91, 89.72, 90.23]
+  ACC_C =  86.53 +/- 0.10   runs = [86.68, 86.52, 86.43, 86.59, 86.41, 86.41, 86.62, 86.4, 86.59, 86.64]
+  LaTeX cell ->  ACC_Y $90.02_{\pm0.23}$   ACC_C $86.53_{\pm0.10}$
+OCBM / CUB   iters=10  epochs=40  K=112  lam=1.0  ay=positive  device=cuda
+  [iter 1/10]  ACC_Y = 64.15  ACC_C = 92.39
+  [iter 2/10]  ACC_Y = 64.53  ACC_C = 92.37
+  [iter 3/10]  ACC_Y = 64.17  ACC_C = 92.38
+  [iter 4/10]  ACC_Y = 64.27  ACC_C = 92.41
+  [iter 5/10]  ACC_Y = 64.00  ACC_C = 92.42
+  [iter 6/10]  ACC_Y = 64.62  ACC_C = 92.40
+  [iter 7/10]  ACC_Y = 64.53  ACC_C = 92.42
+  [iter 8/10]  ACC_Y = 64.36  ACC_C = 92.41
+  [iter 9/10]  ACC_Y = 64.24  ACC_C = 92.37
+  [iter 10/10]  ACC_Y = 64.69  ACC_C = 92.37
+
+=== OCBM v1  /  CUB   (n=10) ===
+  ACC_Y =  64.36 +/- 0.22   runs = [64.15, 64.53, 64.17, 64.27, 64.0, 64.62, 64.53, 64.36, 64.24, 64.69]
+  ACC_C =  92.39 +/- 0.02   runs = [92.39, 92.37, 92.38, 92.41, 92.42, 92.4, 92.42, 92.41, 92.37, 92.37]
+  LaTeX cell ->  ACC_Y $64.36_{\pm0.22}$   ACC_C $92.39_{\pm0.02}$
+OCBM (fine-tuned) / CUB   iters=10  epochs=40  K=112  lam=1.0  ay=positive  device=cuda
+  [iter 1/10]  ACC_Y = 66.02  ACC_C = 92.34
+  [iter 2/10]  ACC_Y = 66.95  ACC_C = 92.40
+  [iter 3/10]  ACC_Y = 66.71  ACC_C = 92.39
+  [iter 4/10]  ACC_Y = 65.95  ACC_C = 92.41
+  [iter 5/10]  ACC_Y = 66.47  ACC_C = 92.38
+  [iter 6/10]  ACC_Y = 66.69  ACC_C = 92.34
+  [iter 7/10]  ACC_Y = 67.10  ACC_C = 92.37
+  [iter 8/10]  ACC_Y = 66.40  ACC_C = 92.38
+  [iter 9/10]  ACC_Y = 66.12  ACC_C = 92.33
+  [iter 10/10]  ACC_Y = 66.24  ACC_C = 92.36
+
+=== OCBM v3  /  CUB   (n=10) ===
+  ACC_Y =  66.46 +/- 0.37   runs = [66.02, 66.95, 66.71, 65.95, 66.47, 66.69, 67.1, 66.4, 66.12, 66.24]
+  ACC_C =  92.37 +/- 0.02   runs = [92.34, 92.4, 92.39, 92.41, 92.38, 92.34, 92.37, 92.38, 92.33, 92.36]
+  LaTeX cell ->  ACC_Y $66.46_{\pm0.37}$   ACC_C $92.37_{\pm0.02}$

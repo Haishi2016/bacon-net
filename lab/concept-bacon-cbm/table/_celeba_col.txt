@@ -1,0 +1,96 @@
+Black-box / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 90.71
+  [iter 2/10]  ACC_Y = 90.41
+  [iter 3/10]  ACC_Y = 90.47
+  [iter 4/10]  ACC_Y = 90.37
+  [iter 5/10]  ACC_Y = 89.74
+  [iter 6/10]  ACC_Y = 90.73
+  [iter 7/10]  ACC_Y = 90.37
+  [iter 8/10]  ACC_Y = 89.84
+  [iter 9/10]  ACC_Y = 90.49
+  [iter 10/10]  ACC_Y = 90.45
+
+=== Black-box  /  CelebA   (n=10) ===
+  ACC_Y =  90.36 +/- 0.31   runs = [90.71, 90.41, 90.47, 90.37, 89.74, 90.73, 90.37, 89.84, 90.49, 90.45]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $90.36_{\pm0.31}$   ACC_C --
+C_true->Y / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 84.50
+  [iter 2/10]  ACC_Y = 84.50
+  [iter 3/10]  ACC_Y = 84.09
+  [iter 4/10]  ACC_Y = 84.09
+  [iter 5/10]  ACC_Y = 84.09
+  [iter 6/10]  ACC_Y = 83.95
+  [iter 7/10]  ACC_Y = 84.49
+  [iter 8/10]  ACC_Y = 84.07
+  [iter 9/10]  ACC_Y = 84.09
+  [iter 10/10]  ACC_Y = 84.50
+
+=== C_true->Y  /  CelebA   (n=10) ===
+  ACC_Y =  84.24 +/- 0.21   runs = [84.5, 84.5, 84.09, 84.09, 84.09, 83.95, 84.49, 84.07, 84.09, 84.5]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $84.24_{\pm0.21}$   ACC_C --
+CBM / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 90.63  ACC_C = 82.67
+  [iter 2/10]  ACC_Y = 90.46  ACC_C = 81.64
+  [iter 3/10]  ACC_Y = 90.42  ACC_C = 83.07
+  [iter 4/10]  ACC_Y = 90.93  ACC_C = 80.30
+  [iter 5/10]  ACC_Y = 90.08  ACC_C = 80.74
+  [iter 6/10]  ACC_Y = 90.17  ACC_C = 79.56
+  [iter 7/10]  ACC_Y = 90.06  ACC_C = 86.48
+  [iter 8/10]  ACC_Y = 90.29  ACC_C = 81.68
+  [iter 9/10]  ACC_Y = 90.64  ACC_C = 81.89
+  [iter 10/10]  ACC_Y = 91.03  ACC_C = 82.77
+
+=== CBM  /  CelebA   (n=10) ===
+  ACC_Y =  90.47 +/- 0.32   runs = [90.63, 90.46, 90.42, 90.93, 90.08, 90.17, 90.06, 90.29, 90.64, 91.03]
+  ACC_C =  82.08 +/- 1.81   runs = [82.67, 81.64, 83.07, 80.3, 80.74, 79.56, 86.48, 81.68, 81.89, 82.77]
+  LaTeX cell ->  ACC_Y $90.47_{\pm0.32}$   ACC_C $82.08_{\pm1.81}$
+CBM+SC / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 90.95  ACC_C = 84.22
+  [iter 2/10]  ACC_Y = 90.48  ACC_C = 84.14
+  [iter 3/10]  ACC_Y = 90.54  ACC_C = 84.17
+  [iter 4/10]  ACC_Y = 90.82  ACC_C = 82.78
+  [iter 5/10]  ACC_Y = 90.78  ACC_C = 82.87
+  [iter 6/10]  ACC_Y = 90.58  ACC_C = 85.35
+  [iter 7/10]  ACC_Y = 90.63  ACC_C = 86.64
+  [iter 8/10]  ACC_Y = 90.31  ACC_C = 83.41
+  [iter 9/10]  ACC_Y = 90.64  ACC_C = 83.70
+  [iter 10/10]  ACC_Y = 90.83  ACC_C = 86.18
+
+=== CBM+SC  /  CelebA   (n=10) ===
+  ACC_Y =  90.66 +/- 0.18   runs = [90.95, 90.48, 90.54, 90.82, 90.78, 90.58, 90.63, 90.31, 90.64, 90.83]
+  ACC_C =  84.35 +/- 1.25   runs = [84.22, 84.14, 84.17, 82.78, 82.87, 85.35, 86.64, 83.41, 83.7, 86.18]
+  LaTeX cell ->  ACC_Y $90.66_{\pm0.18}$   ACC_C $84.35_{\pm1.25}$
+CREAM w/o SC / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 90.38  ACC_C = 84.20
+  [iter 2/10]  ACC_Y = 90.58  ACC_C = 83.63
+  [iter 3/10]  ACC_Y = 90.42  ACC_C = 83.48
+  [iter 4/10]  ACC_Y = 90.55  ACC_C = 83.53
+  [iter 5/10]  ACC_Y = 90.43  ACC_C = 83.94
+  [iter 6/10]  ACC_Y = 90.69  ACC_C = 84.00
+  [iter 7/10]  ACC_Y = 90.05  ACC_C = 84.76
+  [iter 8/10]  ACC_Y = 89.51  ACC_C = 86.95
+  [iter 9/10]  ACC_Y = 90.60  ACC_C = 83.28
+  [iter 10/10]  ACC_Y = 90.63  ACC_C = 84.27
+
+=== CREAM w/o SC  /  CelebA   (n=10) ===
+  ACC_Y =  90.38 +/- 0.34   runs = [90.38, 90.58, 90.42, 90.55, 90.43, 90.69, 90.05, 89.51, 90.6, 90.63]
+  ACC_C =  84.20 +/- 1.01   runs = [84.2, 83.63, 83.48, 83.53, 83.94, 84.0, 84.76, 86.95, 83.28, 84.27]
+  LaTeX cell ->  ACC_Y $90.38_{\pm0.34}$   ACC_C $84.20_{\pm1.01}$
+CREAM / CelebA   iters=10  epochs=40  K=7  lam=1.0  train_subset=5000  freeze=False  device=cuda
+  [iter 1/10]  ACC_Y = 90.55  ACC_C = 84.22
+  [iter 2/10]  ACC_Y = 90.73  ACC_C = 83.65
+  [iter 3/10]  ACC_Y = 90.89  ACC_C = 83.49
+  [iter 4/10]  ACC_Y = 90.85  ACC_C = 83.47
+  [iter 5/10]  ACC_Y = 90.81  ACC_C = 83.98
+  [iter 6/10]  ACC_Y = 90.76  ACC_C = 84.03
+  [iter 7/10]  ACC_Y = 90.53  ACC_C = 84.73
+  [iter 8/10]  ACC_Y = 90.07  ACC_C = 86.92
+  [iter 9/10]  ACC_Y = 90.83  ACC_C = 83.24
+  [iter 10/10]  ACC_Y = 90.95  ACC_C = 84.29
+
+=== CREAM  /  CelebA   (n=10) ===
+  ACC_Y =  90.70 +/- 0.25   runs = [90.55, 90.73, 90.89, 90.85, 90.81, 90.76, 90.53, 90.07, 90.83, 90.95]
+  ACC_C =  84.20 +/- 1.00   runs = [84.22, 83.65, 83.49, 83.47, 83.98, 84.03, 84.73, 86.92, 83.24, 84.29]
+  LaTeX cell ->  ACC_Y $90.70_{\pm0.25}$   ACC_C $84.20_{\pm1.00}$

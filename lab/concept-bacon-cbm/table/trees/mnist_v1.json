@@ -1,0 +1,136 @@
+{
+  "0": {
+    "op": "HC", "name": "digit 0",
+    "children": [
+      {"op": "SC", "name": "closed ring", "weight": 0.55,
+        "children": [
+          {"concept": "loop_upper", "weight": 0.5},
+          {"concept": "loop_lower", "weight": 0.5}
+        ]},
+      {"op": "HC", "name": "empty interior", "weight": 0.45,
+        "children": [
+          {"concept": "horizontal_middle", "weight": 0.5, "negate": true},
+          {"concept": "vertical_line", "weight": 0.5, "negate": true}
+        ]}
+    ]
+  },
+  "1": {
+    "op": "HC", "name": "digit 1",
+    "children": [
+      {"concept": "vertical_line", "weight": 0.55},
+      {"op": "HC", "name": "no loops/top", "weight": 0.45,
+        "children": [
+          {"concept": "loop_upper", "weight": 0.34, "negate": true},
+          {"concept": "loop_lower", "weight": 0.33, "negate": true},
+          {"concept": "horizontal_top", "weight": 0.33, "negate": true}
+        ]}
+    ]
+  },
+  "2": {
+    "op": "HC", "name": "digit 2",
+    "children": [
+      {"op": "SC", "name": "curve + base + slant", "weight": 0.6,
+        "children": [
+          {"concept": "left_curve", "weight": 0.4},
+          {"concept": "horizontal_bottom", "weight": 0.35},
+          {"concept": "diagonal", "weight": 0.25}
+        ]},
+      {"concept": "loop_lower", "weight": 0.4, "negate": true}
+    ]
+  },
+  "3": {
+    "op": "HC", "name": "digit 3",
+    "children": [
+      {"op": "SC", "name": "left curve + mid bar", "weight": 0.55,
+        "children": [
+          {"concept": "left_curve", "weight": 0.5},
+          {"concept": "horizontal_middle", "weight": 0.5}
+        ]},
+      {"op": "HC", "name": "open (no loop/stem)", "weight": 0.45,
+        "children": [
+          {"concept": "loop_lower", "weight": 0.5, "negate": true},
+          {"concept": "vertical_line", "weight": 0.5, "negate": true}
+        ]}
+    ]
+  },
+  "4": {
+    "op": "HC", "name": "digit 4",
+    "children": [
+      {"op": "SC", "name": "stem + mid bar", "weight": 0.55,
+        "children": [
+          {"concept": "vertical_line", "weight": 0.5},
+          {"concept": "horizontal_middle", "weight": 0.5}
+        ]},
+      {"op": "HC", "name": "no loops", "weight": 0.45,
+        "children": [
+          {"concept": "loop_upper", "weight": 0.5, "negate": true},
+          {"concept": "loop_lower", "weight": 0.5, "negate": true}
+        ]}
+    ]
+  },
+  "5": {
+    "op": "HC", "name": "digit 5",
+    "children": [
+      {"op": "SC", "name": "top bar + curve + lower loop", "weight": 0.6,
+        "children": [
+          {"concept": "horizontal_top", "weight": 0.34},
+          {"concept": "left_curve", "weight": 0.33},
+          {"concept": "loop_lower", "weight": 0.33}
+        ]},
+      {"concept": "loop_upper", "weight": 0.4, "negate": true}
+    ]
+  },
+  "6": {
+    "op": "HC", "name": "digit 6",
+    "children": [
+      {"op": "SC", "name": "lower loop + left curve", "weight": 0.55,
+        "children": [
+          {"concept": "loop_lower", "weight": 0.5},
+          {"concept": "left_curve", "weight": 0.5}
+        ]},
+      {"op": "HC", "name": "open top", "weight": 0.45,
+        "children": [
+          {"concept": "loop_upper", "weight": 0.5, "negate": true},
+          {"concept": "horizontal_top", "weight": 0.5, "negate": true}
+        ]}
+    ]
+  },
+  "7": {
+    "op": "HC", "name": "digit 7",
+    "children": [
+      {"concept": "horizontal_top", "weight": 0.4},
+      {"op": "HD", "name": "slanted/vertical stem", "weight": 0.25,
+        "children": [
+          {"concept": "diagonal", "weight": 0.5},
+          {"concept": "vertical_line", "weight": 0.5}
+        ]},
+      {"op": "HC", "name": "no loops", "weight": 0.35,
+        "children": [
+          {"concept": "loop_upper", "weight": 0.5, "negate": true},
+          {"concept": "loop_lower", "weight": 0.5, "negate": true}
+        ]}
+    ]
+  },
+  "8": {
+    "op": "HC", "name": "digit 8",
+    "children": [
+      {"op": "SC", "name": "two stacked loops", "weight": 0.55,
+        "children": [
+          {"concept": "loop_upper", "weight": 0.5},
+          {"concept": "loop_lower", "weight": 0.5}
+        ]},
+      {"concept": "horizontal_middle", "weight": 0.45}
+    ]
+  },
+  "9": {
+    "op": "HC", "name": "digit 9",
+    "children": [
+      {"op": "SC", "name": "upper loop + stem", "weight": 0.55,
+        "children": [
+          {"concept": "loop_upper", "weight": 0.5},
+          {"concept": "vertical_line", "weight": 0.5}
+        ]},
+      {"concept": "loop_lower", "weight": 0.45, "negate": true}
+    ]
+  }
+}

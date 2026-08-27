@@ -1,0 +1,42 @@
+{
+  "0": {"op": "HC", "name": "T-shirt", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.6, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+    {"concept": "Summer", "weight": 0.4}]},
+  "1": {"op": "HC", "name": "Trouser", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.6, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Bottoms", "weight": 0.5}]},
+    {"concept": "Mild", "weight": 0.4}]},
+  "2": {"op": "HC", "name": "Pullover", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.6, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+    {"concept": "Winter", "weight": 0.4}]},
+  "3": {"op": "HC", "name": "Dress", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.6, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Dresses", "weight": 0.5}]},
+    {"concept": "Summer", "weight": 0.4}]},
+  "4": {"op": "HC", "name": "Coat", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.6, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Outers", "weight": 0.5}]},
+    {"concept": "Winter", "weight": 0.4}]},
+  "5": {"op": "HC", "name": "Sandal", "children": [
+    {"op": "SC", "name": "footwear", "weight": 0.6, "children": [
+      {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+    {"concept": "Summer", "weight": 0.4}]},
+  "6": {"op": "HC", "name": "Shirt", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.6, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+    {"concept": "Mild", "weight": 0.4}]},
+  "7": {"op": "HC", "name": "Sneaker", "children": [
+    {"op": "SC", "name": "footwear", "weight": 0.6, "children": [
+      {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+    {"concept": "Mild", "weight": 0.4}]},
+  "8": {"op": "HC", "name": "Bag", "children": [
+    {"op": "SC", "name": "goods", "weight": 0.6, "children": [
+      {"concept": "Goods", "weight": 0.5}, {"concept": "Accessories", "weight": 0.5}]},
+    {"concept": "Mild", "weight": 0.4}]},
+  "9": {"op": "HC", "name": "Ankle_boot", "children": [
+    {"op": "SC", "name": "footwear", "weight": 0.6, "children": [
+      {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+    {"concept": "Winter", "weight": 0.4}]}
+}

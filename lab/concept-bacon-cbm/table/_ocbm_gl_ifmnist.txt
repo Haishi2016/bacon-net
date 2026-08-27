@@ -1,0 +1,48 @@
+OCBM GL (fixed) / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 57.74  ACC_C = 98.06
+  [iter 2/10]  ACC_Y = 57.79  ACC_C = 98.04
+  [iter 3/10]  ACC_Y = 57.87  ACC_C = 98.13
+  [iter 4/10]  ACC_Y = 57.56  ACC_C = 97.96
+  [iter 5/10]  ACC_Y = 57.77  ACC_C = 98.06
+  [iter 6/10]  ACC_Y = 58.01  ACC_C = 97.96
+  [iter 7/10]  ACC_Y = 58.12  ACC_C = 98.10
+  [iter 8/10]  ACC_Y = 58.02  ACC_C = 97.83
+  [iter 9/10]  ACC_Y = 58.10  ACC_C = 97.97
+  [iter 10/10]  ACC_Y = 58.06  ACC_C = 98.09
+
+=== OCBM v1 (GL)  /  iFMNIST   (n=10) ===
+  ACC_Y =  57.90 +/- 0.18   runs = [57.74, 57.79, 57.87, 57.56, 57.77, 58.01, 58.12, 58.02, 58.1, 58.06]
+  ACC_C =  98.02 +/- 0.09   runs = [98.06, 98.04, 98.13, 97.96, 98.06, 97.96, 98.1, 97.83, 97.97, 98.09]
+  LaTeX cell ->  ACC_Y $57.90_{\pm0.18}$   ACC_C $98.02_{\pm0.09}$
+OCBM GL (fixed) / sfmnist   iters=10  epochs=20  K=12  device=cuda
+  [iter 1/10]  ACC_Y = 92.78  ACC_C = 97.36
+  [iter 2/10]  ACC_Y = 91.99  ACC_C = 97.20
+  [iter 3/10]  ACC_Y = 92.50  ACC_C = 97.21
+  [iter 4/10]  ACC_Y = 92.70  ACC_C = 97.39
+  [iter 5/10]  ACC_Y = 92.38  ACC_C = 97.26
+  [iter 6/10]  ACC_Y = 92.14  ACC_C = 97.24
+  [iter 7/10]  ACC_Y = 92.06  ACC_C = 97.25
+  [iter 8/10]  ACC_Y = 92.48  ACC_C = 97.39
+  [iter 9/10]  ACC_Y = 92.22  ACC_C = 97.27
+  [iter 10/10]  ACC_Y = 92.54  ACC_C = 97.27
+
+=== OCBM v2 (GL)  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.38 +/- 0.25   runs = [92.78, 91.99, 92.5, 92.7, 92.38, 92.14, 92.06, 92.48, 92.22, 92.54]
+  ACC_C =  97.28 +/- 0.07   runs = [97.36, 97.2, 97.21, 97.39, 97.26, 97.24, 97.25, 97.39, 97.27, 97.27]
+  LaTeX cell ->  ACC_Y $92.38_{\pm0.25}$   ACC_C $97.28_{\pm0.07}$
+OCBM GL (ft) / sfmnist   iters=10  epochs=20  K=12  device=cuda
+  [iter 1/10]  ACC_Y = 92.13  ACC_C = 97.39
+  [iter 2/10]  ACC_Y = 92.51  ACC_C = 97.45
+  [iter 3/10]  ACC_Y = 92.54  ACC_C = 97.52
+  [iter 4/10]  ACC_Y = 92.71  ACC_C = 97.57
+  [iter 5/10]  ACC_Y = 92.72  ACC_C = 97.48
+  [iter 6/10]  ACC_Y = 92.34  ACC_C = 97.47
+  [iter 7/10]  ACC_Y = 92.23  ACC_C = 97.43
+  [iter 8/10]  ACC_Y = 92.66  ACC_C = 97.47
+  [iter 9/10]  ACC_Y = 92.10  ACC_C = 97.42
+  [iter 10/10]  ACC_Y = 92.05  ACC_C = 97.33
+
+=== OCBM v3 (GL)  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.40 +/- 0.25   runs = [92.13, 92.51, 92.54, 92.71, 92.72, 92.34, 92.23, 92.66, 92.1, 92.05]
+  ACC_C =  97.45 +/- 0.06   runs = [97.39, 97.45, 97.52, 97.57, 97.48, 97.47, 97.43, 97.47, 97.42, 97.33]
+  LaTeX cell ->  ACC_Y $92.40_{\pm0.25}$   ACC_C $97.45_{\pm0.06}$

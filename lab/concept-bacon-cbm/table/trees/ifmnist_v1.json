@@ -1,0 +1,22 @@
+{
+  "0": {"op": "HC", "name": "T-shirt", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+  "1": {"op": "HC", "name": "Trouser", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Bottoms", "weight": 0.5}]},
+  "2": {"op": "HC", "name": "Pullover", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+  "3": {"op": "HC", "name": "Dress", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Dresses", "weight": 0.5}]},
+  "4": {"op": "HC", "name": "Coat", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Outers", "weight": 0.5}]},
+  "5": {"op": "HC", "name": "Sandal", "children": [
+    {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+  "6": {"op": "HC", "name": "Shirt", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+  "7": {"op": "HC", "name": "Sneaker", "children": [
+    {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+  "8": {"op": "HC", "name": "Bag", "children": [
+    {"concept": "Goods", "weight": 0.5}, {"concept": "Accessories", "weight": 0.5}]},
+  "9": {"op": "HC", "name": "Ankle_boot", "children": [
+    {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]}
+}

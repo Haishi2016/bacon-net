@@ -1,0 +1,32 @@
+OCBM v1 / MNIST   iters=10  epochs=6  K=9  finetune=False  device=cuda
+  [iter 1/10]  ACC_Y = 99.19
+  [iter 2/10]  ACC_Y = 99.22
+  [iter 3/10]  ACC_Y = 99.07
+  [iter 4/10]  ACC_Y = 99.16
+  [iter 5/10]  ACC_Y = 99.12
+  [iter 6/10]  ACC_Y = 99.15
+  [iter 7/10]  ACC_Y = 99.16
+  [iter 8/10]  ACC_Y = 99.22
+  [iter 9/10]  ACC_Y = 99.14
+  [iter 10/10]  ACC_Y = 99.18
+
+=== OCBM v1  /  MNIST   (n=10) ===
+  ACC_Y =  99.16 +/- 0.04   runs = [99.19, 99.22, 99.07, 99.16, 99.12, 99.15, 99.16, 99.22, 99.14, 99.18]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $99.16_{\pm0.04}$   ACC_C --
+OCBM v3 / MNIST   iters=10  epochs=6  K=9  finetune=True  device=cuda
+  [iter 1/10]  ACC_Y = 99.15
+  [iter 2/10]  ACC_Y = 99.29
+  [iter 3/10]  ACC_Y = 99.11
+  [iter 4/10]  ACC_Y = 99.17
+  [iter 5/10]  ACC_Y = 99.14
+  [iter 6/10]  ACC_Y = 99.23
+  [iter 7/10]  ACC_Y = 99.15
+  [iter 8/10]  ACC_Y = 99.13
+  [iter 9/10]  ACC_Y = 99.17
+  [iter 10/10]  ACC_Y = 99.19
+
+=== OCBM v3  /  MNIST   (n=10) ===
+  ACC_Y =  99.17 +/- 0.05   runs = [99.15, 99.29, 99.11, 99.17, 99.14, 99.23, 99.15, 99.13, 99.17, 99.19]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $99.17_{\pm0.05}$   ACC_C --

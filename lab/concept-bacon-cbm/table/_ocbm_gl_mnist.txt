@@ -1,0 +1,32 @@
+OCBM v1 (GL) / MNIST   iters=10  epochs=6  trainable=False  trees=mnist_v1.json  device=cuda
+  [iter 1/10]  ACC_Y = 99.18
+  [iter 2/10]  ACC_Y = 99.20
+  [iter 3/10]  ACC_Y = 99.23
+  [iter 4/10]  ACC_Y = 99.22
+  [iter 5/10]  ACC_Y = 99.18
+  [iter 6/10]  ACC_Y = 99.07
+  [iter 7/10]  ACC_Y = 99.20
+  [iter 8/10]  ACC_Y = 99.21
+  [iter 9/10]  ACC_Y = 99.21
+  [iter 10/10]  ACC_Y = 99.24
+
+=== OCBM v1 (GL)  /  MNIST   (n=10) ===
+  ACC_Y =  99.19 +/- 0.05   runs = [99.18, 99.2, 99.23, 99.22, 99.18, 99.07, 99.2, 99.21, 99.21, 99.24]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $99.19_{\pm0.05}$   ACC_C --
+OCBM v3 (GL) / MNIST   iters=10  epochs=6  trainable=True  trees=mnist_v1.json  device=cuda
+  [iter 1/10]  ACC_Y = 99.27
+  [iter 2/10]  ACC_Y = 99.22
+  [iter 3/10]  ACC_Y = 99.23
+  [iter 4/10]  ACC_Y = 99.22
+  [iter 5/10]  ACC_Y = 99.25
+  [iter 6/10]  ACC_Y = 99.19
+  [iter 7/10]  ACC_Y = 99.27
+  [iter 8/10]  ACC_Y = 99.28
+  [iter 9/10]  ACC_Y = 99.20
+  [iter 10/10]  ACC_Y = 99.21
+
+=== OCBM v3 (GL)  /  MNIST   (n=10) ===
+  ACC_Y =  99.23 +/- 0.03   runs = [99.27, 99.22, 99.23, 99.22, 99.25, 99.19, 99.27, 99.28, 99.2, 99.21]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $99.23_{\pm0.03}$   ACC_C --

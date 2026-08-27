@@ -1,0 +1,40 @@
+{
+  "0": {"op": "HC", "name": "T-shirt", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.6, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+    {"concept": "long_sleeve", "weight": 0.4, "negate": true}]},
+  "1": {"op": "HC", "name": "Trouser", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Bottoms", "weight": 0.5}]},
+  "2": {"op": "HC", "name": "Pullover", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.5, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+    {"op": "HC", "name": "attrs", "weight": 0.5, "children": [
+      {"concept": "long_sleeve", "weight": 0.5},
+      {"concept": "front_opening", "weight": 0.5, "negate": true}]}]},
+  "3": {"op": "HC", "name": "Dress", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Dresses", "weight": 0.5}]},
+  "4": {"op": "HC", "name": "Coat", "children": [
+    {"concept": "Clothes", "weight": 0.5}, {"concept": "Outers", "weight": 0.5}]},
+  "5": {"op": "HC", "name": "Sandal", "children": [
+    {"op": "SC", "name": "footwear", "weight": 0.6, "children": [
+      {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+    {"concept": "open_toe", "weight": 0.4}]},
+  "6": {"op": "HC", "name": "Shirt", "children": [
+    {"op": "SC", "name": "apparel", "weight": 0.5, "children": [
+      {"concept": "Clothes", "weight": 0.5}, {"concept": "Tops", "weight": 0.5}]},
+    {"op": "HC", "name": "attrs", "weight": 0.5, "children": [
+      {"concept": "long_sleeve", "weight": 0.5},
+      {"concept": "front_opening", "weight": 0.5}]}]},
+  "7": {"op": "HC", "name": "Sneaker", "children": [
+    {"op": "SC", "name": "footwear", "weight": 0.5, "children": [
+      {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+    {"op": "HC", "name": "closed low", "weight": 0.5, "children": [
+      {"concept": "open_toe", "weight": 0.5, "negate": true},
+      {"concept": "ankle_high", "weight": 0.5, "negate": true}]}]},
+  "8": {"op": "HC", "name": "Bag", "children": [
+    {"concept": "Goods", "weight": 0.5}, {"concept": "Accessories", "weight": 0.5}]},
+  "9": {"op": "HC", "name": "Ankle_boot", "children": [
+    {"op": "SC", "name": "footwear", "weight": 0.6, "children": [
+      {"concept": "Goods", "weight": 0.5}, {"concept": "Shoes", "weight": 0.5}]},
+    {"concept": "ankle_high", "weight": 0.4}]}
+}

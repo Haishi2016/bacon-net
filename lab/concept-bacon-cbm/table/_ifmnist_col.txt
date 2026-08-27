@@ -1,0 +1,96 @@
+Black-box / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 92.56
+  [iter 2/10]  ACC_Y = 92.50
+  [iter 3/10]  ACC_Y = 92.52
+  [iter 4/10]  ACC_Y = 92.59
+  [iter 5/10]  ACC_Y = 92.15
+  [iter 6/10]  ACC_Y = 92.52
+  [iter 7/10]  ACC_Y = 93.17
+  [iter 8/10]  ACC_Y = 92.04
+  [iter 9/10]  ACC_Y = 92.79
+  [iter 10/10]  ACC_Y = 92.18
+
+=== Black-box  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.50 +/- 0.31   runs = [92.56, 92.5, 92.52, 92.59, 92.15, 92.52, 93.17, 92.04, 92.79, 92.18]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $92.50_{\pm0.31}$   ACC_C --
+C_true->Y / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 60.00
+  [iter 2/10]  ACC_Y = 60.00
+  [iter 3/10]  ACC_Y = 60.00
+  [iter 4/10]  ACC_Y = 60.00
+  [iter 5/10]  ACC_Y = 60.00
+  [iter 6/10]  ACC_Y = 60.00
+  [iter 7/10]  ACC_Y = 60.00
+  [iter 8/10]  ACC_Y = 60.00
+  [iter 9/10]  ACC_Y = 60.00
+  [iter 10/10]  ACC_Y = 60.00
+
+=== C_true->Y  /  iFMNIST   (n=10) ===
+  ACC_Y =  60.00 +/- 0.00   runs = [60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $60.00_{\pm0.00}$   ACC_C --
+CBM / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 92.25  ACC_C = 96.75
+  [iter 2/10]  ACC_Y = 92.42  ACC_C = 92.02
+  [iter 3/10]  ACC_Y = 92.30  ACC_C = 90.39
+  [iter 4/10]  ACC_Y = 92.19  ACC_C = 97.59
+  [iter 5/10]  ACC_Y = 92.24  ACC_C = 89.28
+  [iter 6/10]  ACC_Y = 92.30  ACC_C = 93.23
+  [iter 7/10]  ACC_Y = 92.37  ACC_C = 95.19
+  [iter 8/10]  ACC_Y = 92.61  ACC_C = 89.64
+  [iter 9/10]  ACC_Y = 92.23  ACC_C = 96.84
+  [iter 10/10]  ACC_Y = 92.46  ACC_C = 82.02
+
+=== CBM  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.34 +/- 0.12   runs = [92.25, 92.42, 92.3, 92.19, 92.24, 92.3, 92.37, 92.61, 92.23, 92.46]
+  ACC_C =  92.29 +/- 4.51   runs = [96.75, 92.02, 90.39, 97.59, 89.28, 93.23, 95.19, 89.64, 96.84, 82.02]
+  LaTeX cell ->  ACC_Y $92.34_{\pm0.12}$   ACC_C $92.29_{\pm4.51}$
+CBM+SC / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 92.20  ACC_C = 96.55
+  [iter 2/10]  ACC_Y = 92.64  ACC_C = 92.11
+  [iter 3/10]  ACC_Y = 92.36  ACC_C = 90.75
+  [iter 4/10]  ACC_Y = 92.30  ACC_C = 97.48
+  [iter 5/10]  ACC_Y = 92.61  ACC_C = 93.69
+  [iter 6/10]  ACC_Y = 92.50  ACC_C = 95.19
+  [iter 7/10]  ACC_Y = 92.93  ACC_C = 92.84
+  [iter 8/10]  ACC_Y = 92.40  ACC_C = 90.11
+  [iter 9/10]  ACC_Y = 92.33  ACC_C = 97.57
+  [iter 10/10]  ACC_Y = 92.23  ACC_C = 84.55
+
+=== CBM+SC  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.45 +/- 0.21   runs = [92.2, 92.64, 92.36, 92.3, 92.61, 92.5, 92.93, 92.4, 92.33, 92.23]
+  ACC_C =  93.08 +/- 3.80   runs = [96.55, 92.11, 90.75, 97.48, 93.69, 95.19, 92.84, 90.11, 97.57, 84.55]
+  LaTeX cell ->  ACC_Y $92.45_{\pm0.21}$   ACC_C $93.08_{\pm3.80}$
+CREAM w/o SC / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 58.07  ACC_C = 97.94
+  [iter 2/10]  ACC_Y = 10.00  ACC_C = 35.00
+  [iter 3/10]  ACC_Y = 10.00  ACC_C = 35.00
+  [iter 4/10]  ACC_Y = 58.18  ACC_C = 97.94
+  [iter 5/10]  ACC_Y = 57.74  ACC_C = 97.86
+  [iter 6/10]  ACC_Y = 10.00  ACC_C = 35.00
+  [iter 7/10]  ACC_Y = 10.00  ACC_C = 35.00
+  [iter 8/10]  ACC_Y = 58.59  ACC_C = 98.06
+  [iter 9/10]  ACC_Y = 10.00  ACC_C = 35.00
+  [iter 10/10]  ACC_Y = 10.00  ACC_C = 45.00
+
+=== CREAM w/o SC  /  iFMNIST   (n=10) ===
+  ACC_Y =  29.26 +/- 23.59   runs = [58.07, 10.0, 10.0, 58.18, 57.74, 10.0, 10.0, 58.59, 10.0, 10.0]
+  ACC_C =  61.18 +/- 30.16   runs = [97.94, 35.0, 35.0, 97.94, 97.86, 35.0, 35.0, 98.06, 35.0, 45.0]
+  LaTeX cell ->  ACC_Y $29.26_{\pm23.59}$   ACC_C $61.18_{\pm30.16}$
+CREAM / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 91.20  ACC_C = 97.88
+  [iter 2/10]  ACC_Y = 79.15  ACC_C = 35.00
+  [iter 3/10]  ACC_Y = 91.45  ACC_C = 98.14
+  [iter 4/10]  ACC_Y = 67.67  ACC_C = 35.00
+  [iter 5/10]  ACC_Y = 91.05  ACC_C = 98.02
+  [iter 6/10]  ACC_Y = 86.32  ACC_C = 45.00
+  [iter 7/10]  ACC_Y = 75.56  ACC_C = 35.00
+  [iter 8/10]  ACC_Y = 90.65  ACC_C = 97.89
+  [iter 9/10]  ACC_Y = 79.19  ACC_C = 35.00
+  [iter 10/10]  ACC_Y = 80.41  ACC_C = 35.00
+
+=== CREAM  /  iFMNIST   (n=10) ===
+  ACC_Y =  83.27 +/- 7.74   runs = [91.2, 79.15, 91.45, 67.67, 91.05, 86.32, 75.56, 90.65, 79.19, 80.41]
+  ACC_C =  61.19 +/- 30.18   runs = [97.88, 35.0, 98.14, 35.0, 98.02, 45.0, 35.0, 97.89, 35.0, 35.0]
+  LaTeX cell ->  ACC_Y $83.27_{\pm7.74}$   ACC_C $61.19_{\pm30.18}$

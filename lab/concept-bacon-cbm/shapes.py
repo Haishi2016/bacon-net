@@ -39,7 +39,7 @@ def _rot(points, cx, cy, ang):
              (x - cx) * s + (y - cy) * c + cy) for x, y in points]
 
 
-def _draw_shape(shape: str, rng: random.Random) -> Image.Image:
+def _draw_shape(shape: str, rng: random.Random, rotate: bool = True) -> Image.Image:
     img = Image.new("L", (_CANVAS, _CANVAS), 0)
     d = ImageDraw.Draw(img)
     width = rng.randint(2, 4) * _SS                 # stroke width (supersampled)
@@ -50,7 +50,7 @@ def _draw_shape(shape: str, rng: random.Random) -> Image.Image:
     x0, y0 = margin_x, margin_y
     x1, y1 = x0 + size, y0 + size
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    ang = rng.uniform(-math.pi, math.pi)
+    ang = rng.uniform(-math.pi, math.pi) if rotate else 0.0
 
     if shape == "circle":
         d.ellipse([x0, y0, x1, y1], outline=255, width=width)
@@ -77,14 +77,26 @@ def _draw_shape(shape: str, rng: random.Random) -> Image.Image:
         h = _rot([(x0, cy), (x1, cy)], cx, cy, ang)
         d.line(v, fill=255, width=width)
         d.line(h, fill=255, width=width)
+    elif shape == "corner":
+        # L-shape: two segments MEET at a right-angle vertex (open, no crossing).
+        pts = _rot([(x0, y0), (x0, y1), (x1, y1)], cx, cy, ang)
+        d.line(pts, fill=255, width=width, joint="curve")
+    elif shape == "vee":
+        # V-shape: two segments meet at a bottom vertex (open, no crossing).
+        pts = _rot([(x0, y0), (cx, y1), (x1, y0)], cx, cy, ang)
+        d.line(pts, fill=255, width=width, joint="curve")
+    elif shape == "zigzag":
+        # multiple turns (segments meet at vertices, never cross).
+        pts = _rot([(x0, y0), (cx, y1), (x1, y0), (cx, cy)], cx, cy, ang)
+        d.line(pts, fill=255, width=width, joint="curve")
     else:
         raise ValueError(f"unknown shape {shape}")
 
     return img.resize((28, 28), Image.BILINEAR)
 
 
-def make_shape_tensor(shape: str, rng: random.Random) -> torch.Tensor:
-    img = _draw_shape(shape, rng)
+def make_shape_tensor(shape: str, rng: random.Random, rotate: bool = True) -> torch.Tensor:
+    img = _draw_shape(shape, rng, rotate=rotate)
     # bytearray -> writable buffer (avoids torch.frombuffer non-writable warning)
     t = torch.frombuffer(bytearray(img.tobytes()), dtype=torch.uint8).float().reshape(1, 28, 28)
     t = t / 255.0
@@ -92,16 +104,68 @@ def make_shape_tensor(shape: str, rng: random.Random) -> torch.Tensor:
 
 
 def generate(n_per_shape: int, seed: int = 0,
-             shapes: List[str] = None) -> Tuple[torch.Tensor, List[str]]:
+             shapes: List[str] = None, rotate: bool = True) -> Tuple[torch.Tensor, List[str]]:
     """Return (images (N,1,28,28), shape_names list of length N)."""
     shapes = shapes or SHAPES
     rng = random.Random(seed)
     imgs, names = [], []
     for shape in shapes:
         for _ in range(n_per_shape):
-            imgs.append(make_shape_tensor(shape, rng))
+            imgs.append(make_shape_tensor(shape, rng, rotate=rotate))
             names.append(shape)
     return torch.stack(imgs, 0), names
+
+
+def _draw_part(d: "ImageDraw.ImageDraw", kind: str, cx: float, cy: float,
+               r: float, width: int, position: str) -> None:
+    """Draw one stacked part (bar / arc / circle) in 28-px coords (x _SS)."""
+    bb = [(cx - r) * _SS, (cy - r) * _SS, (cx + r) * _SS, (cy + r) * _SS]
+    if kind == "circle":
+        d.ellipse(bb, outline=255, width=width)
+    elif kind == "bar":
+        d.line([(cx - r) * _SS, cy * _SS, (cx + r) * _SS, cy * _SS],
+               fill=255, width=width)
+    elif kind == "arc":
+        # PIL angles: 0=3o'clock, 90=6o'clock (y down), 270=12o'clock.
+        # top band -> upper cap "n" (180->360); bottom band -> lower cup "u".
+        if position == "top":
+            d.arc(bb, 180, 360, fill=255, width=width)
+        else:
+            d.arc(bb, 0, 180, fill=255, width=width)
+    elif kind == "arcL":            # ")" opens left  = right half of circle
+        d.arc(bb, 270, 90, fill=255, width=width)
+    elif kind == "arcR":            # "(" opens right = left half of circle
+        d.arc(bb, 90, 270, fill=255, width=width)
+    elif kind == "diag":            # "/" descender: top-right to bottom-left
+        d.line([(cx + r) * _SS, (cy - r) * _SS,
+                (cx - r) * _SS, (cy + r) * _SS], fill=255, width=width)
+    else:
+        raise ValueError(f"unknown part {kind}")
+
+
+def make_stack_tensor(top: str, bottom: str, rng: random.Random,
+                      jitter: float = 1.0) -> torch.Tensor:
+    """Render two vertically-stacked primitives in one 28x28 MNIST-style frame.
+
+    Each of `top` / `bottom` is one of {"bar", "arc", "circle"}.  The two parts
+    touch at the vertical midline, e.g. ("arc", "bar") ~ a 2, ("circle", "arc")
+    ~ a 9, ("arc", "circle") ~ a 6, ("bar", "arc") ~ a 5.
+    """
+    img = Image.new("L", (_CANVAS, _CANVAS), 0)
+    d = ImageDraw.Draw(img)
+    width = rng.randint(2, 3) * _SS
+    dx = rng.uniform(-jitter, jitter)
+    dy = rng.uniform(-jitter, jitter)
+    cx = 14.0 + dx
+    r = rng.uniform(4.3, 5.3)
+    top_cy = 14.0 - r * 0.95 + dy
+    bot_cy = 14.0 + r * 0.95 + dy
+    _draw_part(d, top, cx, top_cy, r, width, "top")
+    _draw_part(d, bottom, cx, bot_cy, r, width, "bottom")
+    img = img.resize((28, 28), Image.BILINEAR)
+    t = torch.frombuffer(bytearray(img.tobytes()), dtype=torch.uint8).float().reshape(1, 28, 28)
+    t = t / 255.0
+    return (t - _MNIST_MEAN) / _MNIST_STD
 
 
 def make_circles_tensor(circles, rng: random.Random, jitter: float = 1.0) -> torch.Tensor:

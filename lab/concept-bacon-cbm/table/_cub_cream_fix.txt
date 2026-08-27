@@ -1,0 +1,32 @@
+CREAM w/o SC / CUB   iters=10  epochs=40  K=112  lam=1.0  ay=full  device=cuda
+  [iter 1/10]  ACC_Y = 74.51  ACC_C = 85.33
+  [iter 2/10]  ACC_Y = 72.94  ACC_C = 85.31
+  [iter 3/10]  ACC_Y = 73.58  ACC_C = 85.06
+  [iter 4/10]  ACC_Y = 74.32  ACC_C = 85.10
+  [iter 5/10]  ACC_Y = 73.66  ACC_C = 85.15
+  [iter 6/10]  ACC_Y = 72.71  ACC_C = 84.95
+  [iter 7/10]  ACC_Y = 73.32  ACC_C = 84.80
+  [iter 8/10]  ACC_Y = 72.89  ACC_C = 84.70
+  [iter 9/10]  ACC_Y = 73.25  ACC_C = 84.78
+  [iter 10/10]  ACC_Y = 73.01  ACC_C = 85.10
+
+=== CREAM w/o SC  /  CUB   (n=10) ===
+  ACC_Y =  73.42 +/- 0.57   runs = [74.51, 72.94, 73.58, 74.32, 73.66, 72.71, 73.32, 72.89, 73.25, 73.01]
+  ACC_C =  85.03 +/- 0.21   runs = [85.33, 85.31, 85.06, 85.1, 85.15, 84.95, 84.8, 84.7, 84.78, 85.1]
+  LaTeX cell ->  ACC_Y $73.42_{\pm0.57}$   ACC_C $85.03_{\pm0.21}$
+CREAM / CUB   iters=10  epochs=40  K=112  lam=1.0  ay=full  device=cuda
+  [iter 1/10]  ACC_Y = 73.96  ACC_C = 85.27
+  [iter 2/10]  ACC_Y = 73.49  ACC_C = 85.29
+  [iter 3/10]  ACC_Y = 73.01  ACC_C = 85.09
+  [iter 4/10]  ACC_Y = 73.89  ACC_C = 85.10
+  [iter 5/10]  ACC_Y = 73.06  ACC_C = 85.12
+  [iter 6/10]  ACC_Y = 71.78  ACC_C = 84.95
+  [iter 7/10]  ACC_Y = 72.99  ACC_C = 84.80
+  [iter 8/10]  ACC_Y = 72.99  ACC_C = 84.70
+  [iter 9/10]  ACC_Y = 72.71  ACC_C = 84.88
+  [iter 10/10]  ACC_Y = 73.14  ACC_C = 85.11
+
+=== CREAM  /  CUB   (n=10) ===
+  ACC_Y =  73.10 +/- 0.59   runs = [73.96, 73.49, 73.01, 73.89, 73.06, 71.78, 72.99, 72.99, 72.71, 73.14]
+  ACC_C =  85.03 +/- 0.18   runs = [85.27, 85.29, 85.09, 85.1, 85.12, 84.95, 84.8, 84.7, 84.88, 85.11]
+  LaTeX cell ->  ACC_Y $73.10_{\pm0.59}$   ACC_C $85.03_{\pm0.18}$

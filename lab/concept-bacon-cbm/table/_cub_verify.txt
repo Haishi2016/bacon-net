@@ -1,0 +1,14 @@
+Black-box / CUB   iters=1  epochs=40  K=112  lam=1.0  device=cuda
+  [iter 1/1]  ACC_Y = 74.87
+
+=== Black-box  /  CUB   (n=1) ===
+  ACC_Y =  74.87 +/- 0.00   runs = [74.87]
+  ACC_C =    --   (no concept labels for this model/dataset)
+  LaTeX cell ->  ACC_Y $74.87_{\pm0.00}$   ACC_C --
+CBM / CUB   iters=1  epochs=40  K=112  lam=1.0  device=cuda
+  [iter 1/1]  ACC_Y = 74.44  ACC_C = 83.53
+
+=== CBM  /  CUB   (n=1) ===
+  ACC_Y =  74.44 +/- 0.00   runs = [74.44]
+  ACC_C =  83.53 +/- 0.00   runs = [83.53]
+  LaTeX cell ->  ACC_Y $74.44_{\pm0.00}$   ACC_C $83.53_{\pm0.00}$

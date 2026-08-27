@@ -1,0 +1,8 @@
+{
+  "1": {"op": "SC", "name": "smiling", "children": [
+    {"concept": "High_Cheekbones", "weight": 0.5},
+    {"concept": "Mouth_Slightly_Open", "weight": 0.5}]},
+  "0": {"op": "SD", "name": "not smiling", "children": [
+    {"concept": "High_Cheekbones", "weight": 0.5, "negate": true},
+    {"concept": "Mouth_Slightly_Open", "weight": 0.5, "negate": true}]}
+}

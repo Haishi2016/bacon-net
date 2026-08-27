@@ -452,8 +452,16 @@ class VectorTreeLogicHead(nn.Module):
         # Per-head soft input permutation (batched analogue of inputToLeafSinkhorn).
         if use_permutation_layer and input_size > 1:
             self.perm_logits = nn.Parameter(torch.randn(num_heads, input_size, input_size))
+            # Confidence-triggered hard freeze (matches baconNet's locked_perm):
+            # once routing is confident, freeze_permutation() Hungarian-hardens the
+            # soft permutation into `frozen_perm` and forward routes through it.
+            self.register_buffer("perm_frozen", torch.tensor(False))
+            self.register_buffer("frozen_perm",
+                                 torch.zeros(num_heads, input_size, input_size))
         else:
             self.register_parameter("perm_logits", None)
+            self.register_buffer("perm_frozen", torch.tensor(False))
+            self.frozen_perm = None
 
         # Per-head per-concept transformation gate over {identity, negation}.
         # Identity is favored at init (logit +2) with small noise to break ties.
@@ -566,7 +574,10 @@ class VectorTreeLogicHead(nn.Module):
 
         # Per-head soft permutation of the leaves (batched inputToLeafSinkhorn).
         if self.perm_logits is not None:
-            P = self._sinkhorn(self.perm_logits)               # (heads, N, N)
+            if bool(self.perm_frozen):
+                P = self.frozen_perm                           # hard, locked permutation
+            else:
+                P = self._sinkhorn(self.perm_logits)           # (heads, N, N)
             leaves = torch.einsum("bhn,hln->bhl", xb, P)       # reorder per head
         else:
             leaves = xb
@@ -582,5 +593,46 @@ class VectorTreeLogicHead(nn.Module):
                 acc = self._pair(acc, right, a, w)
 
         return acc.clamp(self.eps, 1.0 - self.eps)
+
+    # -- hard-permutation freezing (matches baconNet locked_perm) -----------
+    @torch.no_grad()
+    def permutation_confidence(self) -> float:
+        """Mean peak routing weight per leaf (== baconNet freeze confidence)."""
+        if self.perm_logits is None or bool(self.perm_frozen):
+            return 1.0
+        was_training = self.training
+        self.eval()
+        P = self._sinkhorn(self.perm_logits)
+        self.train(was_training)
+        return P.max(dim=2).values.mean().item()
+
+    def permutation_sparsity_loss(self) -> torch.Tensor:
+        """Mean row-entropy of the soft permutation; minimizing it drives the
+        routing toward a peaked, near-hard (bijective) permutation."""
+        if self.perm_logits is None or bool(self.perm_frozen):
+            return self.temperature.new_zeros(())
+        P = self._sinkhorn(self.perm_logits)
+        H = -(P.clamp_min(1e-9) * P.clamp_min(1e-9).log()).sum(dim=2)   # (heads, N)
+        return H.mean()
+
+    @torch.no_grad()
+    def freeze_permutation(self) -> None:
+        """Hungarian-harden the soft permutation into a locked hard permutation
+        and stop training the routing logits (== baconNet's freeze step)."""
+        if self.perm_logits is None or bool(self.perm_frozen):
+            return
+        from scipy.optimize import linear_sum_assignment
+        was_training = self.training
+        self.eval()
+        P = self._sinkhorn(self.perm_logits)
+        self.train(was_training)
+        hard = torch.zeros_like(P)
+        Pc = P.detach().cpu().numpy()
+        for h in range(P.shape[0]):
+            rows, cols = linear_sum_assignment(-Pc[h])          # maximize routed weight
+            hard[h, rows, cols] = 1.0
+        self.frozen_perm.copy_(hard.to(self.frozen_perm.device))
+        self.perm_frozen.fill_(True)
+        self.perm_logits.requires_grad_(False)
 
 

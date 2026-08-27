@@ -1,0 +1,32 @@
+OCBM GL (fixed) / cfmnist   iters=10  epochs=20  K=11  device=cuda
+  [iter 1/10]  ACC_Y = 92.12  ACC_C = 96.23
+  [iter 2/10]  ACC_Y = 92.38  ACC_C = 96.48
+  [iter 3/10]  ACC_Y = 92.11  ACC_C = 96.31
+  [iter 4/10]  ACC_Y = 92.32  ACC_C = 96.35
+  [iter 5/10]  ACC_Y = 91.90  ACC_C = 96.27
+  [iter 6/10]  ACC_Y = 92.76  ACC_C = 96.55
+  [iter 7/10]  ACC_Y = 92.31  ACC_C = 96.37
+  [iter 8/10]  ACC_Y = 92.30  ACC_C = 96.26
+  [iter 9/10]  ACC_Y = 92.17  ACC_C = 96.39
+  [iter 10/10]  ACC_Y = 92.36  ACC_C = 96.31
+
+=== OCBM v1 (GL)  /  cFMNIST   (n=10) ===
+  ACC_Y =  92.27 +/- 0.21   runs = [92.12, 92.38, 92.11, 92.32, 91.9, 92.76, 92.31, 92.3, 92.17, 92.36]
+  ACC_C =  96.35 +/- 0.10   runs = [96.23, 96.48, 96.31, 96.35, 96.27, 96.55, 96.37, 96.26, 96.39, 96.31]
+  LaTeX cell ->  ACC_Y $92.27_{\pm0.21}$   ACC_C $96.35_{\pm0.10}$
+OCBM GL (ft) / cfmnist   iters=10  epochs=20  K=11  device=cuda
+  [iter 1/10]  ACC_Y = 92.56  ACC_C = 96.48
+  [iter 2/10]  ACC_Y = 92.56  ACC_C = 96.41
+  [iter 3/10]  ACC_Y = 92.51  ACC_C = 96.35
+  [iter 4/10]  ACC_Y = 92.54  ACC_C = 96.35
+  [iter 5/10]  ACC_Y = 91.85  ACC_C = 96.11
+  [iter 6/10]  ACC_Y = 92.45  ACC_C = 96.28
+  [iter 7/10]  ACC_Y = 92.60  ACC_C = 96.43
+  [iter 8/10]  ACC_Y = 92.40  ACC_C = 96.40
+  [iter 9/10]  ACC_Y = 92.19  ACC_C = 96.46
+  [iter 10/10]  ACC_Y = 92.26  ACC_C = 96.23
+
+=== OCBM v3 (GL)  /  cFMNIST   (n=10) ===
+  ACC_Y =  92.39 +/- 0.22   runs = [92.56, 92.56, 92.51, 92.54, 91.85, 92.45, 92.6, 92.4, 92.19, 92.26]
+  ACC_C =  96.35 +/- 0.11   runs = [96.48, 96.41, 96.35, 96.35, 96.11, 96.28, 96.43, 96.4, 96.46, 96.23]
+  LaTeX cell ->  ACC_Y $92.39_{\pm0.22}$   ACC_C $96.35_{\pm0.11}$

@@ -1,0 +1,64 @@
+CBM / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 92.46  ACC_C = 97.67
+  [iter 2/10]  ACC_Y = 92.26  ACC_C = 97.48
+  [iter 3/10]  ACC_Y = 91.98  ACC_C = 97.21
+  [iter 4/10]  ACC_Y = 92.49  ACC_C = 97.38
+  [iter 5/10]  ACC_Y = 92.59  ACC_C = 97.79
+  [iter 6/10]  ACC_Y = 92.44  ACC_C = 97.41
+  [iter 7/10]  ACC_Y = 92.43  ACC_C = 97.59
+  [iter 8/10]  ACC_Y = 92.08  ACC_C = 93.32
+  [iter 9/10]  ACC_Y = 92.54  ACC_C = 97.78
+  [iter 10/10]  ACC_Y = 92.59  ACC_C = 93.14
+
+=== CBM  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.39 +/- 0.20   runs = [92.46, 92.26, 91.98, 92.49, 92.59, 92.44, 92.43, 92.08, 92.54, 92.59]
+  ACC_C =  96.68 +/- 1.73   runs = [97.67, 97.48, 97.21, 97.38, 97.79, 97.41, 97.59, 93.32, 97.78, 93.14]
+  LaTeX cell ->  ACC_Y $92.39_{\pm0.20}$   ACC_C $96.68_{\pm1.73}$
+CBM+SC / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 92.45  ACC_C = 97.00
+  [iter 2/10]  ACC_Y = 92.54  ACC_C = 97.34
+  [iter 3/10]  ACC_Y = 92.47  ACC_C = 97.21
+  [iter 4/10]  ACC_Y = 92.12  ACC_C = 97.61
+  [iter 5/10]  ACC_Y = 92.29  ACC_C = 97.45
+  [iter 6/10]  ACC_Y = 92.20  ACC_C = 97.50
+  [iter 7/10]  ACC_Y = 92.60  ACC_C = 97.87
+  [iter 8/10]  ACC_Y = 92.60  ACC_C = 97.86
+  [iter 9/10]  ACC_Y = 92.19  ACC_C = 97.84
+  [iter 10/10]  ACC_Y = 92.34  ACC_C = 94.98
+
+=== CBM+SC  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.38 +/- 0.17   runs = [92.45, 92.54, 92.47, 92.12, 92.29, 92.2, 92.6, 92.6, 92.19, 92.34]
+  ACC_C =  97.27 +/- 0.81   runs = [97.0, 97.34, 97.21, 97.61, 97.45, 97.5, 97.87, 97.86, 97.84, 94.98]
+  LaTeX cell ->  ACC_Y $92.38_{\pm0.17}$   ACC_C $97.27_{\pm0.81}$
+CREAM w/o SC / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 58.20  ACC_C = 98.12
+  [iter 2/10]  ACC_Y = 58.22  ACC_C = 98.04
+  [iter 3/10]  ACC_Y = 59.08  ACC_C = 98.00
+  [iter 4/10]  ACC_Y = 57.82  ACC_C = 97.89
+  [iter 5/10]  ACC_Y = 57.56  ACC_C = 98.02
+  [iter 6/10]  ACC_Y = 57.98  ACC_C = 97.97
+  [iter 7/10]  ACC_Y = 59.06  ACC_C = 97.81
+  [iter 8/10]  ACC_Y = 58.80  ACC_C = 97.92
+  [iter 9/10]  ACC_Y = 56.66  ACC_C = 97.91
+  [iter 10/10]  ACC_Y = 58.03  ACC_C = 98.06
+
+=== CREAM w/o SC  /  iFMNIST   (n=10) ===
+  ACC_Y =  58.14 +/- 0.70   runs = [58.2, 58.22, 59.08, 57.82, 57.56, 57.98, 59.06, 58.8, 56.66, 58.03]
+  ACC_C =  97.97 +/- 0.09   runs = [98.12, 98.04, 98.0, 97.89, 98.02, 97.97, 97.81, 97.92, 97.91, 98.06]
+  LaTeX cell ->  ACC_Y $58.14_{\pm0.70}$   ACC_C $97.97_{\pm0.09}$
+CREAM / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 91.27  ACC_C = 97.93
+  [iter 2/10]  ACC_Y = 91.46  ACC_C = 98.05
+  [iter 3/10]  ACC_Y = 91.38  ACC_C = 97.98
+  [iter 4/10]  ACC_Y = 90.75  ACC_C = 98.05
+  [iter 5/10]  ACC_Y = 90.75  ACC_C = 98.02
+  [iter 6/10]  ACC_Y = 91.41  ACC_C = 97.99
+  [iter 7/10]  ACC_Y = 90.65  ACC_C = 97.86
+  [iter 8/10]  ACC_Y = 91.01  ACC_C = 97.97
+  [iter 9/10]  ACC_Y = 91.52  ACC_C = 98.19
+  [iter 10/10]  ACC_Y = 91.51  ACC_C = 98.07
+
+=== CREAM  /  iFMNIST   (n=10) ===
+  ACC_Y =  91.17 +/- 0.33   runs = [91.27, 91.46, 91.38, 90.75, 90.75, 91.41, 90.65, 91.01, 91.52, 91.51]
+  ACC_C =  98.01 +/- 0.09   runs = [97.93, 98.05, 97.98, 98.05, 98.02, 97.99, 97.86, 97.97, 98.19, 98.07]
+  LaTeX cell ->  ACC_Y $91.17_{\pm0.33}$   ACC_C $98.01_{\pm0.09}$

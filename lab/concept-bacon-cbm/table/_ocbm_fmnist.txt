@@ -1,0 +1,80 @@
+OCBM / ifmnist   iters=10  epochs=20  K=8  device=cuda
+  [iter 1/10]  ACC_Y = 57.74  ACC_C = 98.11
+  [iter 2/10]  ACC_Y = 58.04  ACC_C = 98.02
+  [iter 3/10]  ACC_Y = 57.57  ACC_C = 98.00
+  [iter 4/10]  ACC_Y = 57.78  ACC_C = 98.08
+  [iter 5/10]  ACC_Y = 57.62  ACC_C = 98.08
+  [iter 6/10]  ACC_Y = 58.16  ACC_C = 98.06
+  [iter 7/10]  ACC_Y = 58.09  ACC_C = 97.97
+  [iter 8/10]  ACC_Y = 58.22  ACC_C = 97.84
+  [iter 9/10]  ACC_Y = 58.18  ACC_C = 98.02
+  [iter 10/10]  ACC_Y = 58.19  ACC_C = 98.09
+
+=== OCBM v1  /  iFMNIST   (n=10) ===
+  ACC_Y =  57.96 +/- 0.24   runs = [57.74, 58.04, 57.57, 57.78, 57.62, 58.16, 58.09, 58.22, 58.18, 58.19]
+  ACC_C =  98.03 +/- 0.08   runs = [98.11, 98.02, 98.0, 98.08, 98.08, 98.06, 97.97, 97.84, 98.02, 98.09]
+  LaTeX cell ->  ACC_Y $57.96_{\pm0.24}$   ACC_C $98.03_{\pm0.08}$
+OCBM / sfmnist   iters=10  epochs=20  K=12  device=cuda
+  [iter 1/10]  ACC_Y = 92.18  ACC_C = 97.29
+  [iter 2/10]  ACC_Y = 92.23  ACC_C = 97.28
+  [iter 3/10]  ACC_Y = 92.61  ACC_C = 97.25
+  [iter 4/10]  ACC_Y = 92.55  ACC_C = 97.37
+  [iter 5/10]  ACC_Y = 92.43  ACC_C = 97.39
+  [iter 6/10]  ACC_Y = 92.28  ACC_C = 97.32
+  [iter 7/10]  ACC_Y = 91.63  ACC_C = 97.20
+  [iter 8/10]  ACC_Y = 92.61  ACC_C = 97.48
+  [iter 9/10]  ACC_Y = 92.58  ACC_C = 97.46
+  [iter 10/10]  ACC_Y = 92.31  ACC_C = 97.35
+
+=== OCBM v2  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.34 +/- 0.28   runs = [92.18, 92.23, 92.61, 92.55, 92.43, 92.28, 91.63, 92.61, 92.58, 92.31]
+  ACC_C =  97.34 +/- 0.08   runs = [97.29, 97.28, 97.25, 97.37, 97.39, 97.32, 97.2, 97.48, 97.46, 97.35]
+  LaTeX cell ->  ACC_Y $92.34_{\pm0.28}$   ACC_C $97.34_{\pm0.08}$
+OCBM (fine-tuned) / sfmnist   iters=10  epochs=20  K=12  device=cuda
+  [iter 1/10]  ACC_Y = 92.44  ACC_C = 97.34
+  [iter 2/10]  ACC_Y = 92.23  ACC_C = 97.50
+  [iter 3/10]  ACC_Y = 92.00  ACC_C = 97.41
+  [iter 4/10]  ACC_Y = 92.36  ACC_C = 97.32
+  [iter 5/10]  ACC_Y = 92.08  ACC_C = 97.31
+  [iter 6/10]  ACC_Y = 92.14  ACC_C = 97.41
+  [iter 7/10]  ACC_Y = 92.18  ACC_C = 97.46
+  [iter 8/10]  ACC_Y = 92.41  ACC_C = 97.38
+  [iter 9/10]  ACC_Y = 92.32  ACC_C = 97.41
+  [iter 10/10]  ACC_Y = 92.16  ACC_C = 97.28
+
+=== OCBM v3  /  iFMNIST   (n=10) ===
+  ACC_Y =  92.23 +/- 0.14   runs = [92.44, 92.23, 92.0, 92.36, 92.08, 92.14, 92.18, 92.41, 92.32, 92.16]
+  ACC_C =  97.38 +/- 0.06   runs = [97.34, 97.5, 97.41, 97.32, 97.31, 97.41, 97.46, 97.38, 97.41, 97.28]
+  LaTeX cell ->  ACC_Y $92.23_{\pm0.14}$   ACC_C $97.38_{\pm0.06}$
+OCBM / cfmnist   iters=10  epochs=20  K=11  device=cuda
+  [iter 1/10]  ACC_Y = 92.25  ACC_C = 96.32
+  [iter 2/10]  ACC_Y = 92.48  ACC_C = 96.42
+  [iter 3/10]  ACC_Y = 92.39  ACC_C = 96.36
+  [iter 4/10]  ACC_Y = 92.27  ACC_C = 96.27
+  [iter 5/10]  ACC_Y = 92.17  ACC_C = 96.25
+  [iter 6/10]  ACC_Y = 92.55  ACC_C = 96.49
+  [iter 7/10]  ACC_Y = 92.52  ACC_C = 96.46
+  [iter 8/10]  ACC_Y = 92.05  ACC_C = 96.31
+  [iter 9/10]  ACC_Y = 92.43  ACC_C = 96.33
+  [iter 10/10]  ACC_Y = 92.44  ACC_C = 96.36
+
+=== OCBM v1  /  cFMNIST   (n=10) ===
+  ACC_Y =  92.36 +/- 0.16   runs = [92.25, 92.48, 92.39, 92.27, 92.17, 92.55, 92.52, 92.05, 92.43, 92.44]
+  ACC_C =  96.36 +/- 0.07   runs = [96.32, 96.42, 96.36, 96.27, 96.25, 96.49, 96.46, 96.31, 96.33, 96.36]
+  LaTeX cell ->  ACC_Y $92.36_{\pm0.16}$   ACC_C $96.36_{\pm0.07}$
+OCBM (fine-tuned) / cfmnist   iters=10  epochs=20  K=11  device=cuda
+  [iter 1/10]  ACC_Y = 92.40  ACC_C = 96.39
+  [iter 2/10]  ACC_Y = 92.37  ACC_C = 96.39
+  [iter 3/10]  ACC_Y = 92.60  ACC_C = 96.44
+  [iter 4/10]  ACC_Y = 92.18  ACC_C = 96.20
+  [iter 5/10]  ACC_Y = 92.64  ACC_C = 96.50
+  [iter 6/10]  ACC_Y = 92.64  ACC_C = 96.54
+  [iter 7/10]  ACC_Y = 92.16  ACC_C = 96.34
+  [iter 8/10]  ACC_Y = 92.41  ACC_C = 96.48
+  [iter 9/10]  ACC_Y = 92.72  ACC_C = 96.55
+  [iter 10/10]  ACC_Y = 92.33  ACC_C = 96.40
+
+=== OCBM v3  /  cFMNIST   (n=10) ===
+  ACC_Y =  92.44 +/- 0.19   runs = [92.4, 92.37, 92.6, 92.18, 92.64, 92.64, 92.16, 92.41, 92.72, 92.33]
+  ACC_C =  96.43 +/- 0.10   runs = [96.39, 96.39, 96.44, 96.2, 96.5, 96.54, 96.34, 96.48, 96.55, 96.4]
+  LaTeX cell ->  ACC_Y $92.44_{\pm0.19}$   ACC_C $96.43_{\pm0.10}$
