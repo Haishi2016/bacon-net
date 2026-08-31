@@ -594,7 +594,58 @@ class VectorTreeLogicHead(nn.Module):
 
         return acc.clamp(self.eps, 1.0 - self.eps)
 
-    # -- hard-permutation freezing (matches baconNet locked_perm) -----------
+    @torch.no_grad()
+    def forward_pruned(self, x: torch.Tensor, keep_mask: torch.Tensor) -> torch.Tensor:
+        """Faithful structural prune-and-infer on the frozen left-fold tree.
+
+        ``keep_mask`` is ``[num_heads, input_size]`` (bool/float) over the
+        ORIGINAL concept indices: the leaves to KEEP per head. A pruned leaf is
+        bypassed at the node where it enters -- its pair weight is set to 0 and
+        the sibling takes weight 1 -- which is the exact GL "remove an input"
+        for a 2-input power mean (``w=[1,0]`` returns the left input for ANY
+        andness), matching ``binaryTreeLogicNet.prune_features``. With an
+        all-ones mask this reproduces :meth:`forward` bit-for-bit.
+        """
+        if self.perm_logits is not None and not bool(self.perm_frozen):
+            raise RuntimeError("forward_pruned requires a frozen permutation")
+        xb = self._expand_inputs(x)                            # (B, H, N)
+        if self.transform_logits is not None:
+            t_temp = self.transform_temperature.clamp(min=1e-6)
+            tw = F.softmax(self.transform_logits / t_temp, dim=-1)
+            keep = tw[..., 0].unsqueeze(0)
+            neg = tw[..., 1].unsqueeze(0)
+            xb = keep * xb + neg * (1.0 - xb)
+        km = keep_mask.to(xb.device).float()                  # [H, N] over concepts
+        if tuple(km.shape) != (self.num_heads, self.input_size):
+            raise ValueError(
+                f"keep_mask must be [{self.num_heads}, {self.input_size}], "
+                f"got {tuple(km.shape)}")
+        if self.perm_logits is not None:
+            P = self.frozen_perm                              # [H, N, N] hard
+            leaves = torch.einsum("bhn,hln->bhl", xb, P)      # reorder per head
+            leaf_keep = torch.einsum("hln,hn->hl", P, km)     # keep -> leaf positions
+        else:
+            leaves = xb
+            leaf_keep = km
+        if self.num_nodes == 0:
+            return leaves[..., 0].clamp(self.eps, 1.0 - self.eps)
+        acc = leaves[..., 0]                                  # (B, H)
+        acc_alive = leaf_keep[:, 0]                           # (H,)
+        ceps = 1e-6
+        bypass = leaves.new_tensor([1.0, 0.0])
+        for i in range(self.num_nodes):
+            right = leaves[..., i + 1]
+            right_alive = leaf_keep[:, i + 1]                 # (H,)
+            a = self._andness(self.bias[:, i])                # (H,)
+            w = F.softmax(self.weight_logits[:, i, :], dim=-1)  # (H, 2)
+            m = torch.stack([acc_alive, right_alive], dim=1)  # (H, 2) alive gate
+            wm = w * m
+            s = wm.sum(dim=1, keepdim=True)                   # (H, 1)
+            w_eff = torch.where(s > ceps, wm / s.clamp_min(ceps),
+                                bypass.expand_as(w))          # renorm survivors
+            acc = self._pair(acc, right, a, w_eff)
+            acc_alive = torch.clamp(acc_alive + right_alive, max=1.0)
+        return acc.clamp(self.eps, 1.0 - self.eps)
     @torch.no_grad()
     def permutation_confidence(self) -> float:
         """Mean peak routing weight per leaf (== baconNet freeze confidence)."""

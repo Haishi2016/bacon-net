@@ -36,6 +36,7 @@ import _cub                                                     # noqa: E402
 from bacon.vectorizedLogicHead import VectorTreeLogicHead, VectorLogicHead  # noqa: E402
 from bacon.vectorizedFullTree import VectorFullTreeHead  # noqa: E402
 from bacon.vectorizedHybridTree import VectorHybridTreeHead  # noqa: E402
+from bacon.vectorizedRectTree import VectorRectTreeHead  # noqa: E402
 from bacon.aggregators.lsp import FullWeightAggregator          # noqa: E402
 from eval_shapes import roc_auc                                 # noqa: E402
 
@@ -44,7 +45,13 @@ class CUBEmergent(nn.Module):
     def __init__(self, K, n_species=200, temp=6.0, head="tree", sinkhorn_iters=20,
                  branching=4, fulltree_final_temp=0.05, fulltree_straight_through=False,
                  fulltree_coefficients=False, fulltree_max_egress=1,
-                 fulltree_bin_frac=0.25, fulltree_negation=False, concept_scale=1.0):
+                 fulltree_bin_frac=0.25, fulltree_negation=False, concept_scale=1.0,
+                 fulltree_aggregator="full_weight", fulltree_experts=5,
+                 hybrid_permutation=True,
+                 rect_width=None, rect_depth=4, rect_max_parents=1,
+                 rect_root_lam=1.0, rect_parent_lam=0.1, rect_compact_lam=0.05,
+                 rect_binarize_lam=0.0, rect_straight_through=False,
+                 rect_leaf_shortcut=False):
         super().__init__()
         self.K = K
         self.head_type = head
@@ -65,15 +72,39 @@ class CUBEmergent(nn.Module):
                                            straight_through=fulltree_straight_through,
                                            use_coefficients=fulltree_coefficients,
                                            max_egress=fulltree_max_egress,
-                                           use_negation=fulltree_negation)
+                                           use_negation=fulltree_negation,
+                                           aggregator=fulltree_aggregator,
+                                           num_experts=fulltree_experts)
         elif head == "hybrid":
             # left-associative binary spine over the important features + a
             # shallow full sub-tree pooling the rest (fed at the deepest node).
+            # A per-head Sinkhorn permutation learns which concepts land on the
+            # spine; an identity/negation gate lets any leaf read NOT c.
             self.head = VectorHybridTreeHead(K, n_species, bin_frac=fulltree_bin_frac,
                                              branching=branching,
                                              max_egress=fulltree_max_egress,
                                              use_coefficients=fulltree_coefficients,
+                                             use_negation=fulltree_negation,
+                                             use_permutation_layer=hybrid_permutation,
+                                             sinkhorn_iters=sinkhorn_iters,
                                              final_temperature=fulltree_final_temp)
+        elif head == "recttree":
+            # rectangular learned-convergence DAG: constant-width layers, tree
+            # shape EMERGES from three penalties (single-root pointer, <=N-parent
+            # fan-out, non-compactness) rather than a fixed funnel. Penalties are
+            # added to the loss in train_one via head.regularization().
+            self.head = VectorRectTreeHead(K, n_species, width=rect_width,
+                                           depth=rect_depth,
+                                           max_parents=rect_max_parents,
+                                           root_lam=rect_root_lam,
+                                           parent_lam=rect_parent_lam,
+                                           compact_lam=rect_compact_lam,
+                                           binarize_lam=rect_binarize_lam,
+                                           straight_through=rect_straight_through,
+                                           leaf_shortcut=rect_leaf_shortcut,
+                                           use_negation=fulltree_negation,
+                                           use_coefficients=fulltree_coefficients,
+                                           final_temperature=fulltree_final_temp)
         else:
             self.head = VectorTreeLogicHead(
                 K, n_species, FullWeightAggregator(),
@@ -167,6 +198,12 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
               fulltree_straight_through=False, fulltree_coefficients=False,
               fulltree_scan=0, fulltree_max_egress=1, fulltree_bin_frac=0.25,
               fulltree_negation=False, concept_scale=1.0,
+              fulltree_aggregator="full_weight", fulltree_experts=5,
+              hybrid_permutation=True,
+              rect_width=None, rect_depth=4, rect_max_parents=1,
+              rect_root_lam=1.0, rect_parent_lam=0.1, rect_compact_lam=0.05,
+              rect_binarize_lam=0.0, rect_straight_through=False,
+              rect_leaf_shortcut=False, early_stop_patience=0, min_freeze_frac=0.3,
               ckpt_path=None, ckpt_every=0):
     torch.manual_seed(seed)
     model = CUBEmergent(K, head=head, sinkhorn_iters=sinkhorn_iters,
@@ -177,7 +214,16 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
                         fulltree_max_egress=fulltree_max_egress,
                         fulltree_bin_frac=fulltree_bin_frac,
                         fulltree_negation=fulltree_negation,
-                        concept_scale=concept_scale).to(device)
+                        concept_scale=concept_scale,
+                        fulltree_aggregator=fulltree_aggregator,
+                        fulltree_experts=fulltree_experts,
+                        hybrid_permutation=hybrid_permutation,
+                        rect_width=rect_width, rect_depth=rect_depth,
+                        rect_max_parents=rect_max_parents, rect_root_lam=rect_root_lam,
+                        rect_parent_lam=rect_parent_lam, rect_compact_lam=rect_compact_lam,
+                        rect_binarize_lam=rect_binarize_lam,
+                        rect_straight_through=rect_straight_through,
+                        rect_leaf_shortcut=rect_leaf_shortcut).to(device)
     if concept_targets is not None:
         concept_targets = torch.as_tensor(concept_targets, device=device)
     bb_ids = {id(p) for p in model.backbone.parameters()}
@@ -187,22 +233,33 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(epochs, 1))
     best = 0.0
     best_state = None
+    best_soft = 0.0            # peak SOFT test acc (pre-freeze) + its snapshot
+    best_soft_state = None
+    no_improve = 0            # epochs since the soft peak (for early stopping)
     frozen = False
     is_ft = head in ("fulltree", "hybrid")
-    can_freeze = harden and head in ("tree", "fulltree", "hybrid")
+    is_rect = head == "recttree"
+    can_freeze = harden and head in ("tree", "fulltree", "hybrid", "recttree")
     # egress hardening collapses if frozen while routing is still soft -> require
     # near-one-hot routing (conf>=0.999) for the full tree (MNIST lesson).
     eff_freeze_conf = 0.999 if is_ft else freeze_conf
 
     def _sparsity_loss():
+        if is_rect:
+            return torch.zeros((), device=device)   # structure penalty added separately
         return (model.head.egress_sparsity_loss() if is_ft
                 else model.head.permutation_sparsity_loss())
 
     def _confidence():
+        if is_rect:
+            return 0.0                              # no confidence metric -> freeze at force_at
         return float(model.head.egress_confidence() if is_ft
                      else model.head.permutation_confidence())
 
     def _freeze():
+        if is_rect:
+            model.head.harden()
+            return
         if is_ft and fulltree_scan > 0:
             # candidate-scan freeze: treat the soft egress as a distribution over
             # discrete trees; sample `fulltree_scan` hard routings and keep, per
@@ -288,20 +345,42 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
                 # RAMP it with the anneal (gentle early so concepts form first,
                 # strong late so the permutation sharpens before the freeze).
                 loss = loss + perm_sparsity * raw * _sparsity_loss()
+            if is_rect:
+                # rectangular head's structural penalties (single-root pointer,
+                # <=N-parent fan-out, non-compactness) from the last forward.
+                loss = loss + model.head.regularization()
             opt.zero_grad(); loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             run += loss.item() * y.numel(); total += y.numel()
         sched.step()
+        acc = evaluate(model, vl, device)                 # SOFT acc while not frozen
         # confidence-triggered hard freeze, then frozen finetuning
         if can_freeze and not frozen:
+            # track the SOFT peak so we can HARDEN FROM THE BEST checkpoint rather
+            # than a later, more-overfit epoch. Faithful for the straight-through
+            # rect head (soft ~ hard); for the other heads it is only used when
+            # explicitly early-stopping (they freeze at confidence/force anyway).
+            if acc > best_soft:
+                best_soft = acc
+                best_soft_state = copy.deepcopy(model.state_dict())
+                no_improve = 0
+            else:
+                no_improve += 1
             conf = _confidence()
-            if conf >= eff_freeze_conf or ep >= force_at:
+            patience_hit = (early_stop_patience > 0 and no_improve >= early_stop_patience
+                            and ep >= int(min_freeze_frac * epochs))
+            if conf >= eff_freeze_conf or ep >= force_at or patience_hit:
+                if best_soft_state is not None:
+                    # restore the PEAK model, then commit the discrete tree from it.
+                    model.load_state_dict(best_soft_state)
+                    print(f"    [early-stop] restore soft-peak {best_soft * 100:.2f}% "
+                          f"(ep-gap {no_improve}) before harden", flush=True)
                 _freeze()
                 frozen = True
+                acc = evaluate(model, vl, device)         # report the FROZEN acc
                 print(f"    [freeze] ep {ep + 1} conf {conf:.3f} -> "
-                      f"{'egress' if is_ft else 'permutation'} hardened")
-        acc = evaluate(model, vl, device)
+                      f"{'rect-harden' if is_rect else ('egress' if is_ft else 'permutation')} hardened")
         # only keep hard checkpoints when hardening (soft ones are not faithful)
         if (not can_freeze or frozen) and acc > best:
             best = acc

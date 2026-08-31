@@ -54,13 +54,16 @@ def test_input_size_too_small_raises():
 
 
 def test_single_bin_feature_matches_pmean_of_full_and_feat():
-    # n_bin=1: output == lsp_power_mean([full_agg, feat]) with the spine's params.
+    # Permutation-free overlay, n_bin=1: output == lsp_power_mean([full_agg, feat])
+    # where full_agg pools ALL K concepts and feat is the (soft) selected concept.
     torch.manual_seed(0)
-    h = VectorHybridTreeHead(5, 2, bin_frac=0.2)      # n_bin=1, n_full=4
-    assert h.n_bin == 1
+    h = VectorHybridTreeHead(5, 2, bin_frac=0.2, use_permutation_layer=False)  # n_bin=1
+    assert h.n_bin == 1 and h.n_full == 5
+    h.eval()                                            # deterministic selection (no gumbel)
     x = torch.rand(8, 5)
-    full_agg = h.full(x[:, h.n_bin:])                  # (8,2)
-    feat = x[:, 0].unsqueeze(1).expand(8, 2)           # (8,2)
+    full_agg = h.full(x)                                # (8,2) full sub-tree over ALL 5
+    sel = h._spine_selection()                          # (2,1,5)
+    feat = torch.einsum("hik,bhk->bhi", sel, x.unsqueeze(1).expand(8, 2, 5))[..., 0]
     a = torch.sigmoid(h.bin_andness[:, 0]) * 3 - 1      # (2,)
     wf = torch.sigmoid(h.bin_weight_logit[:, 0])        # (2,)
     X = torch.stack([full_agg, feat], dim=0)
@@ -68,6 +71,22 @@ def test_single_bin_feature_matches_pmean_of_full_and_feat():
     ref = lsp_power_mean(X, a.unsqueeze(0), w, eps=1e-6).clamp(h.eps, 1 - h.eps)
     got = h(x)
     assert torch.allclose(got, ref, atol=1e-6)
+
+
+def test_permutation_free_recovers_full_tree_when_spine_bypassed():
+    # A spine node with weight ~[1,0] (bin_weight_logit -> -inf) is ~identity, so
+    # the overlay hybrid reduces to its full sub-tree over all K concepts. (Exact
+    # in the limit; with a moderate andness the residual is negligible.)
+    torch.manual_seed(0)
+    h = VectorHybridTreeHead(12, 3, bin_frac=0.25, use_permutation_layer=False)
+    h.eval()
+    with torch.no_grad():
+        h.bin_weight_logit.fill_(-30.0)                 # wf ~ 0 -> spine passes node through
+        h.bin_andness.fill_(0.0)                        # a = 0.5 (mild p; bounded feat^p)
+    x = torch.rand(6, 12)
+    assert torch.allclose(h(x), h.full(x).clamp(h.eps, 1 - h.eps), atol=1e-4)
+
+
 
 
 def test_gradients_flow_to_spine_and_full():

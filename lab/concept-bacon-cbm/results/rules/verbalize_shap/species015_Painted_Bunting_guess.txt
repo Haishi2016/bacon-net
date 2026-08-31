@@ -1,0 +1,12 @@
+Guess the bird species from this field description of a single bird.
+
+How to weigh the evidence (ordered by how much it drives the identity):
+- PRIMARY marks are the most diagnostic and reliable — let these drive your answer.
+- SECONDARY marks are weaker and may be noisy (coarse traits such as size or bill length are often approximate or mislabeled); use them only as tie-breakers, and do NOT rule out a species on a single secondary mark.
+- ABSENT marks are soft exclusions, not hard rules.
+
+PRIMARY marks: blue forehead, grey bill, a multi-colored wing pattern, a perching-like shape, blue crown and a multi-colored back pattern.
+SECONDARY marks: a cone bill shape, a notched tail tail shape and grey leg.
+Usually ABSENT: a multi-colored breast pattern and a striped wing pattern.
+
+Give your single best guess (a specific species), then 2–3 ranked alternates. What species is it?

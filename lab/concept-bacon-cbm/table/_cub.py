@@ -36,6 +36,7 @@ from models import BlackBox, CtrueY, SoftCBM, SoftCBMSC, CREAM, BaconCBM  # noqa
 
 CUB = r"C:\School\datasets\cub\CUB_200_2011"
 _ATTR_TXT = r"C:\School\datasets\cub\attributes.txt"          # 312 attribute names
+_ATTR_CONT = _os.path.join(CUB, "attributes", "class_attribute_labels_continuous.txt")
 _MEAN = [0.485, 0.456, 0.406]
 _STD = [0.229, 0.224, 0.225]
 
@@ -50,6 +51,45 @@ CANONICAL_112 = (
     283, 289, 292, 293, 294, 298, 299, 304, 305, 308, 309, 310, 311,
 )
 _SUPERCATS = ["color", "pattern", "shape", "length", "size"]
+
+
+_CLASS_ATTR_312 = None
+_NAMES_312 = None
+
+
+def load_names_312():
+    """All 312 raw CUB attribute names (0-based order, as in attributes.txt)."""
+    global _NAMES_312
+    if _NAMES_312 is None:
+        raw = {}
+        with open(_ATTR_TXT, "r", encoding="utf-8") as f:
+            for line in f:
+                p = line.split(None, 1)
+                if len(p) == 2:
+                    raw[int(p[0]) - 1] = p[1].strip()
+        _NAMES_312 = [raw[i] for i in range(len(raw))]
+    return _NAMES_312
+
+
+def load_class_attr_312(thresh=50.0):
+    """(200, 312) binary class-attribute matrix (Koh class-level attributes).
+
+    Built from ``class_attribute_labels_continuous.txt`` (percentage of images
+    per class exhibiting each attribute) binarized at ``thresh`` (>=50% => the
+    attribute is present for that class). All images of a class share this row --
+    the standard CUB-CBM 312 setup the LogicCBM paper uses.
+    """
+    global _CLASS_ATTR_312
+    if _CLASS_ATTR_312 is None:
+        rows = []
+        with open(_ATTR_CONT, "r", encoding="utf-8") as f:
+            for line in f:
+                vals = line.split()
+                if vals:
+                    rows.append([float(v) for v in vals])
+        M = torch.tensor(rows, dtype=torch.float32)             # (200, 312) in [0,100]
+        _CLASS_ATTR_312 = (M >= thresh).float()
+    return _CLASS_ATTR_312
 
 
 def _load_attr_groups():
@@ -114,10 +154,12 @@ def _local_path(img_path: str) -> str:
 
 
 class _CUBImages(Dataset):
-    def __init__(self, split: str, train_aug: bool):
+    def __init__(self, split: str, train_aug: bool, attr312: bool = False):
         with open(os.path.join(CUB, f"{split}.pkl"), "rb") as f:
             self.entries = pickle.load(f)
         self.tf = _TRAIN_TF if train_aug else _TEST_TF
+        # class-level 312 attribute matrix (all images of a class share a row).
+        self.attr312 = load_class_attr_312() if attr312 else None
 
     def __len__(self):
         return len(self.entries)
@@ -125,7 +167,10 @@ class _CUBImages(Dataset):
     def __getitem__(self, i):
         e = self.entries[i]
         img = Image.open(_local_path(e["img_path"])).convert("RGB")
-        c = torch.tensor(e["attribute_label"], dtype=torch.float32)
+        if self.attr312 is not None:
+            c = self.attr312[e["class_label"]]
+        else:
+            c = torch.tensor(e["attribute_label"], dtype=torch.float32)
         return self.tf(img), c, e["class_label"]
 
 

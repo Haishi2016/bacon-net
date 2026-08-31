@@ -3,3 +3,4 @@ from .half_weight import HalfWeightAggregator
 from .softmax_lsp import LspSoftmaxAggregator, PerNodeLspSoftmaxAggregator
 from .generic_gl import GenericGLAggregator
 from .generic_full_weight import GenericFullWeightAggregator
+from .aigcd_full_weight import AIGCDFullWeightAggregator

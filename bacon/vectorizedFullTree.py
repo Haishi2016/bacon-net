@@ -79,6 +79,8 @@ class VectorFullTreeHead(nn.Module):
         final_temperature: float = 0.1,
         transform_final_temperature: float = 0.1,
         use_gumbel: bool = True,
+        aggregator: str = "full_weight",
+        num_experts: int = 5,
         eps: float = 1e-7,
     ):
         super().__init__()
@@ -185,6 +187,31 @@ class VectorFullTreeHead(nn.Module):
                 r0 = (torch.eye(w_in) * diag).unsqueeze(0).repeat(num_heads, 1, 1)
                 self.r_logits.append(nn.Parameter(r0))
 
+        # ---- AIGCD aggregator: each node is an ARRAY of full_weight experts --
+        # (continuous-andness power means) blended by a per-node routing that is
+        # value-dependent (gated on the node's child stats). Swaps the single
+        # power mean for a Mean-Andness-Theorem composition over ``num_experts``
+        # experts. All extra params init inert -> at init the node ~= a single
+        # power mean at its base andness (plain full_weight).
+        self.aggregator = aggregator
+        if aggregator not in ("full_weight", "aigcd"):
+            raise ValueError(f"aggregator must be full_weight|aigcd, got {aggregator!r}")
+        if aggregator == "aigcd":
+            self.num_experts = int(num_experts)
+            self.expert_offset = nn.ParameterList()   # [H, w_out, E] andness-logit offsets
+            self.route_expert = nn.ParameterList()    # [H, w_out, E] static routing logits
+            spread = torch.linspace(-2.0, 2.0, self.num_experts)
+            for l in range(self.depth):
+                w_out = self.widths[l + 1]
+                off = spread.view(1, 1, -1).repeat(num_heads, w_out, 1).clone()
+                self.expert_offset.append(nn.Parameter(off))
+                self.route_expert.append(nn.Parameter(torch.zeros(num_heads, w_out, self.num_experts)))
+            # value-based routing gate on child stats [w-mean, std, w-geo-mean].
+            self.aigcd_gate = nn.Sequential(
+                nn.Linear(3, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, self.num_experts))
+            nn.init.zeros_(self.aigcd_gate[-1].weight)   # start as static routing
+            nn.init.zeros_(self.aigcd_gate[-1].bias)
+
     # ---------------------------------------------------------------- routing
     def _egress(self, l: int) -> torch.Tensor:
         """Per-head routing weights ``[H, w_in, w_out]`` (rows = sources)."""
@@ -274,21 +301,105 @@ class VectorFullTreeHead(nn.Module):
             # X: (w_in, B, H, w_out) -- broadcast each source over destinations
             X = V.permute(2, 0, 1).unsqueeze(-1).expand(w_in, B, self.num_heads, w_out)
             Wn = w_agg.permute(1, 0, 2).unsqueeze(1)         # (w_in, 1, H, w_out)
-            a_logit = self.andness_bias[l]                   # [H, w_out]
-            if self.dynamic_andness:
-                # value-based andness: gate on each node's weighted child stats.
-                m1 = (Wn * X).sum(0)                          # (B,H,w_out) w-mean
-                m2 = (Wn * X * X).sum(0)
-                std = ((m2 - m1 * m1).clamp_min(0.0) + 1e-6).sqrt()   # safe grad
-                gm = ((X.clamp_min(1e-6).log()) * Wn).sum(0).exp()   # w-geo-mean
-                feats = torch.stack([m1, std, gm], dim=-1)   # (B,H,w_out,3)
-                delta = self.andness_gate(feats).squeeze(-1)  # (B,H,w_out)
-                A = torch.sigmoid(a_logit.unsqueeze(0) + delta) * 3.0 - 1.0
-            elif self.normalize_andness:
-                A = (torch.sigmoid(a_logit) * 3.0 - 1.0).unsqueeze(0)   # (1,H,w_out)
-            else:
-                A = a_logit.unsqueeze(0)
-            V = lsp_power_mean(X, A, Wn, eps=1e-6)           # (B, H, w_out)
+            V = self._aggregate_layer(l, X, Wn)              # (B, H, w_out)
+        out = V[..., 0]                                      # (B, H)
+        return out.clamp(self.eps, 1.0 - self.eps)
+
+    def _aggregate_layer(self, l: int, X: torch.Tensor, Wn: torch.Tensor) -> torch.Tensor:
+        """One layer's weighted power-mean aggregation, shared by ``forward`` and
+        ``forward_pruned``. ``X`` is ``(w_in, B, H, w_out)`` (each source
+        broadcast over destinations) and ``Wn`` is ``(w_in, 1, H, w_out)`` the
+        per-destination child weights (already normalized to sum to 1)."""
+        a_logit = self.andness_bias[l]                       # [H, w_out]
+        if self.aggregator == "aigcd":
+            # AIGCD node: blend of E full_weight experts, value-routed.
+            a_base = a_logit.unsqueeze(-1)                   # [H, w_out, 1]
+            a_exp = torch.sigmoid(a_base + self.expert_offset[l]) * 3.0 - 1.0  # [H,w_out,E]
+            m1 = (Wn * X).sum(0)                              # (B,H,w_out) w-mean
+            m2 = (Wn * X * X).sum(0)
+            std = ((m2 - m1 * m1).clamp_min(0.0) + 1e-6).sqrt()
+            gm = ((X.clamp_min(1e-6).log()) * Wn).sum(0).exp()
+            feats = torch.stack([m1, std, gm], dim=-1)       # (B,H,w_out,3)
+            rl = self.route_expert[l].unsqueeze(0) + self.aigcd_gate(feats)  # (B,H,w_out,E)
+            alpha = torch.softmax(rl, dim=-1)                # (B,H,w_out,E)
+            ops = torch.stack([
+                lsp_power_mean(X, a_exp[..., e].unsqueeze(0), Wn, eps=1e-6)
+                for e in range(self.num_experts)], dim=-1)   # (B,H,w_out,E)
+            return (alpha * ops).sum(-1)                     # (B, H, w_out)
+        if self.dynamic_andness:
+            # value-based andness: gate on each node's weighted child stats.
+            m1 = (Wn * X).sum(0)                              # (B,H,w_out) w-mean
+            m2 = (Wn * X * X).sum(0)
+            std = ((m2 - m1 * m1).clamp_min(0.0) + 1e-6).sqrt()   # safe grad
+            gm = ((X.clamp_min(1e-6).log()) * Wn).sum(0).exp()   # w-geo-mean
+            feats = torch.stack([m1, std, gm], dim=-1)       # (B,H,w_out,3)
+            delta = self.andness_gate(feats).squeeze(-1)      # (B,H,w_out)
+            A = torch.sigmoid(a_logit.unsqueeze(0) + delta) * 3.0 - 1.0
+            return lsp_power_mean(X, A, Wn, eps=1e-6)         # (B, H, w_out)
+        if self.normalize_andness:
+            A = (torch.sigmoid(a_logit) * 3.0 - 1.0).unsqueeze(0)   # (1,H,w_out)
+            return lsp_power_mean(X, A, Wn, eps=1e-6)         # (B, H, w_out)
+        A = a_logit.unsqueeze(0)
+        return lsp_power_mean(X, A, Wn, eps=1e-6)             # (B, H, w_out)
+
+    @torch.no_grad()
+    def forward_pruned(self, x: torch.Tensor, keep_mask: torch.Tensor) -> torch.Tensor:
+        """Faithful structural prune-and-infer on the frozen tree.
+
+        ``keep_mask`` is ``[num_heads, input_size]`` (bool/float): the leaves to
+        KEEP per head. Every pruned leaf-edge is dropped from its parent power
+        mean and the surviving siblings are RENORMALIZED to sum to 1 -- the
+        canonical GL "remove an input" operation (NOT setting the input to 0,
+        which would corrupt conjunctions/disjunctions). A node whose kept subtree
+        becomes empty contributes zero weight to its parent, so it is removed and
+        the cascade propagates up. With ``keep_mask`` all-ones this reproduces
+        :meth:`forward` exactly (a faithful superset), so any accuracy change is
+        due solely to the removed literals.
+        """
+        if not bool(self.egress_frozen):
+            raise RuntimeError("forward_pruned requires a frozen (hardened) tree")
+        if x.dim() == 2:
+            if x.size(1) != self.input_size:
+                raise ValueError(f"expected input_size={self.input_size}, got {x.size(1)}")
+            V = x.unsqueeze(1).expand(x.size(0), self.num_heads, self.input_size)
+        elif x.dim() == 3:
+            V = x
+        else:
+            raise ValueError(f"x must be 2D or 3D, got {x.dim()}D")
+        V = self._apply_negation(V)
+        B, H = V.size(0), self.num_heads
+        km = keep_mask.to(V.device).float()
+        if tuple(km.shape) != (H, self.input_size):
+            raise ValueError(f"keep_mask must be [{H}, {self.input_size}], got {tuple(km.shape)}")
+        alive = km                                            # [H, w] structure-level
+        ceps = 1e-6
+        for l in range(self.depth):
+            w_in, w_out = self.widths[l], self.widths[l + 1]
+            if self.use_transform:
+                R = F.softmax(self.r_logits[l], dim=2)
+                V = torch.einsum("hji,bhi->bhj", R, V)
+            E = self._egress(l)
+            if self.use_coefficients:
+                rel = torch.exp(self.coeff_logits[l].clamp(-10.0, 10.0))
+                E = E * rel.unsqueeze(2)
+            # Faithful prune: drop pruned sources from the routing, then let the
+            # SAME _child_weights do a single ingress renormalization -- so the
+            # surviving siblings re-sum to 1 exactly as in forward (all-ones ->
+            # E_masked == E -> identical weights). A destination that HAD sources
+            # in the base tree but lost them all to pruning is newly dead: its
+            # value is zeroed and it feeds 0 weight upstream (cascade). A base-
+            # orphaned destination (no sources even unpruned) keeps forward's
+            # uniform fallback so equivalence is exact.
+            base_col = E.sum(dim=1)                           # [H, w_out]
+            E_masked = E * alive.unsqueeze(2)                 # [H, w_in, w_out]
+            real_col = E_masked.sum(dim=1)                    # [H, w_out]
+            w_agg = self._child_weights(E_masked)            # single renorm (+ dead fallback)
+            X = V.permute(2, 0, 1).unsqueeze(-1).expand(w_in, B, H, w_out)
+            Wn = w_agg.permute(1, 0, 2).unsqueeze(1)          # (w_in, 1, H, w_out)
+            V = self._aggregate_layer(l, X, Wn)              # (B, H, w_out)
+            newly_dead = (real_col < ceps) & (base_col >= ceps)   # [H, w_out]
+            alive = (~newly_dead).float()
+            V = V * alive.unsqueeze(0)                       # zero cascaded-dead nodes
         out = V[..., 0]                                      # (B, H)
         return out.clamp(self.eps, 1.0 - self.eps)
 

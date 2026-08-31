@@ -1,0 +1,12 @@
+Guess the bird species from this field description of a single bird.
+
+How to weigh the evidence (ordered by how much it drives the identity):
+- PRIMARY marks are the most diagnostic and reliable — let these drive your answer.
+- SECONDARY marks are weaker and may be noisy (coarse traits such as size or bill length are often approximate or mislabeled); use them only as tie-breakers, and do NOT rule out a species on a single secondary mark.
+- ABSENT marks are soft exclusions, not hard rules.
+
+PRIMARY marks: black belly, a perching-like shape, a plain head pattern, a rounded-wings wing shape, black breast and black nape.
+SECONDARY marks: a multi-colored wing pattern, black underparts and shorter than head bill length.
+Usually ABSENT: buff upper tail.
+
+Give your single best guess (a specific species), then 2–3 ranked alternates. What species is it?
