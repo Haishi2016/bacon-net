@@ -39,6 +39,7 @@ from bacon.vectorizedHybridTree import VectorHybridTreeHead  # noqa: E402
 from bacon.vectorizedRectTree import VectorRectTreeHead  # noqa: E402
 from bacon.aggregators.lsp import FullWeightAggregator          # noqa: E402
 from eval_shapes import roc_auc                                 # noqa: E402
+from cross_learning import confusion_weighted_ovr_loss          # noqa: E402
 
 
 class CUBEmergent(nn.Module):
@@ -49,17 +50,18 @@ class CUBEmergent(nn.Module):
                  fulltree_aggregator="full_weight", fulltree_experts=5,
                  hybrid_permutation=True,
                  rect_width=None, rect_depth=4, rect_max_parents=1,
+                 rect_layer_widths=None,
                  rect_root_lam=1.0, rect_parent_lam=0.1, rect_compact_lam=0.05,
-                 rect_binarize_lam=0.0, rect_straight_through=False,
-                 rect_leaf_shortcut=False):
+                 rect_binarize_lam=0.0, rect_edge_l1_lam=0.0, rect_edge_l0_lam=0.0, rect_straight_through=False,
+                 rect_leaf_shortcut=False, backbone_kind="resnet18"):
         super().__init__()
         self.K = K
         self.head_type = head
         self.head_n_species = n_species
         self.branching = branching
         self.concept_scale = float(concept_scale)
-        self.backbone = _cub._make_resnet()
-        self.concept = nn.Linear(512, K)
+        self.backbone, feat_dim, self.backbone_size = _cub.make_backbone(backbone_kind)
+        self.concept = nn.Linear(feat_dim, K)
         if head == "alt":
             # alternating coeff/aggregation head: learns per-head coefficients
             # (weights) AND anchor-operator mixtures, alternately (static anchors).
@@ -95,15 +97,19 @@ class CUBEmergent(nn.Module):
             # added to the loss in train_one via head.regularization().
             self.head = VectorRectTreeHead(K, n_species, width=rect_width,
                                            depth=rect_depth,
+                                           layer_widths=rect_layer_widths,
                                            max_parents=rect_max_parents,
                                            root_lam=rect_root_lam,
                                            parent_lam=rect_parent_lam,
                                            compact_lam=rect_compact_lam,
                                            binarize_lam=rect_binarize_lam,
+                                           edge_l1_lam=rect_edge_l1_lam,
+                                           edge_l0_lam=rect_edge_l0_lam,
                                            straight_through=rect_straight_through,
                                            leaf_shortcut=rect_leaf_shortcut,
                                            use_negation=fulltree_negation,
                                            use_coefficients=fulltree_coefficients,
+                                           use_checkpoint=True,
                                            final_temperature=fulltree_final_temp)
         else:
             self.head = VectorTreeLogicHead(
@@ -171,7 +177,7 @@ def top_attr_per_concept(C, A):
     return tops
 
 
-def balanced_ovr_loss(truths, y, n_classes):
+def balanced_ovr_loss(truths, y, n_classes, conf_floor=None):
     """Balanced one-vs-rest loss so every per-species tree gets a real training
     signal each batch, not just the ~1/200 positives softmax-CE gives it.
 
@@ -181,19 +187,32 @@ def balanced_ovr_loss(truths, y, n_classes):
         1/(C-1) each so the ~199 negatives sum to weight ~1 and can't drown the
         rare positive (prevents the trivial "always say negative" cheat).
     truths: (B, C) graded-logic tree outputs in (0,1); y: (B,) class indices.
+
+    ``conf_floor`` (0..1, or None=off): CONFIDENCE-GATED negatives -- the other
+    trees are taught "this is a negative for you" only in proportion to how
+    strongly the CORRECT tree fired on this example (a confident teacher). The
+    per-sample gate is ``floor + (1-floor)*truths[y]`` (DETACHED, so it is a
+    weight and NOT a path to lower the true tree). ``floor`` keeps a baseline
+    negative signal when the correct tree is unsure -> avoids a cold start.
     """
     onehot = F.one_hot(y, n_classes).float()
     bce = F.binary_cross_entropy(truths, onehot, reduction="none")   # (B, C)
     pos = (bce * onehot).sum(1)                                      # weight 1
     neg = (bce * (1.0 - onehot)).sum(1) / (n_classes - 1)            # mean negative
+    if conf_floor is not None:
+        pt = truths.gather(1, y.view(-1, 1)).squeeze(1).detach()     # (B,) true-tree activation
+        gate = float(conf_floor) + (1.0 - float(conf_floor)) * pt   # (B,) in [floor, 1]
+        neg = gate * neg
     return (pos + neg).mean()
 
 
 def train_one(K, tl, vl, device, epochs, seed, head="tree",
+              n_species=200,
               anneal_frac=0.7, anneal_cap=0.75, loss_mode="ce", ovr_weight=0.3,
+              ovr_conf_floor=None, confusion_ovr=False, confusion_hardness=1.0,
               harden=False, sinkhorn_iters=20, perm_sparsity=5.0,
               freeze_conf=0.90, freeze_frac=0.85,
-              concept_lam=0.0, concept_targets=None,
+              concept_lam=0.0, concept_targets=None, concept_pos_weight=None,
               decorr_lam=0.0, branching=4, fulltree_final_temp=0.05,
               fulltree_straight_through=False, fulltree_coefficients=False,
               fulltree_scan=0, fulltree_max_egress=1, fulltree_bin_frac=0.25,
@@ -201,12 +220,17 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
               fulltree_aggregator="full_weight", fulltree_experts=5,
               hybrid_permutation=True,
               rect_width=None, rect_depth=4, rect_max_parents=1,
+              rect_layer_widths=None,
               rect_root_lam=1.0, rect_parent_lam=0.1, rect_compact_lam=0.05,
-              rect_binarize_lam=0.0, rect_straight_through=False,
+              rect_binarize_lam=0.0, rect_edge_l1_lam=0.0, rect_edge_l0_lam=0.0, rect_edge_l0_warmup=0,
+              rect_binarize_warmup=0,
+              rect_straight_through=False,
               rect_leaf_shortcut=False, early_stop_patience=0, min_freeze_frac=0.3,
+              backbone_kind="resnet18", init_from=None, freeze_encoder=False,
               ckpt_path=None, ckpt_every=0):
     torch.manual_seed(seed)
     model = CUBEmergent(K, head=head, sinkhorn_iters=sinkhorn_iters,
+                        n_species=n_species,
                         branching=branching,
                         fulltree_final_temp=fulltree_final_temp,
                         fulltree_straight_through=fulltree_straight_through,
@@ -219,17 +243,47 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
                         fulltree_experts=fulltree_experts,
                         hybrid_permutation=hybrid_permutation,
                         rect_width=rect_width, rect_depth=rect_depth,
+                        rect_layer_widths=rect_layer_widths,
                         rect_max_parents=rect_max_parents, rect_root_lam=rect_root_lam,
                         rect_parent_lam=rect_parent_lam, rect_compact_lam=rect_compact_lam,
                         rect_binarize_lam=rect_binarize_lam,
+                        rect_edge_l1_lam=rect_edge_l1_lam,
+                        rect_edge_l0_lam=rect_edge_l0_lam,
                         rect_straight_through=rect_straight_through,
-                        rect_leaf_shortcut=rect_leaf_shortcut).to(device)
+                        rect_leaf_shortcut=rect_leaf_shortcut,
+                        backbone_kind=backbone_kind).to(device)
+    if init_from is not None:
+        # two-stage: warm-start backbone + concept layer from a joint-CBM pretrain
+        # (LogicCBM -use_pretrained_bb_con) so the tree head starts on good concepts.
+        ck = torch.load(init_from, map_location=device, weights_only=False)
+        model.backbone.load_state_dict(ck["backbone"])
+        model.concept.load_state_dict(ck["concept"])
+        print(f"    [init-from] warm-started backbone+concept from {init_from} "
+              f"(joint class {ck.get('class_acc', 0.0) * 100:.2f}%)", flush=True)
     if concept_targets is not None:
         concept_targets = torch.as_tensor(concept_targets, device=device)
+    if concept_pos_weight is not None:
+        concept_pos_weight = torch.as_tensor(concept_pos_weight, device=device,
+                                             dtype=torch.float32)
     bb_ids = {id(p) for p in model.backbone.parameters()}
-    bb = [p for p in model.parameters() if id(p) in bb_ids]
-    heads = [p for p in model.parameters() if id(p) not in bb_ids]
-    opt = torch.optim.Adam([{"params": bb, "lr": 1e-4}, {"params": heads, "lr": 1e-3}])
+    if freeze_encoder:
+        # ANNOTATED mode: keep the supervised concept encoder faithful by freezing
+        # backbone + concept layer (weights AND BatchNorm running stats); train ONLY
+        # the graded-logic head. Prevents the tree stage from drifting the encoder
+        # into a task-optimal code (concept leakage).
+        enc_ids = bb_ids | {id(p) for p in model.concept.parameters()}
+        for p in model.backbone.parameters():
+            p.requires_grad_(False)
+        for p in model.concept.parameters():
+            p.requires_grad_(False)
+        heads = [p for p in model.parameters() if id(p) not in enc_ids]
+        opt = torch.optim.Adam(heads, lr=1e-3)
+        print("    [freeze-encoder] ANNOTATED mode: backbone+concept frozen, "
+              "training graded-logic head only", flush=True)
+    else:
+        bb = [p for p in model.parameters() if id(p) in bb_ids]
+        heads = [p for p in model.parameters() if id(p) not in bb_ids]
+        opt = torch.optim.Adam([{"params": bb, "lr": 1e-4}, {"params": heads, "lr": 1e-3}])
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(epochs, 1))
     best = 0.0
     best_state = None
@@ -282,6 +336,33 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
 
     force_at = int(freeze_frac * epochs)
     start_ep = 0
+
+    def _ovr_term(truths, y):
+        """One-vs-rest cross-learning term. confusion_ovr -> hard-negative
+        (confusion-weighted) OvR that concentrates the negative budget on rivals
+        actually competing; else the uniform balanced OvR."""
+        if confusion_ovr:
+            return confusion_weighted_ovr_loss(
+                truths, y, model.head_n_species,
+                hardness=confusion_hardness, conf_floor=ovr_conf_floor)
+        return balanced_ovr_loss(truths, y, model.head_n_species, ovr_conf_floor)
+
+    def _write_ckpt(ep):
+        """Atomically persist the FULL run state (model/opt/sched/epoch + best +
+        frozen flag). Called periodically AND immediately after the hard freeze so
+        the hardened tree is never lost if the process is killed mid-run."""
+        if not (ckpt_path and ckpt_every):
+            return
+        ck = {"model": model.state_dict(), "opt": opt.state_dict(),
+              "sched": sched.state_dict(), "epoch": ep + 1,
+              "best": best, "best_state": best_state, "frozen": frozen,
+              "K": K, "acc": best}
+        tmp = ckpt_path + ".tmp"
+        torch.save(ck, tmp)
+        os.replace(tmp, ckpt_path)                                # atomic swap
+        print(f"    [ckpt] ep {ep + 1} -> {ckpt_path} (best {best * 100:.2f}%)",
+              flush=True)
+
     # ---- resume from a full checkpoint (power-outage safety) --------------
     # ckpt_path holds the CURRENT model+optimizer+scheduler+epoch (not just the
     # best snapshot), so an interrupted run continues where it left off.
@@ -304,6 +385,8 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
                   f"(best {best * 100:.2f}%, frozen={frozen})", flush=True)
     for ep in range(start_ep, epochs):
         model.train()
+        if freeze_encoder:
+            model.backbone.eval(); model.concept.eval()   # freeze BN running stats too
         # Ramp routing sharpness over the first `anneal_frac` of the run to a
         # CAP (< 1.0), then HOLD.  Pushing routing fully hard at the very end
         # collapsed CUB training (loss explodes ~ep105/120 at cap 0.85); the
@@ -311,24 +394,45 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
         # give the model the tail epochs to settle instead of snapping harder.
         raw = min(1.0, ep / max(1.0, anneal_frac * (epochs - 1)))
         model.anneal(anneal_cap * raw)
+        # L0 edge-gate penalty WARMUP: ramp lambda 0 -> target over the first
+        # `rect_edge_l0_warmup` epochs so the tree learns useful edges BEFORE the
+        # sparsity pressure prunes (gates are always applied; only the penalty
+        # weight ramps). Avoids premature collapse to an empty tree.
+        if is_rect and rect_edge_l0_warmup > 0 and getattr(model.head, "use_l0", False):
+            model.head.edge_l0_lam = rect_edge_l0_lam * min(1.0, ep / float(rect_edge_l0_warmup))
+        # HARDNESS-AWARE ANNEAL: ramp the gate-entropy (binarize) penalty in AFTER
+        # the L0 warmup so edges polarize to {0,1} once the structure has formed --
+        # closes the soft->hard discretization gap (validated on synthetic depth).
+        if is_rect and rect_binarize_warmup > 0 and hasattr(model.head, "binarize_lam"):
+            model.head.binarize_lam = rect_binarize_lam * min(
+                1.0, max(0.0, (ep - rect_edge_l0_warmup)) / float(rect_binarize_warmup))
         run = total = 0
         for img, c, y in tl:
             img, y = img.to(device), y.to(device)
             logits, cpred, truths = model(img)
             if loss_mode == "ovr":
-                loss = balanced_ovr_loss(truths, y, model.head_n_species)
+                loss = _ovr_term(truths, y)
             elif loss_mode == "hybrid":
                 # softmax CE for cross-tree calibration (accuracy) +
                 # down-weighted OvR for per-tree disentanglement.
-                loss = (F.cross_entropy(logits, y)
-                        + ovr_weight * balanced_ovr_loss(truths, y, model.head_n_species))
+                loss = F.cross_entropy(logits, y) + ovr_weight * _ovr_term(truths, y)
             else:
                 loss = F.cross_entropy(logits, y)
             if concept_lam > 0.0 and concept_targets is not None:
                 # SUPERVISE the bottleneck against the selected human attributes
                 # (turns the emergent OCBM into a supervised-concept OCBM).
-                loss = loss + concept_lam * F.binary_cross_entropy(
-                    cpred, c.to(device)[:, concept_targets])
+                ctgt = c.to(device)[:, concept_targets]
+                if concept_pos_weight is not None:
+                    # LogicCBM-style per-attribute imbalance correction: upweight
+                    # each attribute's POSITIVE term by its train n_neg/n_pos ratio
+                    # so rare attributes (mostly-absent) can't be ignored. Manual
+                    # weighted BCE on the concept PROBABILITIES (== pos_weight).
+                    w = concept_pos_weight[concept_targets]              # (K,)
+                    p = cpred.clamp(1e-6, 1.0 - 1e-6)
+                    bce = -(w * ctgt * p.log() + (1.0 - ctgt) * (1.0 - p).log())
+                    loss = loss + concept_lam * bce.mean()
+                else:
+                    loss = loss + concept_lam * F.binary_cross_entropy(cpred, ctgt)
             if decorr_lam > 0.0 and cpred.shape[0] > 1:
                 # DECORRELATE concept activations: penalise the squared
                 # off-diagonal correlation of the batch's concept probs so the
@@ -361,11 +465,16 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
             # than a later, more-overfit epoch. Faithful for the straight-through
             # rect head (soft ~ hard); for the other heads it is only used when
             # explicitly early-stopping (they freeze at confidence/force anyway).
-            if acc > best_soft:
+            # L0 GUARD: don't track the peak until the L0 warmup completes, else the
+            # peak (and the restored-before-harden state) is a PRE-PRUNING DENSE tree
+            # (open~1) -> hardening it discards the whole L0 sparsification.
+            l0_ready = (not getattr(model.head, "use_l0", False)
+                        or ep >= rect_edge_l0_warmup)
+            if l0_ready and acc > best_soft:
                 best_soft = acc
                 best_soft_state = copy.deepcopy(model.state_dict())
                 no_improve = 0
-            else:
+            elif l0_ready:
                 no_improve += 1
             conf = _confidence()
             patience_hit = (early_stop_patience > 0 and no_improve >= early_stop_patience
@@ -381,28 +490,31 @@ def train_one(K, tl, vl, device, epochs, seed, head="tree",
                 acc = evaluate(model, vl, device)         # report the FROZEN acc
                 print(f"    [freeze] ep {ep + 1} conf {conf:.3f} -> "
                       f"{'rect-harden' if is_rect else ('egress' if is_ft else 'permutation')} hardened")
+                # persist the freshly HARDENED model right away (don't wait for
+                # the next ckpt_every boundary -- a kill in between loses the tree).
+                best = acc
+                best_state = copy.deepcopy(model.state_dict())
+                _write_ckpt(ep)
         # only keep hard checkpoints when hardening (soft ones are not faithful)
         if (not can_freeze or frozen) and acc > best:
             best = acc
             best_state = copy.deepcopy(model.state_dict())  # keep the PEAK model
         conf_str = (f" | conf {_confidence():.3f}"
                     if can_freeze and not frozen else (" | FROZEN" if frozen else ""))
+        l0_str = ""
+        if is_rect and getattr(model.head, "use_l0", False):
+            with torch.no_grad():
+                of = sum(float((model.head._l0_z_test(l) > 0.5).float().mean())
+                         for l in range(model.head.depth)) / model.head.depth
+            l0_str = f" | l0lam {model.head.edge_l0_lam:.2g} open {of:.3f}"
         print(f"    epoch {ep + 1:2d}/{epochs} | loss {run / total:.3f} | "
-              f"test {acc * 100:.2f}%{conf_str}")
+              f"test {acc * 100:.2f}%{conf_str}{l0_str}")
         # periodic full-state checkpoint (crash/outage safety + resume). Saves
         # the CURRENT model/optimizer/scheduler/epoch AND the best snapshot, so
         # the run can continue after an interruption. Written to a temp file then
         # atomically renamed, so a crash mid-write cannot corrupt the checkpoint.
         if ckpt_path and ckpt_every and (ep + 1) % ckpt_every == 0:
-            ck = {"model": model.state_dict(), "opt": opt.state_dict(),
-                  "sched": sched.state_dict(), "epoch": ep + 1,
-                  "best": best, "best_state": best_state, "frozen": frozen,
-                  "K": K, "acc": best}
-            tmp = ckpt_path + ".tmp"
-            torch.save(ck, tmp)
-            os.replace(tmp, ckpt_path)                            # atomic swap
-            print(f"    [ckpt] ep {ep + 1} -> {ckpt_path} (best {best * 100:.2f}%)",
-                  flush=True)
+            _write_ckpt(ep)
     if best_state is not None:
         model.load_state_dict(best_state)  # restore peak for --save / concept decode
     return best, model

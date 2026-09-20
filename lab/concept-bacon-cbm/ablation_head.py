@@ -36,6 +36,7 @@ from concept_receptive_fields import collect                    # noqa: E402
 from eval_concept_transfer import usps_loader                   # noqa: E402
 from eval_shapes import roc_auc                                 # noqa: E402
 from interpret_emergent_concepts import named_gt, NAMED, nmi_binary  # noqa: E402
+from eval_tree_transfer_calibrated import calibrate, predict_from_probs  # noqa: E402
 import _bench                                                   # noqa: E402
 from scipy.optimize import linear_sum_assignment               # noqa: E402
 
@@ -79,6 +80,24 @@ def accuracy(model, loader, device):
         p = model(x.to(device))[0].argmax(1).cpu()
         c += (p == y).sum().item(); t += len(y)
     return c / t
+
+
+@torch.no_grad()
+def usps_cal_acc(model, test_ld, usps_ld, device):
+    """Zero-shot USPS accuracy AFTER head-agnostic per-concept quantile
+    calibration (USPS concepts matched onto the model's own MNIST-test concept
+    reference). Works for both the logic-tree head and a linear/mlp head."""
+    Cm = torch.cat([model.concept_probs(x.to(device)).cpu() for x, _ in test_ld])
+    Cu, Yu = [], []
+    for x, y in usps_ld:
+        Cu.append(model.concept_probs(x.to(device)).cpu()); Yu.append(y)
+    Cu = torch.cat(Cu); Yu = torch.cat(Yu)
+    Cu_cal = calibrate(Cu, Cm)
+    if hasattr(model, "trees"):
+        pred = predict_from_probs(model, Cu_cal, device)
+    else:
+        pred = model.head(Cu_cal.to(device)).argmax(1).cpu()
+    return (pred == Yu).float().mean().item()
 
 
 def train_ontology_stable(K, train_ld, test_ld, device, epochs, seed,
@@ -145,7 +164,7 @@ def concept_quality(model, test_ld, usps_ld, device, K, spec):
             "faith_gap": sum(gaps) / len(gaps)}
 
 
-def summarize(name, accs, qs, usps=None):
+def summarize(name, accs, qs, usps=None, usps_cal=None):
     keys = ["bij_auc", "bij_nmi", "named_best", "mean_absR", "faith_gap"]
 
     def ms(v):
@@ -155,6 +174,9 @@ def summarize(name, accs, qs, usps=None):
     if usps is not None:
         um, usd = ms(usps)
         out += f"  {um*100:5.2f}+/-{usd*100:.2f}"
+    if usps_cal is not None:
+        cm, csd = ms(usps_cal)
+        out += f"  {cm*100:5.2f}+/-{csd*100:.2f}"
     for k in keys:
         m, s = ms([q[k] for q in qs])
         out += f"  {m:5.2f}+/-{s:.2f}"
@@ -178,12 +200,14 @@ def main():
     usps_ld = usps_loader(args.data, args.batch_size)
     spec = _bench.mnist_concept_spec("cpu")
 
-    res = {h: {"acc": [], "usps": [], "q": []} for h in ("ontology", "mlp", "linear")}
+    res = {h: {"acc": [], "usps": [], "usps_cal": [], "q": []}
+           for h in ("ontology", "mlp", "linear")}
     if args.load_ontology:
         from concept_receptive_fields import load_model as _load_ocbm
         mo, _ = _load_ocbm(args.load_ontology, device)
         res["ontology"]["acc"].append(accuracy(mo, test_ld, device))
         res["ontology"]["usps"].append(accuracy(mo, usps_ld, device))
+        res["ontology"]["usps_cal"].append(usps_cal_acc(mo, test_ld, usps_ld, device))
         res["ontology"]["q"].append(
             concept_quality(mo, test_ld, usps_ld, device, args.K, spec))
         print(f"loaded hardened OCBM {os.path.basename(args.load_ontology)}")
@@ -196,26 +220,29 @@ def main():
                 print(f"  (ontology needed {nr} restart(s) to avoid collapse)")
             res["ontology"]["acc"].append(acc_o)
             res["ontology"]["usps"].append(accuracy(mo, usps_ld, device))
+            res["ontology"]["usps_cal"].append(usps_cal_acc(mo, test_ld, usps_ld, device))
             res["ontology"]["q"].append(
                 concept_quality(mo, test_ld, usps_ld, device, args.K, spec))
         for h in ("mlp", "linear"):
             m = train_blackbox(h, args.K, train_ld, test_ld, device, args.epochs, s)
             res[h]["acc"].append(accuracy(m, test_ld, device))
             res[h]["usps"].append(accuracy(m, usps_ld, device))
+            res[h]["usps_cal"].append(usps_cal_acc(m, test_ld, usps_ld, device))
             res[h]["q"].append(
                 concept_quality(m, test_ld, usps_ld, device, args.K, spec))
 
     print(f"\nHEAD ABLATION  K={args.K}  seeds={args.seeds}  (same encoder, task-only)")
-    print(f"{'head':18} {'acc%':>11} {'USPS%':>11}  {'bijAUC':>10} {'bijNMI':>10} "
-          f"{'nameAUC':>10} {'mean|R|':>10} {'faithGap':>10}")
+    print(f"{'head':18} {'acc%':>11} {'USPSraw%':>11} {'USPScal%':>11}  {'bijAUC':>10} "
+          f"{'bijNMI':>10} {'nameAUC':>10} {'mean|R|':>10} {'faithGap':>10}")
     print(summarize("ontology (OCBM)", res["ontology"]["acc"], res["ontology"]["q"],
-                    res["ontology"]["usps"]))
+                    res["ontology"]["usps"], res["ontology"]["usps_cal"]))
     print(summarize("black-box mlp", res["mlp"]["acc"], res["mlp"]["q"],
-                    res["mlp"]["usps"]))
+                    res["mlp"]["usps"], res["mlp"]["usps_cal"]))
     print(summarize("black-box linear", res["linear"]["acc"], res["linear"]["q"],
-                    res["linear"]["usps"]))
-    print("\nUSPS% = whole-model zero-shot accuracy on external USPS (no retrain, "
-          "no calibration); bijAUC/bijNMI = strict one-to-one alignment to "
+                    res["linear"]["usps"], res["linear"]["usps_cal"]))
+    print("\nUSPSraw% = whole-model zero-shot accuracy on external USPS (no retrain, "
+          "no calibration); USPScal% = after head-agnostic per-concept quantile "
+          "calibration; bijAUC/bijNMI = strict one-to-one alignment to "
           "distinct human strokes; nameAUC = lenient best-match; lower mean|R| = distinct.")
 
 

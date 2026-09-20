@@ -1,0 +1,19 @@
+\begin{table*}[t]
+\caption{Emergent digit rules ($K{=}5$, hard-frozen; accuracy 99.61\%). The learned trees are shown faithfully; only concepts contributing under 2\% of a digit's decision weight are omitted. $\wedge_a$/$\vee_a$ = conj/disj with andness $a$; $\overline{\cdot}$ = negation.}
+\label{tab:digit-rules}
+\begin{center}\footnotesize
+\begin{tabular}{c l l}
+{\bf DIGIT} & {\bf GRADED-LOGIC EXPRESSION} & {\bf VERBALIZATION} \\ \hline \\
+0 & $0.76\,(0.52\,(0.53\,(0.56\,\text{arc}\mathbin{\wedge}_{+1.58}0.44\,\overline{\text{junction}})\mathbin{\wedge}_{+1.62}0.47\,\overline{\text{cross}})\mathbin{\wedge}_{+1.21}0.48\,\overline{\text{slant}})\mathbin{\vee}_{+0.03}0.24\,\text{loop}$ & a loop (round), or an arc \\[3pt]
+1 & $0.42\,(0.88\,(0.85\,\overline{\text{loop}}\mathbin{\vee}_{+0.33}0.15\,\overline{\text{arc}})\mathbin{\vee}_{+0.08}0.12\,\text{slant})\mathbin{\wedge}_{+1.38}0.58\,\overline{\text{junction}}$ & no loop \textbf{AND} no junction (bare stroke) \\[3pt]
+2 & $0.76\,(0.77\,(0.72\,(0.23\,\overline{\text{junction}}\mathbin{\wedge}_{+1.36}0.77\,\text{slant})\mathbin{\wedge}_{+1.05}0.28\,\text{cross})\mathbin{\wedge}_{+1.06}0.23\,\text{loop})\mathbin{\vee}_{+0.29}0.24\,\text{arc}$ & an arc with a slant bar (no junction), or a top arc \\[3pt]
+3 & $0.67\,(0.90\,(0.80\,(0.53\,\overline{\text{loop}}\mathbin{\wedge}_{+1.61}0.47\,\overline{\text{slant}})\mathbin{\wedge}_{+0.85}0.20\,\text{arc})\mathbin{\vee}_{+0.40}0.10\,\overline{\text{junction}})\mathbin{\vee}_{+0.36}0.33\,\overline{\text{cross}}$ & no cross, slant, or loop (all curves) \\[3pt]
+4 & $0.38\,\text{junction}\mathbin{\wedge}_{+1.08}0.62\,\text{slant}$ & a junction \textbf{AND} a slant bar (a crossing) \\[3pt]
+5 & $0.70\,(0.61\,(0.27\,(0.48\,\overline{\text{loop}}\mathbin{\vee}_{+0.09}0.52\,\text{arc})\mathbin{\vee}_{+0.44}0.73\,\overline{\text{slant}})\mathbin{\wedge}_{+1.72}0.39\,\text{cross})\mathbin{\vee}_{+0.35}0.30\,\text{junction}$ & a bar/junction, not a slant \\[3pt]
+6 & $0.61\,(0.74\,(0.58\,(0.88\,\overline{\text{cross}}\mathbin{\vee}_{+0.41}0.12\,\text{slant})\mathbin{\wedge}_{+1.51}0.42\,\overline{\text{loop}})\mathbin{\wedge}_{+1.67}0.26\,\overline{\text{junction}})\mathbin{\vee}_{+0.30}0.39\,\overline{\text{arc}}$ & no cross, no arc (bottom loop) \\[3pt]
+7 & $0.42\,(0.24\,\text{loop}\mathbin{\wedge}_{+0.89}0.76\,\text{slant})\mathbin{\wedge}_{+1.17}0.58\,\text{junction}$ & a slant bar \textbf{AND} a junction (angular) \\[3pt]
+8 & $0.67\,(0.19\,(0.81\,\text{cross}\mathbin{\vee}_{+0.39}0.19\,\text{arc})\mathbin{\vee}_{+0.08}0.81\,\text{junction})\mathbin{\wedge}_{+1.48}0.33\,\text{loop}$ & a junction \textbf{AND} a loop, with a cross (stacked loops) \\[3pt]
+9 & $0.27\,(0.28\,(0.62\,\text{loop}\mathbin{\wedge}_{+1.38}0.38\,\text{slant})\mathbin{\wedge}_{+1.14}0.72\,\text{arc})\mathbin{\wedge}_{+1.30}0.73\,\text{junction}$ & a loop with an arc, slant bar \textbf{AND} junction (all) \\[3pt]
+\end{tabular}
+\end{center}
+\end{table*}

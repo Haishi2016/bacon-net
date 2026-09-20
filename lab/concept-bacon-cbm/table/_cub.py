@@ -148,18 +148,152 @@ _TEST_TF = transforms.Compose([
 ])
 
 
+def _train_tf(size: int):
+    """Train-time augmentation at a given crop size (224 for ResNet, 299 for InceptionV3)."""
+    if size == 224:
+        return _TRAIN_TF
+    return transforms.Compose([
+        transforms.RandomResizedCrop(size, scale=(0.5, 1.0)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(0.2, 0.2, 0.2),
+        transforms.ToTensor(),
+        transforms.Normalize(_MEAN, _STD),
+    ])
+
+
+def _test_tf(size: int):
+    if size == 224:
+        return _TEST_TF
+    return transforms.Compose([
+        transforms.Resize(int(round(size * 256 / 224))), transforms.CenterCrop(size),
+        transforms.ToTensor(), transforms.Normalize(_MEAN, _STD),
+    ])
+
+
+def _strong_train_tf(size: int):
+    """Heavier train-time augmentation (RandAugment + RandomErasing) to combat the
+    backbone overfitting (train loss ~0 while test caps ~80%) that ceilings the
+    joint-CBM concepts. Pairs with AdamW weight-decay + label smoothing."""
+    return transforms.Compose([
+        transforms.RandomResizedCrop(size, scale=(0.5, 1.0)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandAugment(num_ops=2, magnitude=9),
+        transforms.ColorJitter(0.2, 0.2, 0.2),
+        transforms.ToTensor(),
+        transforms.Normalize(_MEAN, _STD),
+        transforms.RandomErasing(p=0.25),
+    ])
+
+
+# --- Paper-faithful CUB transforms (Koh ConceptBottleneck / LogicCBM) ---------
+# Koh's legacy pipeline was Normalize(mean=0.5, std=2) + Inception transform_input
+# =True, which only matches their OLD TF-ported inception weights. With modern
+# torchvision IMAGENET1K_V1 weights the correct pairing is standard ImageNet
+# normalization + transform_input=False (verified: +7pt frozen-feature probe over
+# the 0.5/2 norm, +23pt over Koh's exact legacy combo). So "paper" aug here = Koh
+# crop/jitter/flip augmentation but with ImageNet normalization for modern weights.
+_KOH_MEAN = _MEAN
+_KOH_STD = _STD
+
+
+def _paper_train_tf(size: int = 299):
+    # Cropping before ColorJitter (Koh order is jitter-first) makes ColorJitter
+    # ~10x cheaper for a negligible accuracy difference (same ops, smaller canvas).
+    return transforms.Compose([
+        transforms.RandomResizedCrop(size),
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=32 / 255, saturation=(0.5, 1.5)),
+        transforms.ToTensor(),
+        transforms.Normalize(_KOH_MEAN, _KOH_STD),
+    ])
+
+
+def _paper_test_tf(size: int = 299):
+    return transforms.Compose([
+        transforms.Resize(size),
+        transforms.CenterCrop(size),
+        transforms.ToTensor(),
+        transforms.Normalize(_KOH_MEAN, _KOH_STD),
+    ])
+
+
+def find_imbalance_312(thresh: float = 50.0):
+    """Per-attribute imbalance ratio for the class-level 312 attributes, matching
+    Koh/LogicCBM ``find_class_imbalance(multiple_attr=True)``: ``total/n_ones - 1``
+    (= n_negative / n_positive) computed over the TRAIN images. Used as the scalar
+    ``weight`` of each attribute's ``BCEWithLogitsLoss``."""
+    M = load_class_attr_312(thresh)                             # (200, 312) {0,1}
+    with open(os.path.join(CUB, "train.pkl"), "rb") as f:
+        entries = pickle.load(f)
+    counts = torch.zeros(200)
+    for e in entries:
+        counts[e["class_label"]] += 1
+    n_ones = (counts.unsqueeze(1) * M).sum(dim=0)              # (312,) positives
+    total = float(counts.sum())
+    return total / n_ones.clamp_min(1.0) - 1.0                 # (312,)
+
+
+_IMG_ATTR_312 = None
+_IMG_ATTR_TXT = _os.path.join(CUB, "attributes", "image_attribute_labels.txt")
+
+
+def load_image_attr_312():
+    """(max_image_id+1, 312) binary matrix of the RAW per-image CUB attributes
+    (``image_attribute_labels.txt``: ``image_id attr_id is_present ...``). This is
+    the faithful Koh/LogicCBM ``-n_attributes 312`` target (dense: every attribute
+    has positive images, unlike the sparse >=50% class-level binarization). Index
+    with the pkl entry's ``id`` field."""
+    global _IMG_ATTR_312
+    if _IMG_ATTR_312 is None:
+        rows = {}
+        max_id = 0
+        with open(_IMG_ATTR_TXT, "r", encoding="utf-8") as f:
+            for line in f:
+                p = line.split()
+                if len(p) < 3:
+                    continue
+                iid, aid, present = int(p[0]), int(p[1]), int(p[2])
+                rows.setdefault(iid, [0] * 312)[aid - 1] = present
+                max_id = max(max_id, iid)
+        M = torch.zeros(max_id + 1, 312, dtype=torch.float32)
+        for iid, vec in rows.items():
+            M[iid] = torch.tensor(vec, dtype=torch.float32)
+        _IMG_ATTR_312 = M
+    return _IMG_ATTR_312
+
+
+def find_imbalance_img312():
+    """Per-attribute imbalance ratio (``n_neg/n_pos``) for the RAW per-image 312
+    attributes over the TRAIN split -- the faithful LogicCBM weighting."""
+    M = load_image_attr_312()
+    with open(os.path.join(CUB, "train.pkl"), "rb") as f:
+        entries = pickle.load(f)
+    ids = torch.tensor([e["id"] for e in entries])
+    pos = M[ids].sum(dim=0)                                    # (312,) train positives
+    total = float(len(entries))
+    return total / pos.clamp_min(1.0) - 1.0                    # (312,)
+
+
 def _local_path(img_path: str) -> str:
     i = img_path.replace("\\", "/").find("images/")
     return os.path.join(CUB, img_path.replace("\\", "/")[i:])
 
 
 class _CUBImages(Dataset):
-    def __init__(self, split: str, train_aug: bool, attr312: bool = False):
+    def __init__(self, split: str, train_aug: bool, attr312: bool = False, image_size: int = 224,
+                 paper_tf: bool = False, attr_img312: bool = False, strong_aug: bool = False):
         with open(os.path.join(CUB, f"{split}.pkl"), "rb") as f:
             self.entries = pickle.load(f)
-        self.tf = _TRAIN_TF if train_aug else _TEST_TF
+        if paper_tf:
+            self.tf = _paper_train_tf(image_size) if train_aug else _paper_test_tf(image_size)
+        elif train_aug and strong_aug:
+            self.tf = _strong_train_tf(image_size)
+        else:
+            self.tf = _train_tf(image_size) if train_aug else _test_tf(image_size)
         # class-level 312 attribute matrix (all images of a class share a row).
         self.attr312 = load_class_attr_312() if attr312 else None
+        # raw per-image 312 attribute matrix (Koh/LogicCBM faithful target).
+        self.attr_img312 = load_image_attr_312() if attr_img312 else None
 
     def __len__(self):
         return len(self.entries)
@@ -167,7 +301,9 @@ class _CUBImages(Dataset):
     def __getitem__(self, i):
         e = self.entries[i]
         img = Image.open(_local_path(e["img_path"])).convert("RGB")
-        if self.attr312 is not None:
+        if self.attr_img312 is not None:
+            c = self.attr_img312[e["id"]]
+        elif self.attr312 is not None:
             c = self.attr312[e["class_label"]]
         else:
             c = torch.tensor(e["attribute_label"], dtype=torch.float32)
@@ -221,6 +357,56 @@ def _make_resnet():
     net = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     net.fc = nn.Identity()
     return net
+
+
+def _make_inception():
+    """InceptionV3 feature extractor (the Koh-CBM / LogicCBM CUB backbone). 299px
+    input, 2048-d pooled features. aux head disabled (we take features only)."""
+    net = models.inception_v3(weights=models.Inception_V3_Weights.IMAGENET1K_V1,
+                              transform_input=False)
+    net.aux_logits = False
+    net.AuxLogits = None
+    net.fc = nn.Identity()
+    return net
+
+
+class InceptionConcept(nn.Module):
+    """X -> ``n_concepts`` concept LOGITS, the Koh-CBM InceptionV3 bottleneck.
+
+    Keeps the InceptionV3 auxiliary head (its ``fc`` is re-targeted to predict the
+    concepts too), so training gets deep supervision on both the main (2048-d) and
+    aux (768-d) branches. In ``train`` mode returns ``(main_logits, aux_logits)``;
+    in ``eval`` mode returns ``main_logits`` only (torchvision drops the aux path)."""
+
+    def __init__(self, n_concepts: int = 312):
+        super().__init__()
+        net = models.inception_v3(weights=models.Inception_V3_Weights.IMAGENET1K_V1,
+                                  transform_input=False, aux_logits=True)
+        net.fc = nn.Linear(2048, n_concepts)
+        net.AuxLogits.fc = nn.Linear(768, n_concepts)
+        self.net = net
+        self.n_concepts = int(n_concepts)
+
+    def forward(self, x):
+        out = self.net(x)
+        if self.training:
+            return out.logits, out.aux_logits          # (main, aux) concept logits
+        return out                                     # main concept logits (tensor)
+
+
+# backbone kind -> (factory, feature_dim, input_size)
+_BACKBONES = {
+    "resnet18": (_make_resnet, 512, 224),
+    "inception_v3": (_make_inception, 2048, 299),
+}
+
+
+def make_backbone(kind: str = "resnet18"):
+    """Return (network, feature_dim, input_size) for the given backbone kind."""
+    if kind not in _BACKBONES:
+        raise ValueError(f"backbone must be one of {list(_BACKBONES)}, got {kind!r}")
+    factory, feat_dim, size = _BACKBONES[kind]
+    return factory(), feat_dim, size
 
 
 class _CUBOCBM(nn.Module):

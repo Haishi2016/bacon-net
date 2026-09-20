@@ -1,0 +1,19 @@
+\begin{table*}[t]
+\caption{Emergent digit rules ($K{=}5$, hard-frozen; accuracy 99.61\%). The learned trees are shown faithfully; only concepts contributing under 2\% of a digit's decision weight are omitted. $\wedge_a$/$\vee_a$ = conj/disj with andness $a$; $\overline{\cdot}$ = negation. Concepts: $c_{0}$ = junction; $c_{1}$ = upper rounded arc / hook; $c_{2}$ = U-turn (varied direction); $c_{3}$ = arc; $c_{4}$ = slant bar.}
+\label{tab:digit-rules}
+\begin{center}\footnotesize
+\begin{tabular}{c l l}
+{\bf DIGIT} & {\bf GRADED-LOGIC EXPRESSION} & {\bf VERBALIZATION} \\ \hline \\
+0 & $0.76\,(0.52\,(0.53\,(0.56\,c_{3}\mathbin{\wedge}_{+1.58}0.44\,\overline{c_{0}})\mathbin{\wedge}_{+1.62}0.47\,\overline{c_{2}})\mathbin{\wedge}_{+1.21}0.48\,\overline{c_{4}})\mathbin{\vee}_{+0.03}0.24\,c_{1}$ & $c_1$ or $c_3$ (round top) \\[3pt]
+1 & $0.42\,(0.88\,(0.85\,\overline{c_{1}}\mathbin{\vee}_{+0.33}0.15\,\overline{c_{3}})\mathbin{\vee}_{+0.08}0.12\,c_{4})\mathbin{\wedge}_{+1.38}0.58\,\overline{c_{0}}$ & $\neg c_1$ \textbf{AND} $\neg c_0$ (bare stroke) \\[3pt]
+2 & $0.76\,(0.77\,(0.72\,(0.23\,\overline{c_{0}}\mathbin{\wedge}_{+1.36}0.77\,c_{4})\mathbin{\wedge}_{+1.05}0.28\,c_{2})\mathbin{\wedge}_{+1.06}0.23\,c_{1})\mathbin{\vee}_{+0.29}0.24\,c_{3}$ & $c_3$ with $c_4$ (no $c_0$), or $c_3$ \\[3pt]
+3 & $0.67\,(0.90\,(0.80\,(0.53\,\overline{c_{1}}\mathbin{\wedge}_{+1.61}0.47\,\overline{c_{4}})\mathbin{\wedge}_{+0.85}0.20\,c_{3})\mathbin{\vee}_{+0.40}0.10\,\overline{c_{0}})\mathbin{\vee}_{+0.36}0.33\,\overline{c_{2}}$ & no $c_2$, $c_4$, or $c_1$ (all curves) \\[3pt]
+4 & $0.38\,c_{0}\mathbin{\wedge}_{+1.08}0.62\,c_{4}$ & $c_0$ \textbf{AND} $c_4$ (a crossing) \\[3pt]
+5 & $0.70\,(0.61\,(0.27\,(0.48\,\overline{c_{1}}\mathbin{\vee}_{+0.09}0.52\,c_{3})\mathbin{\vee}_{+0.44}0.73\,\overline{c_{4}})\mathbin{\wedge}_{+1.72}0.39\,c_{2})\mathbin{\vee}_{+0.35}0.30\,c_{0}$ & $c_0$, not $c_4$ \\[3pt]
+6 & $0.61\,(0.74\,(0.58\,(0.88\,\overline{c_{2}}\mathbin{\vee}_{+0.41}0.12\,c_{4})\mathbin{\wedge}_{+1.51}0.42\,\overline{c_{1}})\mathbin{\wedge}_{+1.67}0.26\,\overline{c_{0}})\mathbin{\vee}_{+0.30}0.39\,\overline{c_{3}}$ & no $c_2$, no $c_3$ (bottom loop) \\[3pt]
+7 & $0.42\,(0.24\,c_{1}\mathbin{\wedge}_{+0.89}0.76\,c_{4})\mathbin{\wedge}_{+1.17}0.58\,c_{0}$ & $c_4$ \textbf{AND} $c_0$ (angular) \\[3pt]
+8 & $0.67\,(0.19\,(0.81\,c_{2}\mathbin{\vee}_{+0.39}0.19\,c_{3})\mathbin{\vee}_{+0.08}0.81\,c_{0})\mathbin{\wedge}_{+1.48}0.33\,c_{1}$ & $c_0$ \textbf{AND} $c_1$, with $c_2$ (stacked loops) \\[3pt]
+9 & $0.27\,(0.28\,(0.62\,c_{1}\mathbin{\wedge}_{+1.38}0.38\,c_{4})\mathbin{\wedge}_{+1.14}0.72\,c_{3})\mathbin{\wedge}_{+1.30}0.73\,c_{0}$ & $c_1$ with $c_3$, $c_4$ \textbf{AND} $c_0$ (all) \\[3pt]
+\end{tabular}
+\end{center}
+\end{table*}

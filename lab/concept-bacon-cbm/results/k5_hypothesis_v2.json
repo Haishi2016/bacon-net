@@ -1,0 +1,9 @@
+{
+  "concepts": {
+    "c0": {"meaning": "junction/bar", "present": [4, 5, 7, 8, 9], "absent": [0, 1]},
+    "c1": {"meaning": "loop", "present": [0, 6, 8, 9], "absent": [1]},
+    "c2": {"meaning": "straight stem", "present": [1, 4, 7, 9], "absent": [0, 3]},
+    "c3": {"meaning": "top-arc", "present": [0, 2, 3, 5, 7, 9], "absent": [1, 6]},
+    "c4": {"meaning": "edge/diagonal", "present": [1, 2, 4, 7], "absent": [0, 3, 5, 6]}
+  }
+}

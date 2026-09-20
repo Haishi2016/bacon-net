@@ -1,0 +1,182 @@
+{
+  "operator": "SD+",
+  "name": "high soft disjunction",
+  "andness": 0.266,
+  "verbalization": "nice to have some",
+  "children": [
+    {
+      "weight": 0.43,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.776,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 0.59,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.262,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.064,
+              "feature": "forehead color: grey"
+            },
+            {
+              "weight": 0.062,
+              "feature": "crown color: yellow"
+            },
+            {
+              "weight": 0.06,
+              "feature": "upperparts color: red"
+            }
+          ]
+        },
+        {
+          "weight": 0.41,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.296,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.051,
+              "feature": "forehead color: grey"
+            },
+            {
+              "weight": 0.049,
+              "feature": "crown color: yellow"
+            },
+            {
+              "weight": 0.048,
+              "feature": "belly color: red"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.419,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.758,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 0.334,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.296,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.051,
+              "feature": "forehead color: grey"
+            },
+            {
+              "weight": 0.049,
+              "feature": "crown color: yellow"
+            },
+            {
+              "weight": 0.048,
+              "feature": "belly color: red"
+            }
+          ]
+        },
+        {
+          "weight": 0.333,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.251,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.26,
+              "feature": "nape color: red"
+            },
+            {
+              "weight": 0.26,
+              "feature": "upperparts color: olive"
+            },
+            {
+              "weight": 0.243,
+              "feature": "head pattern: plain"
+            }
+          ]
+        },
+        {
+          "weight": 0.333,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.323,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.187,
+              "feature": "belly color: red"
+            },
+            {
+              "weight": 0.186,
+              "feature": "upperparts color: red"
+            },
+            {
+              "weight": 0.181,
+              "feature": "bill shape: cone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.15,
+      "operator": "HC-",
+      "name": "low hard conjunction",
+      "andness": 0.779,
+      "verbalization": "must have all",
+      "children": [
+        {
+          "weight": 0.5,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.251,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.26,
+              "feature": "nape color: red"
+            },
+            {
+              "weight": 0.26,
+              "feature": "upperparts color: olive"
+            },
+            {
+              "weight": 0.243,
+              "feature": "head pattern: plain"
+            }
+          ]
+        },
+        {
+          "weight": 0.5,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.323,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.187,
+              "feature": "belly color: red"
+            },
+            {
+              "weight": 0.186,
+              "feature": "upperparts color: red"
+            },
+            {
+              "weight": 0.181,
+              "feature": "bill shape: cone"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

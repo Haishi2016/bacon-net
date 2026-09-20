@@ -124,6 +124,11 @@ GL aggregators are named by their andness per this table:
 Instructions
 ============
 1. Organize the report into:
+   - Plain-Language Statement: ONE intuitive natural-English sentence that a \
+birder would understand, summarizing what the rule looks for -- weave in your \
+ornithological knowledge (do NOT mention GL/andness/operators here), e.g. \
+"It calls a bird an {species_name} when it sees a mostly-blue songbird with a \
+dark masked face and a stout bill."
    - Overview: the overall decision logic in 2-3 sentences.
    - Decision Logic Walkthrough: step by step from the root to the leaves. For \
 each node, name the operator by its code AND verbalization (e.g. "HC+ - high \

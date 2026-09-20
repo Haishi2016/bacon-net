@@ -1,0 +1,16 @@
+You are grounding an UNSUPERVISED visual concept from an MNIST digit classifier. A concept is a single scalar in [0,1] per image (no internal structure). Concept c0 has this MEAN activation per digit class 0-9 (higher = fires more on that digit):
+  digit 5: 1.0
+  digit 9: 1.0
+  digit 4: 0.99
+  digit 8: 0.99
+  digit 7: 0.92
+  digit 3: 0.75
+  digit 6: 0.67
+  digit 2: 0.36
+  digit 0: 0.06
+  digit 1: 0.06
+
+These ATOMIC stroke primitives were already tried and did NOT match (AUC < 0.85): loop_upper, loop_lower, vertical_line, horizontal_top, horizontal_middle, horizontal_bottom, left_curve, right_curve, diagonal.
+
+Propose up to 5 NEW *atomic* visual primitives -- single, indivisible pen-stroke / shape features (e.g. 'open top', 'left cusp', 'descender'). Do NOT propose digit names, and do NOT combine primitives with AND/OR. For each, list the digits (0-9) that possess it.
+Return STRICT JSON only: {"primitives":[{"name":"...","digits":[..]}, ...]}

@@ -1,0 +1,231 @@
+% Appendix: quantitative concept-grounding scores for the K=5 MNIST OCBM.
+% Requires amsmath, amssymb, booktabs.
+\section{Quantitative Concept Grounding}
+\label{app:grounding}
+
+We complement the qualitative grounding workflow (Fig.~\ref{fig:loop}) with three
+quantitative \emph{grounding-satisfaction} scores, each in $[0,1]$, computed
+per concept on the hard-frozen $K{=}5$ MNIST OCBM ($99.61\%$ test accuracy). The
+scores measure three distinct and non-overlapping axes of grounding---activation
+coherence ($G_c$, itself split into an internal self-consistency $G_{ci}$ and an
+external alignment $G_{ce}$), compositional structure ($G_s$), and cross-domain
+function ($G_f$)---and are fused into a per-concept satisfaction score $z$ with the
+same soft graded-logic aggregator used by the model. We also report a
+\emph{falsification control} that verifies the structural score rejects incorrect
+groundings rather than accepting any assignment.
+
+\paragraph{Setup and notation.}
+The encoder maps an image to $K$ sigmoid concept activations
+$\mathbf c(x)=\sigma(f_\theta(x))\in[0,1]^K$, and each class $d\in\{0,\dots,9\}$ is
+scored by a frozen graded-logic tree $T_d:[0,1]^K\!\to[0,1]$. From tree $d$ we read
+the \emph{usage polarity} $\pi_{i,d}\in\{+1,-1\}$ of concept $i$ (identity vs.\
+negation of its leaf), and we write $\bar c_{i,d}$ for the mean activation of
+concept $i$ over the test images of class $d$.
+
+\paragraph{$G_c$: concept coherence (activation grounding).}
+Coherence has two complementary sub-measurements: an \emph{internal} score
+$G_{ci}$, which asks whether a concept's activation is consistent with how the
+model's own rules use it, and an \emph{external} score $G_{ce}$, which asks whether
+the concept aligns with a distinct human primitive. The reported coherence is their
+arithmetic mean, $G_c^{(i)}=\tfrac12\big(G_{ci}^{(i)}+G_{ce}^{(i)}\big)$.
+
+\emph{Internal self-consistency ($G_{ci}$).} A well-grounded concept fires
+\emph{high} on the classes whose rules use it positively and \emph{low} on those
+that negate it. Let $D_i^{+}=\{d:\pi_{i,d}{=}{+}1\}$ and
+$D_i^{-}=\{d:\pi_{i,d}{=}{-}1\}$. We define the negation-aware coherence gap
+\begin{equation}
+G_{ci}^{(i)} \;=\; \max\!\Big(0,\;
+\frac{1}{|D_i^{+}|}\sum_{d\in D_i^{+}}\bar c_{i,d}
+\;-\;
+\frac{1}{|D_i^{-}|}\sum_{d\in D_i^{-}}\bar c_{i,d}\Big).
+\end{equation}
+Because it reads the model's own logic tree (the leaf polarity $\pi$), it is defined
+\emph{only} for the ontology head; a value near $0$ flags a concept that fires
+irrespective of how the rules use it.
+
+\emph{External alignment ($G_{ce}$).} Independently of the model, we test whether
+each concept behaves like a distinct human primitive. Given a vocabulary of human
+strokes $\{h_j\}$ (the per-digit stroke truth tables), we form the
+direction-agnostic identification AUC
+$a_{ij}=\max\!\big(\mathrm{AUC}(c_i,h_j),\,1-\mathrm{AUC}(c_i,h_j)\big)\in[\tfrac12,1]$,
+match concepts to \emph{distinct} strokes with a one-to-one (Hungarian) assignment
+$M$ maximising $\sum_i a_{i,M(i)}$ (no stroke reused), and rescale the matched AUC to
+$[0,1]$,
+\begin{equation}
+G_{ce}^{(i)} = \max\!\big(0,\; 2\,a_{i,M(i)}-1\big).
+\end{equation}
+This uses only concept activations and stroke labels, so it is \emph{head-agnostic}:
+it is defined for black-box (MLP, linear) heads too, which is what makes a
+cross-head grounding comparison possible. It is the bijective alignment (bijAUC)
+used in the head comparison below.
+
+\paragraph{$G_s$: structural grounding.}
+We test whether a concept's proposed meaning is consistent with the frozen logic.
+Probing each tree at the neutral point $\mathbf c^{0}=\tfrac12\mathbf 1$ gives the
+signed structural influence
+\begin{equation}
+S_{i,d}=T_d(\mathbf c^{0}\!\mid c_i{=}1)-T_d(\mathbf c^{0}\!\mid c_i{=}0),
+\qquad
+\sigma_{i,d}=\operatorname{sign}(S_{i,d})\,\mathbb 1[\,|S_{i,d}|>\epsilon\,].
+\end{equation}
+Given the proposer's world-knowledge membership---classes $P_i$ where the concept
+should be present and $A_i$ where it should be absent---we define a consistency and
+an evidence support,
+\begin{equation}
+\mathrm{cons}_i=\frac{|\{d\in P_i:\sigma_{i,d}{=}{+}1\}|+|\{d\in A_i:\sigma_{i,d}{=}{-}1\}|}
+{|\{d\in P_i\cup A_i:\sigma_{i,d}\neq0\}|},
+\qquad
+s_i=|\{d\in P_i\cup A_i:\sigma_{i,d}\neq0\}|,
+\end{equation}
+and combine them so that a perfect consistency on too few classes is not mistaken
+for solid grounding:
+\begin{equation}
+G_s^{(i)}=\mathrm{cons}_i\cdot\frac{\min(s_i,\,s_{\max})}{s_{\max}},\qquad s_{\max}=5.
+\end{equation}
+
+\paragraph{$G_f$: functional grounding.}
+As a model-level functional test we measure zero-shot transfer of the whole
+reasoning system to the external USPS digit corpus, applying only an unsupervised
+per-concept quantile calibration of the concept activations (no USPS labels). $G_f$
+is the resulting calibrated top-1 accuracy.
+
+\paragraph{Fusion and acceptance.}
+Grounding is itself a graded-logic aggregation, so we combine the pillars with the
+same GCD operators the model uses, respecting their roles. \emph{Per concept}
+(within a single model) coherence and structure are both \emph{mandatory}: a concept
+must be both activation-coherent and structurally consistent, so we combine them
+with a \emph{hard conjunction} (``must have all''), realized as the weighted
+geometric mean,
+\begin{equation}
+z_i=\bar\vartriangle\!\big(G_c^{(i)},G_s^{(i)}\big)=\sqrt{G_c^{(i)}\,G_s^{(i)}}.
+\end{equation}
+\emph{At the model level} we score grounding so that it is also comparable across
+head types (Sec.~``Cross-head comparison''). The two \emph{head-agnostic} axes---%
+coherence $G_c$ and function $G_f$---form the \emph{mandatory} core (a grounded model
+must be both activation-coherent and functionally transferable), again a hard
+conjunction. The structural score $G_s$ requires the logic tree, so it is available
+only to the ontology; we therefore fold it in as a \emph{non-annihilating bonus}
+via a soft conjunction (andness $\approx0.75$, the power mean with exponent
+$r{=}\tfrac12$), so that a head lacking structure ($G_s{=}0$) still scores its
+coherence-and-function core while the ontology is rewarded for the structure it
+uniquely earns:
+\begin{equation}
+Z=\vartriangle_{\!0.65,0.35}\!\Big(\bar\vartriangle\big(\overline{G_c},\,G_f\big),\;\overline{G_s}\Big),
+\qquad
+\vartriangle_{\!w_1,w_2}(a,b)=\big(w_1\,a^{1/2}+w_2\,b^{1/2}\big)^{2}.
+\end{equation}
+The outer weights $(0.65,0.35)$ correct for the hierarchical position of $G_s$:
+because it enters one level above the $G_c\wedge G_f$ core, equal weights would
+over-weight it, whereas the $0.65/0.35$ split gives the three criteria near-equal
+final influence ($\approx0.325,0.325,0.35$). Unlike a pure conjunction, this never
+sends $Z$ to zero when the bonus is absent. A concept (or model) is accepted when
+its score exceeds a threshold $\tau$. We use $\epsilon=0.05$.
+
+\paragraph{Results.}
+Table~\ref{tab:grounding} reports the per-concept scores. The slant-bar ($c_4$) and
+junction ($c_0$) concepts are the best grounded on every measure. The diffuse $c_2$
+(``U-turn'') is the weakest overall ($z{=}0.41$), and the two coherence
+sub-measurements pinpoint \emph{why}: its external alignment is respectable
+($G_{ce}{=}0.74$---it does resemble a nameable stroke), but its internal
+self-consistency is near zero ($G_{ci}{=}0.10$) and its structural score is low
+($G_s{=}0.40$). In other words $c_2$ \emph{looks} like a primitive but the model does
+not \emph{use} it coherently---a distinction the split coherence makes visible. The
+model-level functional score is $G_f=0.74$ (USPS-calibrated; in-domain MNIST
+$99.6\%$), giving an overall grounding score
+$Z=\vartriangle_{\!0.65,0.35}\!\big(\bar\vartriangle(0.65,0.74),0.76\big)=\vartriangle_{\!0.65,0.35}(0.69,0.76)=0.72$.
+Collecting the three axes at the model level,
+\begin{equation}
+\overline{G_c}=0.65\;\big(\overline{G_{ci}}=0.49,\ \overline{G_{ce}}=0.80\big),\qquad
+G_f=0.74,\qquad \overline{G_s}=0.76
+\quad\Longrightarrow\quad Z=0.72 .
+\end{equation}
+
+\begin{table}[t]
+\centering
+\caption{Per-concept grounding scores for the $K{=}5$ MNIST OCBM.
+$G_{ci}$: internal self-consistency (polarity-aware gap, ontology-only);
+$G_{ce}$: external alignment (bijective concept--stroke AUC, head-agnostic);
+$G_c=\tfrac12(G_{ci}{+}G_{ce})$; $G_s$: structural consistency$\times$support;
+$z=\sqrt{G_c\,G_s}$. $c_2$ aligns externally but is weakest internally and
+structurally. Model-level $G_f=0.74$ (USPS-calibrated transfer, in-domain MNIST
+$99.6\%$).}
+\label{tab:grounding}
+\small
+\begin{tabular}{llccccc}
+\toprule
+& concept & $G_{ci}$ & $G_{ce}$ & $G_c$ & $G_s$ & $z$ \\
+\midrule
+$c_0$ & junction            & 0.60 & 0.98 & 0.79 & 1.00 & 0.89 \\
+$c_1$ & upper rounded arc/hook & 0.59 & 0.74 & 0.67 & 0.80 & 0.73 \\
+$c_2$ & U-turn (varied dir.) & 0.10 & 0.74 & 0.42 & 0.40 & 0.41 \\
+$c_3$ & arc                 & 0.35 & 0.54 & 0.45 & 0.60 & 0.52 \\
+$c_4$ & slant bar           & 0.80 & 1.00 & 0.90 & 1.00 & 0.95 \\
+\midrule
+& mean                       & 0.49 & 0.80 & 0.65 & 0.76 & 0.70 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Falsification control.}
+A grounding score is only meaningful if it \emph{rejects} wrong meanings. We
+re-score $G_s$ under all $K!\!-\!1$ non-identity permutations of the
+concept$\to$membership assignment (i.e.\ giving each concept a different concept's
+world-knowledge membership). Consistency drops from $1.00$ to $0.85$ and the mean
+structural score from $\overline{G_s}=0.76$ to $0.50$, confirming that the frozen
+structure discriminates correct groundings from permuted ones rather than
+accepting any assignment.
+
+\paragraph{Cross-head comparison.}
+Because $G_{ce}$ and $G_f$ need only concept activations---no logic tree---they are
+defined for any head, which lets us compare the ontology against black-box MLP and
+linear heads on the same axes. The internal self-consistency $G_{ci}$ and the
+structural score $G_s$ are intrinsically model-specific (they read the logic tree),
+so a black-box head scores $G_{ci}{=}0$ and admits no $G_s$: the ontology earns a
+grounding certificate the black-box heads structurally cannot receive.
+Table~\ref{tab:heads} reports the head comparison. On the coherence axes the
+ontology is clearly best---its external alignment $G_{ce}$ is highest and, with the
+internal pillar added, its $G_c$ nearly doubles the black-box heads'---and it
+uniquely earns the internal ($G_{ci}$) and structural ($G_s$) pillars. For
+functional transfer we report the authoritative $5$-seed calibrated-USPS accuracy
+(transfer is high-variance, so a single run is unreliable): the ontology is both
+highest and most stable ($0.81{\pm}0.04$ vs.\ MLP $0.73{\pm}0.09$ vs.\ linear
+$0.69{\pm}0.10$). The ontology therefore leads on every comparable axis. The
+composite model-level score is $Z=0.74$ for the ontology versus $0.23$ (MLP) and
+$0.20$ (linear): the black-box heads earn a nonzero coherence-and-function core but
+forfeit the structural bonus that only the logic head can provide.
+
+\begin{table}[t]
+\centering
+\caption{Cross-head grounding. $G_{ci}$ (internal) and $G_s$ (structural) require the
+logic tree, so they are $0$ / ``--'' for black-box heads---the ontology earns a
+certificate they cannot receive. $G_{ce}$: external alignment (bijAUC, rescaled);
+$G_c$: reported coherence; $G_f$: USPS-calibrated transfer, $5$-seed mean$\,\pm\,$std
+(the ontology's own single $K{=}5$ audit model scores $0.74$, Table~\ref{tab:grounding}).
+The black-box $G_{ce}$ (and hence $G_c$) are the $5$-seed bijAUC; the ontology's
+coherence is from the $K{=}5$ model (its mean $G_{ce}$ equals the $5$-seed bijAUC).
+$Z=\vartriangle_{\!0.65,0.35}(\bar\vartriangle(G_c,G_f),G_s)$ is the model-level
+grounding score (black-box $G_s{=}0$).}
+\label{tab:heads}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+head & $G_{ci}$ & $G_{ce}$ & $G_c$ & $G_s$ & $G_f$ & $Z$ \\
+\midrule
+ontology & 0.49 & 0.80 & 0.65 & 0.76 & $0.81{\pm}0.04$ & \textbf{0.74} \\
+MLP      & 0.00 & 0.78 & 0.39 & --   & $0.73{\pm}0.09$ & 0.23 \\
+linear   & 0.00 & 0.68 & 0.34 & --   & $0.69{\pm}0.10$ & 0.20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{On a fourth (evidence) pillar.}
+We also investigated a pixel-attribution ``evidence'' pillar (Grad-CAM
+insertion--deletion, template prediction, and within-digit firing consistency).
+None proved a reliable grounding signal on MNIST: attribution measures spatial
+\emph{localization} (compact features such as an arc score high, distributed
+features such as a junction score low), which is orthogonal to grounding quality;
+and metrics computed on top activators or within a single digit are structurally
+blind to $c_2$'s failure mode, which is that it fires across \emph{too many}
+classes---a cross-class property already captured by $G_c$ and $G_s$. We therefore
+report attribution only as a descriptive property and restrict the grounding score
+to the three pillars above.

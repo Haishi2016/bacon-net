@@ -1,0 +1,119 @@
+% Methodology: human/LLM-in-the-loop grounding of emergent OCBM concepts.
+% Requires: amsmath, amssymb, bm (optional), and a figure labelled fig:loop.
+\section{Methodology}
+\label{sec:method}
+
+\paragraph{Post-hoc grounding of emergent concepts.}
+We interpret a trained Ontology-based Concept Bottleneck Model (OCBM) whose
+encoder $f_\theta$ maps an input $x$ to $K$ \emph{emergent} concept activations
+$\mathbf{c}(x)=\sigma\!\big(f_\theta(x)\big)\in[0,1]^K$, and whose per-class heads
+are frozen graded-logic trees $\{T_d\}_{d=1}^{C}$, with
+$T_d:[0,1]^K\!\to[0,1]$ and prediction $\hat y=\arg\max_d T_d(\mathbf{c})$.
+Each $T_d$ is a deterministic left-fold of two-input graded aggregations,
+\begin{equation}
+\mathrm{acc}_{0}=\ell_0,\qquad
+\mathrm{acc}_{t+1}=\Phi_{a_t}\!\big(\mathrm{acc}_t,\ \ell_{t+1}\big),
+\end{equation}
+where the leaves $\ell_t$ are (optionally negated) concepts selected by a frozen
+routing/transformation layer and $a\in[-1,2]$ is the \emph{andness} of the
+aggregator ($a>\tfrac12$ conjunctive, $a<\tfrac12$ disjunctive). Because the
+concepts carry no supervision, the set $\{T_d\}$ constitutes a \emph{learned
+ontology}---a fixed symbolic scaffold---but the \emph{meaning} of each $c_i$ is
+initially unknown. Grounding is therefore a closed loop
+(Fig.~\ref{fig:loop}) between a proposer (an LLM or a human) that supplies
+candidate meanings and two automated tools: a \emph{verification tool} that tests
+those meanings against the frozen structure, and a \emph{visualization tool} that
+tests them against the pixels. The two tools induce two nested feedback loops---an
+\emph{inner} structural verify--revise loop and an \emph{outer} visualization loop.
+
+\paragraph{Inner loop: structural verification.}
+A proposer emits, for each concept $c_i$, a natural-language meaning $m_i$ together
+with a \emph{membership hypothesis}---the sets of classes $P_i$ (present) and $A_i$
+(absent) that world knowledge about $m_i$ implies (e.g.\ ``loops occur in
+$0,8,9$''). Crucially, the proposer never controls the topology; it only annotates
+it, which breaks the circularity that plagues activation-only interpretation. The
+verification tool reads the frozen trees and computes a data-free
+\emph{structural influence} by finite differences at the neutral point
+$\mathbf{c}^0=\tfrac12\mathbf{1}$,
+\begin{equation}
+S_{i,d} \;=\; T_d\big(\mathbf{c}^0\!\mid c_i{=}1\big)\;-\;T_d\big(\mathbf{c}^0\!\mid c_i{=}0\big),
+\qquad
+\sigma_{i,d}=\operatorname{sign}(S_{i,d})\,\mathbb{1}\!\big[\lvert S_{i,d}\rvert>\epsilon\big],
+\end{equation}
+so that $\sigma_{i,d}\in\{-1,0,+1\}$ records whether concept $i$ raises, is silent
+to, or lowers the truth of class $d$. The hypothesis is audited by a per-concept
+\textbf{consistency} and \textbf{support},
+\begin{equation}
+\mathrm{cons}_i=\frac{\big|\{d\in P_i:\sigma_{i,d}{=}{+}1\}\big|+\big|\{d\in A_i:\sigma_{i,d}{=}{-}1\}\big|}
+{\big|\{d\in P_i\cup A_i:\sigma_{i,d}\neq0\}\big|},
+\qquad
+\mathrm{sup}_i=\big|\{d\in P_i\cup A_i:\sigma_{i,d}\neq0\}\big|,
+\end{equation}
+where $\mathrm{sup}_i$ counts the classes on which the structure actually commits
+(is non-silent). A concept is accepted only if it is both consistent
+($\mathrm{cons}_i=1$, no sign contradictions) and \emph{well-evidenced}
+($\mathrm{sup}_i\ge\tau$); the support gate prevents a hypothesis from passing on a
+single class where every other head is indifferent. This is the \textsc{Plausible?}
+gate of Fig.~\ref{fig:loop}: if any concept fails, the tool returns the offending
+class--sign contradictions, the proposer \emph{revises} the meaning or membership,
+and the audit repeats until the whole vocabulary is plausible.
+
+\paragraph{Report generation and the outer visualization loop.}
+Once the vocabulary passes the gate, the final rules are read \emph{exactly} from
+the frozen left-folds---including per-node andness, softmax leaf weights, and
+negations---so the reported formulas are reproductions of the model rather than
+transcriptions. The visualization tool then connects the verified structure back to
+the input space: for each concept it renders the per-class images ordered by the
+concept's \emph{rule-preferred} polarity. For a class $d$ we read the leaf
+transformation to obtain the usage polarity $\pi_{i,d}\in\{+1,-1\}$ (identity vs.\
+negation) and rank images by high $c_i$ when $\pi_{i,d}{=}{+}1$ and by low $c_i$
+when $\pi_{i,d}{=}{-}1$. We summarize alignment with a negation-aware
+\textbf{coherence gap}
+\begin{equation}
+g_i=\frac{1}{|D_i^{+}|}\sum_{d\in D_i^{+}}\bar c_{i,d}
+\;-\;\frac{1}{|D_i^{-}|}\sum_{d\in D_i^{-}}\bar c_{i,d},
+\qquad D_i^{\pm}=\{d:\pi_{i,d}={\pm}1\},
+\end{equation}
+where $\bar c_{i,d}$ is the mean activation of concept $i$ over class-$d$ inputs;
+a large positive $g_i$ indicates a concept that fires where the rules use it
+positively and stays quiet where they negate it, whereas $g_i\!\approx\!0$ flags a
+near-saturated, non-discriminative concept. A Grad-CAM overlay on the encoder's
+last convolutional map provides an auxiliary ``where-it-lands'' cue, but we treat
+it as corroborating rather than decisive, since its coarse spatial resolution
+localizes concepts only approximately. As shown in Fig.~\ref{fig:loop}, the
+visualization tool feeds back to the proposer, closing the \emph{outer} loop: even a
+structurally-plausible vocabulary can be refined (or its labels softened) when the
+pixel evidence disagrees, before a final, human-inspected report is issued.
+% Requires: algorithm, algpseudocode.
+\begin{algorithm}[t]
+\caption{Human/LLM-in-the-loop grounding of emergent OCBM concepts.}
+\label{alg:loop}
+\begin{algorithmic}[1]
+\Require frozen encoder $f_\theta$, frozen logic trees $\{T_d\}_{d=1}^{C}$
+         (the learned ontology), thresholds $\epsilon,\tau$
+\Ensure grounded meanings $\{m_i\}_{i=1}^{K}$ and final report
+\Statex \textbf{Structural influence (data-free, computed once):}
+\For{$i=1$ to $K$, $d=1$ to $C$}
+  \State $S_{i,d}\gets T_d(\mathbf{c}^0\!\mid c_i{=}1)-T_d(\mathbf{c}^0\!\mid c_i{=}0)$,
+         \quad $\mathbf{c}^0=\tfrac12\mathbf{1}$
+  \State $\sigma_{i,d}\gets \operatorname{sign}(S_{i,d})\,\mathbb{1}[\lvert S_{i,d}\rvert>\epsilon]$
+\EndFor
+\Statex \textbf{Inner loop: propose \,$\to$\, verify \,$\to$\, revise:}
+\Repeat
+  \State proposer emits meanings $m_i$ and membership $(P_i,A_i)$ \Comment{Propose / Revise Vocabulary}
+  \For{$i=1$ to $K$} \Comment{Verification tool}
+    \State $\mathrm{cons}_i,\ \mathrm{sup}_i \gets \textsc{Audit}(P_i,A_i,\sigma_{i,\cdot})$
+    \State $\mathrm{ok}_i \gets (\mathrm{cons}_i{=}1)\wedge(\mathrm{sup}_i\ge\tau)$
+  \EndFor
+\Until{$\bigwedge_{i} \mathrm{ok}_i$} \Comment{\textsc{Plausible?}}
+\State extract exact rules from $\{T_d\}$; \textbf{generate final report} \Comment{Yes-branch}
+\Statex \textbf{Outer loop: visualize \,$\to$\, refine:}
+\For{$i=1$ to $K$} \Comment{Visualization tool}
+  \State compute polarity $\pi_{i,d}$, per-class means $\bar c_{i,d}$, coherence gap $g_i$
+  \State render polarity-ordered galleries (+ Grad-CAM overlay, auxiliary)
+\EndFor
+\If{pixel evidence disagrees with any $m_i$}
+  \State return to the inner loop with refined/softened labels
+\EndIf
+\end{algorithmic}
+\end{algorithm}

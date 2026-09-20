@@ -1,0 +1,164 @@
+{
+  "operator": "HC-",
+  "name": "low hard conjunction",
+  "andness": 0.761,
+  "verbalization": "must have all",
+  "children": [
+    {
+      "weight": 0.267,
+      "operator": "LHC",
+      "name": "low hyper-conjunction",
+      "andness": 1.128,
+      "verbalization": "below the lowest",
+      "children": [
+        {
+          "weight": 0.145,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.335,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "primary color: olive"
+            }
+          ]
+        },
+        {
+          "weight": 0.145,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.262,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.552,
+              "feature": "bill shape: hooked seabird"
+            },
+            {
+              "weight": 0.448,
+              "feature": "size: large (16 - 32 in)"
+            }
+          ]
+        },
+        {
+          "weight": 0.145,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.302,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "bill shape: hooked seabird"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.262,
+      "operator": "LHC",
+      "name": "low hyper-conjunction",
+      "andness": 1.182,
+      "verbalization": "below the lowest",
+      "children": [
+        {
+          "weight": 0.127,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.335,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "primary color: olive"
+            }
+          ]
+        },
+        {
+          "weight": 0.127,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.269,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.523,
+              "feature": "eye color: blue"
+            },
+            {
+              "weight": 0.477,
+              "feature": "size: large (16 - 32 in)"
+            }
+          ]
+        },
+        {
+          "weight": 0.127,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.326,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "head pattern: masked"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.248,
+      "operator": "LHC",
+      "name": "low hyper-conjunction",
+      "andness": 1.064,
+      "verbalization": "below the lowest",
+      "children": [
+        {
+          "weight": 0.173,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.269,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.523,
+              "feature": "eye color: blue"
+            },
+            {
+              "weight": 0.477,
+              "feature": "size: large (16 - 32 in)"
+            }
+          ]
+        },
+        {
+          "weight": 0.173,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.326,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "head pattern: masked"
+            }
+          ]
+        },
+        {
+          "weight": 0.173,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.307,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "head pattern: masked"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "operator": "SC+",
+  "name": "high soft conjunction",
+  "andness": 0.718,
+  "verbalization": "nice to have most",
+  "children": [
+    {
+      "weight": 0.162,
+      "operator": "HC-",
+      "name": "low hard conjunction",
+      "andness": 0.75,
+      "verbalization": "must have all",
+      "children": [
+        {
+          "weight": 0.174,
+          "operator": "HC-",
+          "name": "low hard conjunction",
+          "andness": 0.808,
+          "verbalization": "must have all",
+          "children": [
+            {
+              "weight": 0.51,
+              "feature": "eye color: brown"
+            },
+            {
+              "weight": 0.312,
+              "feature": "nape color: white"
+            },
+            {
+              "weight": 0.178,
+              "feature": "throat color: yellow"
+            }
+          ]
+        },
+        {
+          "weight": 0.161,
+          "operator": "C",
+          "name": "pure conjunction",
+          "andness": 0.986,
+          "verbalization": "decided by lowest",
+          "children": [
+            {
+              "weight": 0.281,
+              "feature": "wing color: white"
+            },
+            {
+              "weight": 0.278,
+              "feature": "primary color: yellow"
+            },
+            {
+              "weight": 0.248,
+              "feature": "belly color: orange"
+            }
+          ]
+        },
+        {
+          "weight": 0.154,
+          "operator": "C",
+          "name": "pure conjunction",
+          "andness": 1.012,
+          "verbalization": "decided by lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "wing color: white"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.162,
+      "operator": "HC-",
+      "name": "low hard conjunction",
+      "andness": 0.75,
+      "verbalization": "must have all",
+      "children": [
+        {
+          "weight": 1.0,
+          "operator": "LHC",
+          "name": "low hyper-conjunction",
+          "andness": 1.038,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "forehead color: green"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.162,
+      "operator": "HC-",
+      "name": "low hard conjunction",
+      "andness": 0.75,
+      "verbalization": "must have all",
+      "children": [
+        {
+          "weight": 0.174,
+          "operator": "HC-",
+          "name": "low hard conjunction",
+          "andness": 0.808,
+          "verbalization": "must have all",
+          "children": [
+            {
+              "weight": 0.51,
+              "feature": "eye color: brown"
+            },
+            {
+              "weight": 0.312,
+              "feature": "nape color: white"
+            },
+            {
+              "weight": 0.178,
+              "feature": "throat color: yellow"
+            }
+          ]
+        },
+        {
+          "weight": 0.161,
+          "operator": "C",
+          "name": "pure conjunction",
+          "andness": 0.986,
+          "verbalization": "decided by lowest",
+          "children": [
+            {
+              "weight": 0.281,
+              "feature": "wing color: white"
+            },
+            {
+              "weight": 0.278,
+              "feature": "primary color: yellow"
+            },
+            {
+              "weight": 0.248,
+              "feature": "belly color: orange"
+            }
+          ]
+        },
+        {
+          "weight": 0.154,
+          "operator": "C",
+          "name": "pure conjunction",
+          "andness": 1.012,
+          "verbalization": "decided by lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "wing color: white"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

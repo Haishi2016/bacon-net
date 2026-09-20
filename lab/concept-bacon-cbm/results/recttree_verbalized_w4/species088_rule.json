@@ -1,0 +1,161 @@
+{
+  "operator": "LHD",
+  "name": "low hyper-disjunction",
+  "andness": -0.091,
+  "verbalization": "above the highest",
+  "children": [
+    {
+      "weight": 0.395,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.792,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 0.333,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.228,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.055,
+              "feature": "under tail color: grey"
+            },
+            {
+              "weight": 0.052,
+              "feature": "primary color: black"
+            },
+            {
+              "weight": 0.051,
+              "feature": "breast color: brown"
+            }
+          ]
+        },
+        {
+          "weight": 0.333,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.201,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.092,
+              "feature": "under tail color: blue"
+            },
+            {
+              "weight": 0.089,
+              "feature": "bill length: longer than head"
+            },
+            {
+              "weight": 0.088,
+              "feature": "underparts color: green"
+            }
+          ]
+        },
+        {
+          "weight": 0.333,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.203,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.038,
+              "feature": "under tail color: blue"
+            },
+            {
+              "weight": 0.037,
+              "feature": "bill length: longer than head"
+            },
+            {
+              "weight": 0.036,
+              "feature": "underparts color: green"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.393,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.813,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 1.0,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.201,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.092,
+              "feature": "under tail color: blue"
+            },
+            {
+              "weight": 0.089,
+              "feature": "bill length: longer than head"
+            },
+            {
+              "weight": 0.088,
+              "feature": "underparts color: green"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.213,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.759,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 0.5,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.228,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.055,
+              "feature": "under tail color: grey"
+            },
+            {
+              "weight": 0.052,
+              "feature": "primary color: black"
+            },
+            {
+              "weight": 0.051,
+              "feature": "breast color: brown"
+            }
+          ]
+        },
+        {
+          "weight": 0.5,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.203,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.038,
+              "feature": "under tail color: blue"
+            },
+            {
+              "weight": 0.037,
+              "feature": "bill length: longer than head"
+            },
+            {
+              "weight": 0.036,
+              "feature": "underparts color: green"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

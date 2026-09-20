@@ -1,0 +1,31 @@
+GROUNDING SCORES  k5_harden.pt  K=5  acc=99.61%
+
+concept            G_ci   G_ce    G_c    G_s      z
+---------------------------------------------------
+c0 junction        0.60   0.98   0.79   1.00   0.89
+c1 upper arc/hook   0.59   0.74   0.67   0.80   0.73
+c2 U-turn          0.10   0.74   0.42   0.40   0.41
+c3 arc             0.35   0.54   0.45   0.60   0.52
+c4 slant bar       0.80   1.00   0.90   1.00   0.95
+---------------------------------------------------
+mean               0.49   0.80   0.65   0.76   0.70
+
+  G_ci = internal self-consistency (polarity-aware gap, ontology-only); G_ce = external alignment (bijective concept<->stroke AUC, rescaled, head-agnostic); G_c = mean(G_ci, G_ce).
+
+G_f (USPS-calibrated transfer accuracy, model-level) = 0.74  (in-domain MNIST 99.6%)
+
+MODEL-LEVEL grounding  Z = soft-conj_{0.65/0.35}( hard-conj(mean G_c, G_f), mean G_s )  = soft-conj(0.69, 0.76) = 0.72
+  (MANDATORY core = hard-conj(G_c, G_f), both head-agnostic; structural G_s folded in as a non-annihilating bonus at 0.35 -- a head with no structure (G_s=0) still scores its coherence-AND-function core, and the ontology is rewarded for the structure it uniquely has.)
+
+G_c variants  (gap = polarity-aware magnitude; tmpl = template-prediction, corr(top-activator-template match, activation)):
+  c0 gap 0.79/tmpl 0.50  c1 gap 0.67/tmpl 0.41  c2 gap 0.42/tmpl 0.00  c3 gap 0.45/tmpl 0.04  c4 gap 0.90/tmpl 0.33
+  mean: gap 0.65  |  tmpl 0.26
+
+G_e variants  (attr = attribution ins-del on top activators; cons = within-digit firing consistency):
+  c0 attr 0.20/cons 0.91  c1 attr 0.37/cons 0.89  c2 attr 0.53/cons 0.90  c3 attr 0.41/cons 0.87  c4 attr 0.24/cons 0.90
+  mean: attr 0.35  |  cons 0.89
+
+FALSIFICATION CONTROL (structural grounding is discriminative):
+  true hypothesis   : overall consistency 1.00,  mean G_s 0.76
+  shuffled meanings : overall consistency 0.85,  mean G_s 0.50  (mean over 5!-1 permutations)
+  => structure rejects wrong meaning->membership assignments (consistency 1.00 vs 0.85).

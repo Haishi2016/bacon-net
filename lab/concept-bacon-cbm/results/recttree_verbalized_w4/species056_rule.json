@@ -1,0 +1,203 @@
+{
+  "operator": "LHD",
+  "name": "low hyper-disjunction",
+  "andness": -0.075,
+  "verbalization": "above the highest",
+  "children": [
+    {
+      "weight": 0.374,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.804,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 0.335,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.321,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.086,
+              "feature": "underparts color: red"
+            },
+            {
+              "weight": 0.085,
+              "feature": "leg color: grey"
+            },
+            {
+              "weight": 0.084,
+              "feature": "breast color: red"
+            }
+          ]
+        },
+        {
+          "weight": 0.335,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.346,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.048,
+              "feature": "leg color: grey"
+            },
+            {
+              "weight": 0.048,
+              "feature": "breast color: red"
+            },
+            {
+              "weight": 0.048,
+              "feature": "head pattern: plain"
+            }
+          ]
+        },
+        {
+          "weight": 0.33,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.421,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.23,
+              "feature": "head pattern: plain"
+            },
+            {
+              "weight": 0.213,
+              "feature": "bill shape: cone"
+            },
+            {
+              "weight": 0.194,
+              "feature": "underparts color: white"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.36,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.8,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 0.335,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.295,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.084,
+              "feature": "underparts color: red"
+            },
+            {
+              "weight": 0.081,
+              "feature": "tail pattern: multi-colored"
+            },
+            {
+              "weight": 0.077,
+              "feature": "primary color: white"
+            }
+          ]
+        },
+        {
+          "weight": 0.333,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.321,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.086,
+              "feature": "underparts color: red"
+            },
+            {
+              "weight": 0.085,
+              "feature": "leg color: grey"
+            },
+            {
+              "weight": 0.084,
+              "feature": "breast color: red"
+            }
+          ]
+        },
+        {
+          "weight": 0.332,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.346,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.048,
+              "feature": "leg color: grey"
+            },
+            {
+              "weight": 0.048,
+              "feature": "breast color: red"
+            },
+            {
+              "weight": 0.048,
+              "feature": "head pattern: plain"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.267,
+      "operator": "HHD",
+      "name": "high hyper-disjunction",
+      "andness": -0.77,
+      "verbalization": "above the highest",
+      "children": [
+        {
+          "weight": 0.505,
+          "operator": "CP",
+          "name": "product t-norm",
+          "andness": 1.295,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.084,
+              "feature": "underparts color: red"
+            },
+            {
+              "weight": 0.081,
+              "feature": "tail pattern: multi-colored"
+            },
+            {
+              "weight": 0.077,
+              "feature": "primary color: white"
+            }
+          ]
+        },
+        {
+          "weight": 0.495,
+          "operator": "HHC",
+          "name": "high hyper-conjunction",
+          "andness": 1.421,
+          "verbalization": "below the lowest",
+          "children": [
+            {
+              "weight": 0.23,
+              "feature": "head pattern: plain"
+            },
+            {
+              "weight": 0.213,
+              "feature": "bill shape: cone"
+            },
+            {
+              "weight": 0.194,
+              "feature": "underparts color: white"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

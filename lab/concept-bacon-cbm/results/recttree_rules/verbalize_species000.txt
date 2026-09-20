@@ -1,0 +1,262 @@
+You are given a graded-logic (LSP) rule a CUB-200 bird classifier learned for the species 'Black footed Albatross'. Each operator has a GCD andness code (conjunctive C/HC/SC = 'must have', disjunctive D/HD/SD = 'enough to have any', A = neutral). Weights are child relevances. Write a concise, plain-language field-guide description of what this rule looks for.
+
+RULE (JSON):
+{
+  "operator": "HC-",
+  "operator_name": "low hard conjunction",
+  "reading": "must have all",
+  "children": [
+    {
+      "weight": 0.223,
+      "operator": "CP",
+      "operator_name": "product t-norm",
+      "reading": "below the lowest",
+      "children": [
+        {
+          "weight": 0.344,
+          "operator": "CP",
+          "operator_name": "product t-norm",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 0.604,
+              "feature": "throat color: olive"
+            },
+            {
+              "weight": 0.396,
+              "feature": "upperparts color: olive"
+            }
+          ]
+        },
+        {
+          "weight": 0.238,
+          "operator": "LHC",
+          "operator_name": "low hyper-conjunction",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "breast color: yellow"
+            }
+          ]
+        },
+        {
+          "weight": 0.219,
+          "operator": "LHC",
+          "operator_name": "low hyper-conjunction",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 0.279,
+              "feature": "head pattern: masked"
+            },
+            {
+              "weight": 0.277,
+              "feature": "shape: swallow-like"
+            },
+            {
+              "weight": 0.268,
+              "feature": "breast color: yellow"
+            },
+            {
+              "weight": 0.176,
+              "feature": "forehead color: purple"
+            }
+          ]
+        },
+        {
+          "weight": 0.198,
+          "operator": "CP",
+          "operator_name": "product t-norm",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "upper tail color: yellow"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.209,
+      "operator": "CP",
+      "operator_name": "product t-norm",
+      "reading": "below the lowest",
+      "children": [
+        {
+          "weight": 0.35,
+          "operator": "CP",
+          "operator_name": "product t-norm",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "head pattern: masked"
+            }
+          ]
+        },
+        {
+          "weight": 0.337,
+          "operator": "LHC",
+          "operator_name": "low hyper-conjunction",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "shape: swallow-like"
+            }
+          ]
+        },
+        {
+          "weight": 0.313,
+          "operator": "CP",
+          "operator_name": "product t-norm",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 0.502,
+              "feature": "throat color: olive"
+            },
+            {
+              "weight": 0.498,
+              "feature": "upperparts color: iridescent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.192,
+      "operator": "LHC",
+      "operator_name": "low hyper-conjunction",
+      "reading": "below the lowest",
+      "children": [
+        {
+          "weight": 0.525,
+          "operator": "LHC",
+          "operator_name": "low hyper-conjunction",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 0.279,
+              "feature": "head pattern: masked"
+            },
+            {
+              "weight": 0.277,
+              "feature": "shape: swallow-like"
+            },
+            {
+              "weight": 0.268,
+              "feature": "breast color: yellow"
+            },
+            {
+              "weight": 0.176,
+              "feature": "forehead color: purple"
+            }
+          ]
+        },
+        {
+          "weight": 0.475,
+          "operator": "CP",
+          "operator_name": "product t-norm",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "upper tail color: yellow"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.187,
+      "operator": "LHC",
+      "operator_name": "low hyper-conjunction",
+      "reading": "below the lowest",
+      "children": [
+        {
+          "weight": 0.506,
+          "operator": "CP",
+          "operator_name": "product t-norm",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "head pattern: masked"
+            }
+          ]
+        },
+        {
+          "weight": 0.494,
+          "operator": "LHC",
+          "operator_name": "low hyper-conjunction",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "breast color: yellow"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.071,
+      "operator": "HC-",
+      "operator_name": "low hard conjunction",
+      "reading": "must have all",
+      "children": [
+        {
+          "weight": 0.611,
+          "operator": "C",
+          "operator_name": "pure conjunction",
+          "reading": "decided by lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "eye color: brown"
+            }
+          ]
+        },
+        {
+          "weight": 0.389,
+          "operator": "CP",
+          "operator_name": "product t-norm",
+          "reading": "below the lowest",
+          "children": [
+            {
+              "weight": 0.502,
+              "feature": "throat color: olive"
+            },
+            {
+              "weight": 0.498,
+              "feature": "upperparts color: iridescent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight": 0.06,
+      "operator": "HC-",
+      "operator_name": "low hard conjunction",
+      "reading": "must have all",
+      "children": [
+        {
+          "weight": 1.0,
+          "operator": "C",
+          "operator_name": "pure conjunction",
+          "reading": "decided by lowest",
+          "children": [
+            {
+              "weight": 1.0,
+              "feature": "eye color: brown"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

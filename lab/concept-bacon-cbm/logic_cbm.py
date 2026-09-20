@@ -115,12 +115,12 @@ class CUBLogicCBM(nn.Module):
     """backbone -> K concepts -> difflogic LogicLayer -> Linear -> class logits."""
 
     def __init__(self, K=112, n_classes=200, n_neurons=250, fixed_gates=True,
-                 concept_scale=1.0, seed=0):
+                 concept_scale=1.0, seed=0, backbone_kind="resnet18"):
         super().__init__()
         self.K = K
         self.concept_scale = float(concept_scale)
-        self.backbone = _cub._make_resnet()
-        self.concept = nn.Linear(512, K)
+        self.backbone, feat_dim, self.backbone_size = _cub.make_backbone(backbone_kind)
+        self.concept = nn.Linear(feat_dim, K)
         self.logic = LogicLayer(K, n_neurons, fixed_gates=fixed_gates, seed=seed)
         self.classifier = nn.Linear(n_neurons, n_classes)
 
@@ -151,18 +151,24 @@ def train(args):
     torch.manual_seed(args.seed)
     attr312 = bool(args.attr312)
     K = 312 if attr312 else args.K
-    tl = DataLoader(_cub._CUBImages("train", True, attr312=attr312), batch_size=args.batch_size,
+    image_size = 299 if args.backbone == "inception_v3" else 224
+    eval_bs = 64 if args.backbone == "inception_v3" else 128
+    tl = DataLoader(_cub._CUBImages("train", True, attr312=attr312, image_size=image_size),
+                    batch_size=args.batch_size,
                     shuffle=True, num_workers=args.workers, pin_memory=True)
-    vl = DataLoader(_cub._CUBImages("test", False, attr312=attr312), batch_size=128,
+    vl = DataLoader(_cub._CUBImages("test", False, attr312=attr312, image_size=image_size),
+                    batch_size=eval_bs,
                     shuffle=False, num_workers=args.workers, pin_memory=True)
     model = CUBLogicCBM(K=K, n_neurons=args.n_neurons,
-                        fixed_gates=not args.learn_gates, seed=args.seed).to(device)
+                        fixed_gates=not args.learn_gates, seed=args.seed,
+                        backbone_kind=args.backbone).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(args.epochs, 1))
     ce, bce = nn.CrossEntropyLoss(), nn.BCELoss()
     best = 0.0
     tag = (f"logiccbm_k{K}_{args.n_neurons}n"
-           f"{'_learngates' if args.learn_gates else ''}")
+           f"{'_learngates' if args.learn_gates else ''}"
+           f"{'' if args.backbone == 'resnet18' else '_' + args.backbone}")
     path = os.path.join(args.save_dir, f"{tag}.pt")
     os.makedirs(args.save_dir, exist_ok=True)
     print(f"===== {tag}: K={K} neurons={args.n_neurons} attr312={attr312} "
@@ -181,7 +187,7 @@ def train(args):
         if acc >= best:
             torch.save({"state_dict": model.state_dict(), "K": K,
                         "n_neurons": args.n_neurons, "fixed_gates": not args.learn_gates,
-                        "attr312": attr312, "acc": acc}, path)
+                        "attr312": attr312, "backbone": args.backbone, "acc": acc}, path)
         print(f"    epoch {ep:3d}/{args.epochs} | loss {loss.item():.3f} | "
               f"test {acc*100:.2f}% | best {best*100:.2f}%", flush=True)
     print(f"  DONE {tag}: best {best*100:.2f}%  saved {path}", flush=True)
@@ -192,10 +198,12 @@ def cmd_eval(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ck = torch.load(args.ckpt, map_location="cpu", weights_only=False)
     model = CUBLogicCBM(K=ck["K"], n_neurons=ck["n_neurons"],
-                        fixed_gates=ck["fixed_gates"]).to(device)
+                        fixed_gates=ck["fixed_gates"],
+                        backbone_kind=ck.get("backbone", "resnet18")).to(device)
     model.load_state_dict(ck["state_dict"])
-    vl = DataLoader(_cub._CUBImages("test", False, attr312=ck.get("attr312", False)),
-                    batch_size=128, shuffle=False, num_workers=args.workers, pin_memory=True)
+    _isz = 299 if ck.get("backbone", "resnet18") == "inception_v3" else 224
+    vl = DataLoader(_cub._CUBImages("test", False, attr312=ck.get("attr312", False), image_size=_isz),
+                    batch_size=64, shuffle=False, num_workers=args.workers, pin_memory=True)
     print(f"test accuracy: {evaluate(model, vl, device)*100:.2f}%  (saved {ck.get('acc',0)*100:.2f}%)")
 
 
@@ -268,6 +276,8 @@ def main():
     p.add_argument("--concept-lam", type=float, default=1.0)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--batch-size", type=int, default=64)
+    p.add_argument("--backbone", choices=["resnet18", "inception_v3"], default="resnet18",
+                   help="feature backbone. inception_v3 = Koh-CBM/LogicCBM standard (299px, 2048-d)")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--save-dir", default=os.path.join(_HERE, "saved"))

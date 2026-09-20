@@ -1,0 +1,801 @@
+Black footed Albatross (species 0) -- rule vs rect-head width
+
+==============================================================================
+width 64   63 literals, 36 ops   test 79.55%  recall 90.0%
+------------------------------------------------------------------------------
+full expression:
+  HC+[N1 a=+0.92](0.18*HHC[N2 a=+1.52](0.42*HHC[N3 a=+1.62](1.00*bill color: rufous), 0.36*HHC[N4 a=+1.53](0.55*shape: swallow-like, 0.45*under tail color: brown), 0.22*CP[N5 a=+1.30](1.00*crown color: yellow)), 0.15*CP[N6 a=+1.23](0.38*HHC[N7 a=+1.50](0.28*upperparts color: olive, 0.22*eye color: orange, 0.15*back pattern: solid, 0.14*belly pattern: solid, 0.10*upper tail color: yellow, 0.05*leg color: buff, 0.04*back color: white, 0.03*belly color: white), 0.38*SD+[N8 a=+0.27](1.00*NOT throat color: yellow), 0.24*CP[N9 a=+1.20](0.25*eye color: brown, 0.15*upperparts color: iridescent, 0.11*throat color: olive, 0.09*forehead color: green, 0.07*belly pattern: solid, 0.04*primary color: yellow, 0.04*size: small (5 - 9 in), 0.03*head pattern: masked, 0.03*head pattern: striped, 0.03*head pattern: eyebrow, 0.02*back color: orange, 0.02*crown color: purple, 0.02*upperparts color: grey, 0.02*under tail color: yellow, 0.02*wing color: grey, 0.01*back color: buff, 0.01*belly color: white, 0.01*upper tail color: grey, 0.01*throat color: iridescent, 0.01*leg color: black)), 0.12*CP[N10 a=+1.21](0.41*HHC[N11 a=+1.55](0.56*bill color: buff, 0.44*underparts color: buff), 0.40*HHC[N12 a=+1.46](0.50*breast color: yellow, 0.50*shape: swallow-like), 0.19*LHC[N13 a=+1.11](1.00*breast color: yellow)), 0.11*LHC[N14 a=+1.07](0.27*@N12, 0.24*@N4, 0.16*HHC[N15 a=+1.32](1.00*crown color: yellow), 0.14*@N5, 0.13*@N13, 0.06*LHC[N16 a=+1.10](1.00*under tail color: brown)), 0.09*C[N17 a=+1.01](0.36*@N3, 0.36*@N11, 0.20*@N15, 0.08*@N16), 0.07*HHD[N18 a=-0.38](0.34*HHC[N19 a=+1.56](0.25*back color: brown, 0.24*throat color: olive, 0.15*bill shape: hooked, 0.15*wing color: iridescent, 0.09*forehead color: grey, 0.08*size: small (5 - 9 in), 0.02*forehead color: yellow, 0.02*crown color: iridescent), 0.31*LHC[N20 a=+1.17](0.29*eye color: brown, 0.13*wing pattern: solid, 0.13*bill length: about the same as head, 0.12*bill shape: hooked seabird, 0.11*breast pattern: solid, 0.06*primary color: olive, 0.05*forehead color: grey, 0.03*bill shape: all-purpose, 0.03*tail shape: rounded tail, 0.02*back color: buff, 0.01*primary color: purple, 0.01*breast color: white), 0.22*@N9, 0.14*HHC[N21 a=+1.62](0.63*bill color: buff, 0.37*bill shape: hooked)), 0.06*HHD[N22 a=-0.35](0.41*@N7, 0.40*@N19, 0.19*HHC[N23 a=+1.49](1.00*back color: brown)), 0.05*HHC[N24 a=+1.40](0.57*SD+[N25 a=+0.27](1.00*size: medium (9 - 16 in)), 0.43*SD-[N26 a=+0.45](0.44*NOT upper tail color: blue, 0.37*NOT upper tail color: brown, 0.19*NOT back color: pink)), 0.04*HHC[N27 a=+1.34](1.00*@N8), 0.04*LHC[N28 a=+1.12](0.69*@N25, 0.31*CP[N29 a=+1.22](0.09*size: medium (9 - 16 in), 0.09*wing pattern: solid, 0.09*bill length: about the same as head, 0.08*upper tail color: purple, 0.08*bill shape: hooked seabird, 0.08*breast pattern: solid, 0.06*back pattern: solid, 0.06*forehead color: purple, 0.04*back color: black, 0.04*upper tail color: yellow, 0.03*primary color: yellow, 0.02*underparts color: grey, 0.02*head pattern: striped, 0.02*bill shape: all-purpose, 0.02*head pattern: eyebrow, 0.02*leg color: buff, 0.02*tail shape: rounded tail, 0.02*breast color: black, 0.02*back color: orange, 0.02*crown color: purple, 0.02*upperparts color: grey, 0.02*under tail color: yellow, 0.01*head pattern: crested, 0.01*primary color: purple, 0.01*underparts color: blue, 0.01*under tail color: white, 0.01*wing color: brown)), 0.04*HC[N30 a=+0.89](0.50*C[N31 a=+0.99](0.24*eye color: orange, 0.18*forehead color: green, 0.15*forehead color: purple, 0.11*back color: black, 0.11*primary color: olive, 0.06*head pattern: masked, 0.06*underparts color: grey, 0.06*wing shape: rounded-wings, 0.02*forehead color: yellow), 0.50*HC+[N32 a=+0.96](0.19*upperparts color: iridescent, 0.18*upperparts color: olive, 0.15*bill color: rufous, 0.14*upper tail color: purple, 0.11*underparts color: buff, 0.09*wing color: iridescent, 0.04*wing shape: rounded-wings, 0.03*breast color: black, 0.03*back color: white, 0.02*head pattern: crested, 0.01*under tail color: white, 0.01*throat color: iridescent)), 0.02*DP[N33 a=-0.28](0.43*@N31, 0.20*@N23, 0.19*@N29, 0.17*@N21), 0.01*SC[N34 a=+0.63](1.00*@N20), 0.01*LHC[N35 a=+1.12](1.00*@N26), 0.01*SC+[N36 a=+0.74](1.00*@N32))
+
+verbalization:
+  - must have all (high hard conjunction, 15 of):
+    - (18%) below the lowest (high hyper-conjunction, 3 of):
+      - (42%) below the lowest (high hyper-conjunction, 1 of):
+        - (100%) bill color: rufous
+      - (36%) below the lowest (high hyper-conjunction, 2 of):
+        - (55%) shape: swallow-like
+        - (45%) under tail color: brown
+      - (22%) below the lowest (product t-norm, 1 of):
+        - (100%) crown color: yellow
+    - (15%) below the lowest (product t-norm, 3 of):
+      - (38%) below the lowest (high hyper-conjunction, 8 of):
+        - (28%) upperparts color: olive
+        - (22%) eye color: orange
+        - (15%) back pattern: solid
+        - (14%) belly pattern: solid
+        - (10%) upper tail color: yellow
+        - (5%) leg color: buff
+        - (4%) back color: white
+        - (3%) belly color: white
+      - (38%) nice to have some (high soft disjunction, 1 of):
+        - (100%) NOT throat color: yellow
+      - (24%) below the lowest (product t-norm, 20 of):
+        - (25%) eye color: brown
+        - (15%) upperparts color: iridescent
+        - (11%) throat color: olive
+        - (9%) forehead color: green
+        - (7%) belly pattern: solid
+        - (4%) primary color: yellow
+        - (4%) size: small (5 - 9 in)
+        - (3%) head pattern: masked
+        - (3%) head pattern: striped
+        - (3%) head pattern: eyebrow
+        - (2%) back color: orange
+        - (2%) crown color: purple
+        - (2%) upperparts color: grey
+        - (2%) under tail color: yellow
+        - (2%) wing color: grey
+        - (1%) back color: buff
+        - (1%) belly color: white
+        - (1%) upper tail color: grey
+        - (1%) throat color: iridescent
+        - (1%) leg color: black
+    - (12%) below the lowest (product t-norm, 3 of):
+      - (41%) below the lowest (high hyper-conjunction, 2 of):
+        - (56%) bill color: buff
+        - (44%) underparts color: buff
+      - (40%) below the lowest (high hyper-conjunction, 2 of):
+        - (50%) breast color: yellow
+        - (50%) shape: swallow-like
+      - (19%) below the lowest (low hyper-conjunction, 1 of):
+        - (100%) breast color: yellow
+    - (11%) below the lowest (low hyper-conjunction, 6 of):
+      - (27%) below the lowest (high hyper-conjunction, 2 of):
+        - (50%) breast color: yellow
+        - (50%) shape: swallow-like
+      - (24%) below the lowest (high hyper-conjunction, 2 of):
+        - (55%) shape: swallow-like
+        - (45%) under tail color: brown
+      - (16%) below the lowest (high hyper-conjunction, 1 of):
+        - (100%) crown color: yellow
+      - (14%) below the lowest (product t-norm, 1 of):
+        - (100%) crown color: yellow
+      - (13%) below the lowest (low hyper-conjunction, 1 of):
+        - (100%) breast color: yellow
+      - (6%) below the lowest (low hyper-conjunction, 1 of):
+        - (100%) under tail color: brown
+    - (9%) decided by lowest (pure conjunction, 4 of):
+      - (36%) below the lowest (high hyper-conjunction, 1 of):
+        - (100%) bill color: rufous
+      - (36%) below the lowest (high hyper-conjunction, 2 of):
+        - (56%) bill color: buff
+        - (44%) underparts color: buff
+      - (20%) below the lowest (high hyper-conjunction, 1 of):
+        - (100%) crown color: yellow
+      - (8%) below the lowest (low hyper-conjunction, 1 of):
+        - (100%) under tail color: brown
+    - (7%) above the highest (high hyper-disjunction, 4 of):
+      - (34%) below the lowest (high hyper-conjunction, 8 of):
+        - (25%) back color: brown
+        - (24%) throat color: olive
+        - (15%) bill shape: hooked
+        - (15%) wing color: iridescent
+        - (9%) forehead color: grey
+        - (8%) size: small (5 - 9 in)
+        - (2%) forehead color: yellow
+        - (2%) crown color: iridescent
+      - (31%) below the lowest (low hyper-conjunction, 12 of):
+        - (29%) eye color: brown
+        - (13%) wing pattern: solid
+        - (13%) bill length: about the same as head
+        - (12%) bill shape: hooked seabird
+        - (11%) breast pattern: solid
+        - (6%) primary color: olive
+        - (5%) forehead color: grey
+        - (3%) bill shape: all-purpose
+        - (3%) tail shape: rounded tail
+        - (2%) back color: buff
+        - (1%) primary color: purple
+        - (1%) breast color: white
+      - (22%) below the lowest (product t-norm, 20 of):
+        - (25%) eye color: brown
+        - (15%) upperparts color: iridescent
+        - (11%) throat color: olive
+        - (9%) forehead color: green
+        - (7%) belly pattern: solid
+        - (4%) primary color: yellow
+        - (4%) size: small (5 - 9 in)
+        - (3%) head pattern: masked
+        - (3%) head pattern: striped
+        - (3%) head pattern: eyebrow
+        - (2%) back color: orange
+        - (2%) crown color: purple
+        - (2%) upperparts color: grey
+        - (2%) under tail color: yellow
+        - (2%) wing color: grey
+        - (1%) back color: buff
+        - (1%) belly color: white
+        - (1%) upper tail color: grey
+        - (1%) throat color: iridescent
+        - (1%) leg color: black
+      - (14%) below the lowest (high hyper-conjunction, 2 of):
+        - (63%) bill color: buff
+        - (37%) bill shape: hooked
+    - (6%) above the highest (high hyper-disjunction, 3 of):
+      - (41%) below the lowest (high hyper-conjunction, 8 of):
+        - (28%) upperparts color: olive
+        - (22%) eye color: orange
+        - (15%) back pattern: solid
+        - (14%) belly pattern: solid
+        - (10%) upper tail color: yellow
+        - (5%) leg color: buff
+        - (4%) back color: white
+        - (3%) belly color: white
+      - (40%) below the lowest (high hyper-conjunction, 8 of):
+        - (25%) back color: brown
+        - (24%) throat color: olive
+        - (15%) bill shape: hooked
+        - (15%) wing color: iridescent
+        - (9%) forehead color: grey
+        - (8%) size: small (5 - 9 in)
+        - (2%) forehead color: yellow
+        - (2%) crown color: iridescent
+      - (19%) below the lowest (high hyper-conjunction, 1 of):
+        - (100%) back color: brown
+    - (5%) below the lowest (high hyper-conjunction, 2 of):
+      - (57%) nice to have some (high soft disjunction, 1 of):
+        - (100%) size: medium (9 - 16 in)
+      - (43%) nice to have some (low soft disjunction, 3 of):
+        - (44%) NOT upper tail color: blue
+        - (37%) NOT upper tail color: brown
+        - (19%) NOT back color: pink
+    - (4%) below the lowest (high hyper-conjunction, 1 of):
+      - (100%) nice to have some (high soft disjunction, 1 of):
+        - (100%) NOT throat color: yellow
+    - (4%) below the lowest (low hyper-conjunction, 2 of):
+      - (69%) nice to have some (high soft disjunction, 1 of):
+        - (100%) size: medium (9 - 16 in)
+      - (31%) below the lowest (product t-norm, 27 of):
+        - (9%) size: medium (9 - 16 in)
+        - (9%) wing pattern: solid
+        - (9%) bill length: about the same as head
+        - (8%) upper tail color: purple
+        - (8%) bill shape: hooked seabird
+        - (8%) breast pattern: solid
+        - (6%) back pattern: solid
+        - (6%) forehead color: purple
+        - (4%) back color: black
+        - (4%) upper tail color: yellow
+        - (3%) primary color: yellow
+        - (2%) underparts color: grey
+        - (2%) head pattern: striped
+        - (2%) bill shape: all-purpose
+        - (2%) head pattern: eyebrow
+        - (2%) leg color: buff
+        - (2%) tail shape: rounded tail
+        - (2%) breast color: black
+        - (2%) back color: orange
+        - (2%) crown color: purple
+        - (2%) upperparts color: grey
+        - (2%) under tail color: yellow
+        - (1%) head pattern: crested
+        - (1%) primary color: purple
+        - (1%) underparts color: blue
+        - (1%) under tail color: white
+        - (1%) wing color: brown
+    - (4%) must have all (medium hard conjunction, 2 of):
+      - (50%) decided by lowest (pure conjunction, 9 of):
+        - (24%) eye color: orange
+        - (18%) forehead color: green
+        - (15%) forehead color: purple
+        - (11%) back color: black
+        - (11%) primary color: olive
+        - (6%) head pattern: masked
+        - (6%) underparts color: grey
+        - (6%) wing shape: rounded-wings
+        - (2%) forehead color: yellow
+      - (50%) must have all (high hard conjunction, 12 of):
+        - (19%) upperparts color: iridescent
+        - (18%) upperparts color: olive
+        - (15%) bill color: rufous
+        - (14%) upper tail color: purple
+        - (11%) underparts color: buff
+        - (9%) wing color: iridescent
+        - (4%) wing shape: rounded-wings
+        - (3%) breast color: black
+        - (3%) back color: white
+        - (2%) head pattern: crested
+        - (1%) under tail color: white
+        - (1%) throat color: iridescent
+    - (2%) above the highest (product t-conorm, 4 of):
+      - (43%) decided by lowest (pure conjunction, 9 of):
+        - (24%) eye color: orange
+        - (18%) forehead color: green
+        - (15%) forehead color: purple
+        - (11%) back color: black
+        - (11%) primary color: olive
+        - (6%) head pattern: masked
+        - (6%) underparts color: grey
+        - (6%) wing shape: rounded-wings
+        - (2%) forehead color: yellow
+      - (20%) below the lowest (high hyper-conjunction, 1 of):
+        - (100%) back color: brown
+      - (19%) below the lowest (product t-norm, 27 of):
+        - (9%) size: medium (9 - 16 in)
+        - (9%) wing pattern: solid
+        - (9%) bill length: about the same as head
+        - (8%) upper tail color: purple
+        - (8%) bill shape: hooked seabird
+        - (8%) breast pattern: solid
+        - (6%) back pattern: solid
+        - (6%) forehead color: purple
+        - (4%) back color: black
+        - (4%) upper tail color: yellow
+        - (3%) primary color: yellow
+        - (2%) underparts color: grey
+        - (2%) head pattern: striped
+        - (2%) bill shape: all-purpose
+        - (2%) head pattern: eyebrow
+        - (2%) leg color: buff
+        - (2%) tail shape: rounded tail
+        - (2%) breast color: black
+        - (2%) back color: orange
+        - (2%) crown color: purple
+        - (2%) upperparts color: grey
+        - (2%) under tail color: yellow
+        - (1%) head pattern: crested
+        - (1%) primary color: purple
+        - (1%) underparts color: blue
+        - (1%) under tail color: white
+        - (1%) wing color: brown
+      - (17%) below the lowest (high hyper-conjunction, 2 of):
+        - (63%) bill color: buff
+        - (37%) bill shape: hooked
+    - (1%) nice to have most (medium soft conjunction, 1 of):
+      - (100%) below the lowest (low hyper-conjunction, 12 of):
+        - (29%) eye color: brown
+        - (13%) wing pattern: solid
+        - (13%) bill length: about the same as head
+        - (12%) bill shape: hooked seabird
+        - (11%) breast pattern: solid
+        - (6%) primary color: olive
+        - (5%) forehead color: grey
+        - (3%) bill shape: all-purpose
+        - (3%) tail shape: rounded tail
+        - (2%) back color: buff
+        - (1%) primary color: purple
+        - (1%) breast color: white
+    - (1%) below the lowest (low hyper-conjunction, 1 of):
+      - (100%) nice to have some (low soft disjunction, 3 of):
+        - (44%) NOT upper tail color: blue
+        - (37%) NOT upper tail color: brown
+        - (19%) NOT back color: pink
+    - (1%) nice to have most (high soft conjunction, 1 of):
+      - (100%) must have all (high hard conjunction, 12 of):
+        - (19%) upperparts color: iridescent
+        - (18%) upperparts color: olive
+        - (15%) bill color: rufous
+        - (14%) upper tail color: purple
+        - (11%) underparts color: buff
+        - (9%) wing color: iridescent
+        - (4%) wing shape: rounded-wings
+        - (3%) breast color: black
+        - (3%) back color: white
+        - (2%) head pattern: crested
+        - (1%) under tail color: white
+        - (1%) throat color: iridescent
+
+==============================================================================
+width 8   52 literals, 11 ops   test 77.15%  recall 76.7%
+------------------------------------------------------------------------------
+full expression:
+  SC[N1 a=+0.61](0.46*HC-[N2 a=+0.75](0.31*HC[N3 a=+0.83](0.33*wing shape: long-wings, 0.25*forehead color: brown, 0.19*belly color: red, 0.13*bill shape: dagger, 0.11*bill color: buff), 0.27*SC+[N4 a=+0.73](0.10*size: medium (9 - 16 in), 0.05*wing pattern: multi-colored, 0.04*back pattern: solid, 0.04*breast pattern: solid, 0.04*belly pattern: solid, 0.04*bill shape: hooked seabird, 0.04*bill length: about the same as head, 0.04*wing pattern: solid, 0.03*belly color: red, 0.03*crown color: grey, 0.03*upperparts color: olive, 0.03*leg color: buff, 0.03*leg color: black, 0.03*tail pattern: striped, 0.03*bill shape: all-purpose, 0.02*head pattern: spotted, 0.02*upperparts color: black, 0.02*belly color: green, 0.02*nape color: grey, 0.02*shape: duck-like, 0.02*nape color: yellow, 0.02*belly color: grey, 0.02*leg color: orange, 0.02*breast color: grey, 0.01*back color: blue, 0.01*forehead color: white, 0.01*tail shape: rounded tail, 0.01*belly color: white, 0.01*under tail color: grey, 0.01*upperparts color: purple, 0.01*wing shape: pointed-wings, 0.01*eye color: red, 0.01*primary color: black, 0.01*belly color: rufous, 0.01*breast color: red, 0.01*belly color: buff, 0.01*back pattern: multi-colored, 0.01*forehead color: yellow, 0.01*bill color: yellow, 0.01*upper tail color: buff, 0.01*crown color: white, 0.01*wing color: grey), 0.21*C[N5 a=+1.01](1.00*wing shape: long-wings), 0.21*SC+[N6 a=+0.74](1.00*nape color: blue)), 0.42*SC+[N7 a=+0.74](0.24*@N3, 0.21*@N4, 0.16*C[N8 a=+0.99](1.00*forehead color: brown), 0.16*@N6, 0.11*SC+[N9 a=+0.73](0.10*size: medium (9 - 16 in), 0.05*wing pattern: multi-colored, 0.04*back pattern: solid, 0.04*breast pattern: solid, 0.04*belly pattern: solid, 0.04*bill shape: hooked seabird, 0.04*bill length: about the same as head, 0.03*wing pattern: solid, 0.03*crown color: grey, 0.03*upperparts color: olive, 0.03*leg color: buff, 0.03*leg color: black, 0.03*nape color: blue, 0.02*tail pattern: striped, 0.02*bill shape: all-purpose, 0.02*head pattern: spotted, 0.02*upperparts color: black, 0.02*bill shape: dagger, 0.02*belly color: green, 0.02*nape color: grey, 0.02*shape: duck-like, 0.02*nape color: yellow, 0.02*bill color: buff, 0.02*belly color: grey, 0.02*leg color: orange, 0.02*breast color: grey, 0.01*back color: blue, 0.01*forehead color: white, 0.01*tail shape: rounded tail, 0.01*belly color: white, 0.01*under tail color: grey, 0.01*upperparts color: purple, 0.01*wing shape: pointed-wings, 0.01*eye color: red, 0.01*primary color: black, 0.01*belly color: rufous, 0.01*breast color: red, 0.01*belly color: buff, 0.01*back pattern: multi-colored, 0.01*forehead color: yellow, 0.01*bill color: yellow, 0.01*upper tail color: buff, 0.01*crown color: white, 0.01*crown color: yellow, 0.01*tail pattern: solid, 0.01*wing color: grey), 0.11*LHD[N10 a=-0.13](0.41*back color: red, 0.33*upperparts color: orange, 0.26*crown color: pink)), 0.12*SC+[N11 a=+0.74](0.30*@N5, 0.30*@N8, 0.21*@N9, 0.20*@N10))
+
+verbalization:
+  - nice to have most (medium soft conjunction, 3 of):
+    - (46%) must have all (low hard conjunction, 4 of):
+      - (31%) must have all (medium hard conjunction, 5 of):
+        - (33%) wing shape: long-wings
+        - (25%) forehead color: brown
+        - (19%) belly color: red
+        - (13%) bill shape: dagger
+        - (11%) bill color: buff
+      - (27%) nice to have most (high soft conjunction, 42 of):
+        - (10%) size: medium (9 - 16 in)
+        - (5%) wing pattern: multi-colored
+        - (4%) back pattern: solid
+        - (4%) breast pattern: solid
+        - (4%) belly pattern: solid
+        - (4%) bill shape: hooked seabird
+        - (4%) bill length: about the same as head
+        - (4%) wing pattern: solid
+        - (3%) belly color: red
+        - (3%) crown color: grey
+        - (3%) upperparts color: olive
+        - (3%) leg color: buff
+        - (3%) leg color: black
+        - (3%) tail pattern: striped
+        - (3%) bill shape: all-purpose
+        - (2%) head pattern: spotted
+        - (2%) upperparts color: black
+        - (2%) belly color: green
+        - (2%) nape color: grey
+        - (2%) shape: duck-like
+        - (2%) nape color: yellow
+        - (2%) belly color: grey
+        - (2%) leg color: orange
+        - (2%) breast color: grey
+        - (1%) back color: blue
+        - (1%) forehead color: white
+        - (1%) tail shape: rounded tail
+        - (1%) belly color: white
+        - (1%) under tail color: grey
+        - (1%) upperparts color: purple
+        - (1%) wing shape: pointed-wings
+        - (1%) eye color: red
+        - (1%) primary color: black
+        - (1%) belly color: rufous
+        - (1%) breast color: red
+        - (1%) belly color: buff
+        - (1%) back pattern: multi-colored
+        - (1%) forehead color: yellow
+        - (1%) bill color: yellow
+        - (1%) upper tail color: buff
+        - (1%) crown color: white
+        - (1%) wing color: grey
+      - (21%) decided by lowest (pure conjunction, 1 of):
+        - (100%) wing shape: long-wings
+      - (21%) nice to have most (high soft conjunction, 1 of):
+        - (100%) nape color: blue
+    - (42%) nice to have most (high soft conjunction, 6 of):
+      - (24%) must have all (medium hard conjunction, 5 of):
+        - (33%) wing shape: long-wings
+        - (25%) forehead color: brown
+        - (19%) belly color: red
+        - (13%) bill shape: dagger
+        - (11%) bill color: buff
+      - (21%) nice to have most (high soft conjunction, 42 of):
+        - (10%) size: medium (9 - 16 in)
+        - (5%) wing pattern: multi-colored
+        - (4%) back pattern: solid
+        - (4%) breast pattern: solid
+        - (4%) belly pattern: solid
+        - (4%) bill shape: hooked seabird
+        - (4%) bill length: about the same as head
+        - (4%) wing pattern: solid
+        - (3%) belly color: red
+        - (3%) crown color: grey
+        - (3%) upperparts color: olive
+        - (3%) leg color: buff
+        - (3%) leg color: black
+        - (3%) tail pattern: striped
+        - (3%) bill shape: all-purpose
+        - (2%) head pattern: spotted
+        - (2%) upperparts color: black
+        - (2%) belly color: green
+        - (2%) nape color: grey
+        - (2%) shape: duck-like
+        - (2%) nape color: yellow
+        - (2%) belly color: grey
+        - (2%) leg color: orange
+        - (2%) breast color: grey
+        - (1%) back color: blue
+        - (1%) forehead color: white
+        - (1%) tail shape: rounded tail
+        - (1%) belly color: white
+        - (1%) under tail color: grey
+        - (1%) upperparts color: purple
+        - (1%) wing shape: pointed-wings
+        - (1%) eye color: red
+        - (1%) primary color: black
+        - (1%) belly color: rufous
+        - (1%) breast color: red
+        - (1%) belly color: buff
+        - (1%) back pattern: multi-colored
+        - (1%) forehead color: yellow
+        - (1%) bill color: yellow
+        - (1%) upper tail color: buff
+        - (1%) crown color: white
+        - (1%) wing color: grey
+      - (16%) decided by lowest (pure conjunction, 1 of):
+        - (100%) forehead color: brown
+      - (16%) nice to have most (high soft conjunction, 1 of):
+        - (100%) nape color: blue
+      - (11%) nice to have most (high soft conjunction, 46 of):
+        - (10%) size: medium (9 - 16 in)
+        - (5%) wing pattern: multi-colored
+        - (4%) back pattern: solid
+        - (4%) breast pattern: solid
+        - (4%) belly pattern: solid
+        - (4%) bill shape: hooked seabird
+        - (4%) bill length: about the same as head
+        - (3%) wing pattern: solid
+        - (3%) crown color: grey
+        - (3%) upperparts color: olive
+        - (3%) leg color: buff
+        - (3%) leg color: black
+        - (3%) nape color: blue
+        - (2%) tail pattern: striped
+        - (2%) bill shape: all-purpose
+        - (2%) head pattern: spotted
+        - (2%) upperparts color: black
+        - (2%) bill shape: dagger
+        - (2%) belly color: green
+        - (2%) nape color: grey
+        - (2%) shape: duck-like
+        - (2%) nape color: yellow
+        - (2%) bill color: buff
+        - (2%) belly color: grey
+        - (2%) leg color: orange
+        - (2%) breast color: grey
+        - (1%) back color: blue
+        - (1%) forehead color: white
+        - (1%) tail shape: rounded tail
+        - (1%) belly color: white
+        - (1%) under tail color: grey
+        - (1%) upperparts color: purple
+        - (1%) wing shape: pointed-wings
+        - (1%) eye color: red
+        - (1%) primary color: black
+        - (1%) belly color: rufous
+        - (1%) breast color: red
+        - (1%) belly color: buff
+        - (1%) back pattern: multi-colored
+        - (1%) forehead color: yellow
+        - (1%) bill color: yellow
+        - (1%) upper tail color: buff
+        - (1%) crown color: white
+        - (1%) crown color: yellow
+        - (1%) tail pattern: solid
+        - (1%) wing color: grey
+      - (11%) above the highest (low hyper-disjunction, 3 of):
+        - (41%) back color: red
+        - (33%) upperparts color: orange
+        - (26%) crown color: pink
+    - (12%) nice to have most (high soft conjunction, 4 of):
+      - (30%) decided by lowest (pure conjunction, 1 of):
+        - (100%) wing shape: long-wings
+      - (30%) decided by lowest (pure conjunction, 1 of):
+        - (100%) forehead color: brown
+      - (21%) nice to have most (high soft conjunction, 46 of):
+        - (10%) size: medium (9 - 16 in)
+        - (5%) wing pattern: multi-colored
+        - (4%) back pattern: solid
+        - (4%) breast pattern: solid
+        - (4%) belly pattern: solid
+        - (4%) bill shape: hooked seabird
+        - (4%) bill length: about the same as head
+        - (3%) wing pattern: solid
+        - (3%) crown color: grey
+        - (3%) upperparts color: olive
+        - (3%) leg color: buff
+        - (3%) leg color: black
+        - (3%) nape color: blue
+        - (2%) tail pattern: striped
+        - (2%) bill shape: all-purpose
+        - (2%) head pattern: spotted
+        - (2%) upperparts color: black
+        - (2%) bill shape: dagger
+        - (2%) belly color: green
+        - (2%) nape color: grey
+        - (2%) shape: duck-like
+        - (2%) nape color: yellow
+        - (2%) bill color: buff
+        - (2%) belly color: grey
+        - (2%) leg color: orange
+        - (2%) breast color: grey
+        - (1%) back color: blue
+        - (1%) forehead color: white
+        - (1%) tail shape: rounded tail
+        - (1%) belly color: white
+        - (1%) under tail color: grey
+        - (1%) upperparts color: purple
+        - (1%) wing shape: pointed-wings
+        - (1%) eye color: red
+        - (1%) primary color: black
+        - (1%) belly color: rufous
+        - (1%) breast color: red
+        - (1%) belly color: buff
+        - (1%) back pattern: multi-colored
+        - (1%) forehead color: yellow
+        - (1%) bill color: yellow
+        - (1%) upper tail color: buff
+        - (1%) crown color: white
+        - (1%) crown color: yellow
+        - (1%) tail pattern: solid
+        - (1%) wing color: grey
+      - (20%) above the highest (low hyper-disjunction, 3 of):
+        - (41%) back color: red
+        - (33%) upperparts color: orange
+        - (26%) crown color: pink
+
+==============================================================================
+width 4   68 literals, 7 ops   test 76.96%  recall 90.0%
+------------------------------------------------------------------------------
+full expression:
+  HC+[N1 a=+0.95](0.40*HHD[N2 a=-0.84](0.51*HC[N3 a=+0.82](0.15*crown color: yellow, 0.12*tail pattern: striped, 0.11*bill shape: specialized, 0.09*bill shape: hooked seabird, 0.09*upperparts color: blue, 0.08*belly color: buff, 0.08*underparts color: grey, 0.08*throat color: grey, 0.07*back pattern: multi-colored, 0.06*eye color: purple, 0.05*bill length: about the same as head), 0.49*HC[N4 a=+0.83](0.03*size: medium (9 - 16 in), 0.03*primary color: green, 0.03*wing pattern: multi-colored, 0.03*wing pattern: solid, 0.03*back pattern: solid, 0.03*wing shape: long-wings, 0.03*primary color: purple, 0.03*bill shape: needle, 0.03*wing shape: tapered-wings, 0.03*bill length: longer than head, 0.03*crown color: grey, 0.03*belly color: rufous, 0.02*forehead color: red, 0.02*under tail color: buff, 0.02*breast color: red, 0.02*belly color: brown, 0.02*forehead color: brown, 0.02*wing color: green, 0.02*under tail color: rufous, 0.02*belly pattern: solid, 0.02*leg color: buff, 0.02*breast pattern: solid, 0.02*forehead color: white, 0.02*eye color: black, 0.02*bill color: white, 0.02*crown color: white, 0.02*under tail color: iridescent, 0.02*bill length: about the same as head, 0.02*upper tail color: olive, 0.02*belly color: green, 0.02*bill color: rufous, 0.01*throat color: buff, 0.01*wing color: pink, 0.01*nape color: red, 0.01*bill color: yellow, 0.01*under tail color: green, 0.01*upper tail color: orange, 0.01*wing color: iridescent, 0.01*throat color: purple, 0.01*nape color: olive, 0.01*bill color: red, 0.01*bill shape: curved (up or down), 0.01*shape: gull-like, 0.01*upperparts color: white, 0.01*bill color: buff, 0.01*throat color: green, 0.01*bill color: iridescent, 0.01*back color: yellow, 0.01*belly pattern: multi-colored, 0.01*shape: hawk-like, 0.01*belly color: iridescent, 0.01*wing color: purple, 0.01*primary color: olive, 0.01*eye color: orange, 0.01*underparts color: pink, 0.01*upperparts color: orange)), 0.39*HHD[N5 a=-0.86](0.50*HC-[N6 a=+0.77](0.04*crown color: yellow, 0.03*tail pattern: striped, 0.03*bill shape: specialized, 0.03*bill shape: hooked seabird, 0.02*upperparts color: blue, 0.02*size: medium (9 - 16 in), 0.02*belly color: buff, 0.02*underparts color: grey, 0.02*throat color: grey, 0.02*primary color: green, 0.02*wing pattern: multi-colored, 0.02*back pattern: multi-colored, 0.02*wing pattern: solid, 0.02*back pattern: solid, 0.02*wing shape: long-wings, 0.02*primary color: purple, 0.02*bill shape: needle, 0.02*wing shape: tapered-wings, 0.02*bill length: longer than head, 0.02*crown color: grey, 0.02*belly color: rufous, 0.02*forehead color: red, 0.02*under tail color: buff, 0.02*breast color: red, 0.02*belly color: brown, 0.02*forehead color: brown, 0.02*wing color: green, 0.02*under tail color: rufous, 0.02*belly pattern: solid, 0.02*leg color: buff, 0.02*breast pattern: solid, 0.02*eye color: purple, 0.02*forehead color: white, 0.02*eye color: black, 0.02*bill color: white, 0.02*crown color: white, 0.02*under tail color: iridescent, 0.01*upper tail color: olive, 0.01*belly color: green, 0.01*bill color: rufous, 0.01*throat color: buff, 0.01*wing color: pink, 0.01*nape color: red, 0.01*bill color: yellow, 0.01*under tail color: green, 0.01*upper tail color: orange, 0.01*wing color: iridescent, 0.01*throat color: purple, 0.01*nape color: olive, 0.01*bill color: red, 0.01*bill shape: curved (up or down), 0.01*shape: gull-like, 0.01*upperparts color: white, 0.01*bill color: buff, 0.01*throat color: green, 0.01*bill color: iridescent, 0.01*back color: yellow, 0.01*belly pattern: multi-colored, 0.01*shape: hawk-like, 0.01*belly color: iridescent, 0.01*wing color: purple, 0.01*primary color: olive, 0.01*eye color: orange, 0.01*leg color: green, 0.01*shape: swallow-like), 0.50*@N4), 0.21*HHD[N7 a=-0.84](0.51*@N3, 0.49*@N6))
+
+verbalization:
+  - must have all (high hard conjunction, 3 of):
+    - (40%) above the highest (high hyper-disjunction, 2 of):
+      - (51%) must have all (medium hard conjunction, 11 of):
+        - (15%) crown color: yellow
+        - (12%) tail pattern: striped
+        - (11%) bill shape: specialized
+        - (9%) bill shape: hooked seabird
+        - (9%) upperparts color: blue
+        - (8%) belly color: buff
+        - (8%) underparts color: grey
+        - (8%) throat color: grey
+        - (7%) back pattern: multi-colored
+        - (6%) eye color: purple
+        - (5%) bill length: about the same as head
+      - (49%) must have all (medium hard conjunction, 56 of):
+        - (3%) size: medium (9 - 16 in)
+        - (3%) primary color: green
+        - (3%) wing pattern: multi-colored
+        - (3%) wing pattern: solid
+        - (3%) back pattern: solid
+        - (3%) wing shape: long-wings
+        - (3%) primary color: purple
+        - (3%) bill shape: needle
+        - (3%) wing shape: tapered-wings
+        - (3%) bill length: longer than head
+        - (3%) crown color: grey
+        - (3%) belly color: rufous
+        - (2%) forehead color: red
+        - (2%) under tail color: buff
+        - (2%) breast color: red
+        - (2%) belly color: brown
+        - (2%) forehead color: brown
+        - (2%) wing color: green
+        - (2%) under tail color: rufous
+        - (2%) belly pattern: solid
+        - (2%) leg color: buff
+        - (2%) breast pattern: solid
+        - (2%) forehead color: white
+        - (2%) eye color: black
+        - (2%) bill color: white
+        - (2%) crown color: white
+        - (2%) under tail color: iridescent
+        - (2%) bill length: about the same as head
+        - (2%) upper tail color: olive
+        - (2%) belly color: green
+        - (2%) bill color: rufous
+        - (1%) throat color: buff
+        - (1%) wing color: pink
+        - (1%) nape color: red
+        - (1%) bill color: yellow
+        - (1%) under tail color: green
+        - (1%) upper tail color: orange
+        - (1%) wing color: iridescent
+        - (1%) throat color: purple
+        - (1%) nape color: olive
+        - (1%) bill color: red
+        - (1%) bill shape: curved (up or down)
+        - (1%) shape: gull-like
+        - (1%) upperparts color: white
+        - (1%) bill color: buff
+        - (1%) throat color: green
+        - (1%) bill color: iridescent
+        - (1%) back color: yellow
+        - (1%) belly pattern: multi-colored
+        - (1%) shape: hawk-like
+        - (1%) belly color: iridescent
+        - (1%) wing color: purple
+        - (1%) primary color: olive
+        - (1%) eye color: orange
+        - (1%) underparts color: pink
+        - (1%) upperparts color: orange
+    - (39%) above the highest (high hyper-disjunction, 2 of):
+      - (50%) must have all (low hard conjunction, 65 of):
+        - (4%) crown color: yellow
+        - (3%) tail pattern: striped
+        - (3%) bill shape: specialized
+        - (3%) bill shape: hooked seabird
+        - (2%) upperparts color: blue
+        - (2%) size: medium (9 - 16 in)
+        - (2%) belly color: buff
+        - (2%) underparts color: grey
+        - (2%) throat color: grey
+        - (2%) primary color: green
+        - (2%) wing pattern: multi-colored
+        - (2%) back pattern: multi-colored
+        - (2%) wing pattern: solid
+        - (2%) back pattern: solid
+        - (2%) wing shape: long-wings
+        - (2%) primary color: purple
+        - (2%) bill shape: needle
+        - (2%) wing shape: tapered-wings
+        - (2%) bill length: longer than head
+        - (2%) crown color: grey
+        - (2%) belly color: rufous
+        - (2%) forehead color: red
+        - (2%) under tail color: buff
+        - (2%) breast color: red
+        - (2%) belly color: brown
+        - (2%) forehead color: brown
+        - (2%) wing color: green
+        - (2%) under tail color: rufous
+        - (2%) belly pattern: solid
+        - (2%) leg color: buff
+        - (2%) breast pattern: solid
+        - (2%) eye color: purple
+        - (2%) forehead color: white
+        - (2%) eye color: black
+        - (2%) bill color: white
+        - (2%) crown color: white
+        - (2%) under tail color: iridescent
+        - (1%) upper tail color: olive
+        - (1%) belly color: green
+        - (1%) bill color: rufous
+        - (1%) throat color: buff
+        - (1%) wing color: pink
+        - (1%) nape color: red
+        - (1%) bill color: yellow
+        - (1%) under tail color: green
+        - (1%) upper tail color: orange
+        - (1%) wing color: iridescent
+        - (1%) throat color: purple
+        - (1%) nape color: olive
+        - (1%) bill color: red
+        - (1%) bill shape: curved (up or down)
+        - (1%) shape: gull-like
+        - (1%) upperparts color: white
+        - (1%) bill color: buff
+        - (1%) throat color: green
+        - (1%) bill color: iridescent
+        - (1%) back color: yellow
+        - (1%) belly pattern: multi-colored
+        - (1%) shape: hawk-like
+        - (1%) belly color: iridescent
+        - (1%) wing color: purple
+        - (1%) primary color: olive
+        - (1%) eye color: orange
+        - (1%) leg color: green
+        - (1%) shape: swallow-like
+      - (50%) must have all (medium hard conjunction, 56 of):
+        - (3%) size: medium (9 - 16 in)
+        - (3%) primary color: green
+        - (3%) wing pattern: multi-colored
+        - (3%) wing pattern: solid
+        - (3%) back pattern: solid
+        - (3%) wing shape: long-wings
+        - (3%) primary color: purple
+        - (3%) bill shape: needle
+        - (3%) wing shape: tapered-wings
+        - (3%) bill length: longer than head
+        - (3%) crown color: grey
+        - (3%) belly color: rufous
+        - (2%) forehead color: red
+        - (2%) under tail color: buff
+        - (2%) breast color: red
+        - (2%) belly color: brown
+        - (2%) forehead color: brown
+        - (2%) wing color: green
+        - (2%) under tail color: rufous
+        - (2%) belly pattern: solid
+        - (2%) leg color: buff
+        - (2%) breast pattern: solid
+        - (2%) forehead color: white
+        - (2%) eye color: black
+        - (2%) bill color: white
+        - (2%) crown color: white
+        - (2%) under tail color: iridescent
+        - (2%) bill length: about the same as head
+        - (2%) upper tail color: olive
+        - (2%) belly color: green
+        - (2%) bill color: rufous
+        - (1%) throat color: buff
+        - (1%) wing color: pink
+        - (1%) nape color: red
+        - (1%) bill color: yellow
+        - (1%) under tail color: green
+        - (1%) upper tail color: orange
+        - (1%) wing color: iridescent
+        - (1%) throat color: purple
+        - (1%) nape color: olive
+        - (1%) bill color: red
+        - (1%) bill shape: curved (up or down)
+        - (1%) shape: gull-like
+        - (1%) upperparts color: white
+        - (1%) bill color: buff
+        - (1%) throat color: green
+        - (1%) bill color: iridescent
+        - (1%) back color: yellow
+        - (1%) belly pattern: multi-colored
+        - (1%) shape: hawk-like
+        - (1%) belly color: iridescent
+        - (1%) wing color: purple
+        - (1%) primary color: olive
+        - (1%) eye color: orange
+        - (1%) underparts color: pink
+        - (1%) upperparts color: orange
+    - (21%) above the highest (high hyper-disjunction, 2 of):
+      - (51%) must have all (medium hard conjunction, 11 of):
+        - (15%) crown color: yellow
+        - (12%) tail pattern: striped
+        - (11%) bill shape: specialized
+        - (9%) bill shape: hooked seabird
+        - (9%) upperparts color: blue
+        - (8%) belly color: buff
+        - (8%) underparts color: grey
+        - (8%) throat color: grey
+        - (7%) back pattern: multi-colored
+        - (6%) eye color: purple
+        - (5%) bill length: about the same as head
+      - (49%) must have all (low hard conjunction, 65 of):
+        - (4%) crown color: yellow
+        - (3%) tail pattern: striped
+        - (3%) bill shape: specialized
+        - (3%) bill shape: hooked seabird
+        - (2%) upperparts color: blue
+        - (2%) size: medium (9 - 16 in)
+        - (2%) belly color: buff
+        - (2%) underparts color: grey
+        - (2%) throat color: grey
+        - (2%) primary color: green
+        - (2%) wing pattern: multi-colored
+        - (2%) back pattern: multi-colored
+        - (2%) wing pattern: solid
+        - (2%) back pattern: solid
+        - (2%) wing shape: long-wings
+        - (2%) primary color: purple
+        - (2%) bill shape: needle
+        - (2%) wing shape: tapered-wings
+        - (2%) bill length: longer than head
+        - (2%) crown color: grey
+        - (2%) belly color: rufous
+        - (2%) forehead color: red
+        - (2%) under tail color: buff
+        - (2%) breast color: red
+        - (2%) belly color: brown
+        - (2%) forehead color: brown
+        - (2%) wing color: green
+        - (2%) under tail color: rufous
+        - (2%) belly pattern: solid
+        - (2%) leg color: buff
+        - (2%) breast pattern: solid
+        - (2%) eye color: purple
+        - (2%) forehead color: white
+        - (2%) eye color: black
+        - (2%) bill color: white
+        - (2%) crown color: white
+        - (2%) under tail color: iridescent
+        - (1%) upper tail color: olive
+        - (1%) belly color: green
+        - (1%) bill color: rufous
+        - (1%) throat color: buff
+        - (1%) wing color: pink
+        - (1%) nape color: red
+        - (1%) bill color: yellow
+        - (1%) under tail color: green
+        - (1%) upper tail color: orange
+        - (1%) wing color: iridescent
+        - (1%) throat color: purple
+        - (1%) nape color: olive
+        - (1%) bill color: red
+        - (1%) bill shape: curved (up or down)
+        - (1%) shape: gull-like
+        - (1%) upperparts color: white
+        - (1%) bill color: buff
+        - (1%) throat color: green
+        - (1%) bill color: iridescent
+        - (1%) back color: yellow
+        - (1%) belly pattern: multi-colored
+        - (1%) shape: hawk-like
+        - (1%) belly color: iridescent
+        - (1%) wing color: purple
+        - (1%) primary color: olive
+        - (1%) eye color: orange
+        - (1%) leg color: green
+        - (1%) shape: swallow-like

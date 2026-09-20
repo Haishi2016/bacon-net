@@ -1,0 +1,104 @@
+{
+  "report": {
+    "concepts": {
+      "c0": {
+        "meaning": "junction/bar",
+        "consistency": 1.0,
+        "hits": [
+          1,
+          4,
+          5,
+          7,
+          8,
+          9
+        ],
+        "violations": [],
+        "neutral(model-silent)": [
+          0
+        ]
+      },
+      "c1": {
+        "meaning": "loop",
+        "consistency": 1.0,
+        "hits": [
+          0,
+          1,
+          8,
+          9
+        ],
+        "violations": [],
+        "neutral(model-silent)": [
+          6
+        ]
+      },
+      "c2": {
+        "meaning": "straight stem",
+        "consistency": 1.0,
+        "hits": [
+          3
+        ],
+        "violations": [],
+        "neutral(model-silent)": [
+          0,
+          1,
+          4,
+          7,
+          9
+        ]
+      },
+      "c3": {
+        "meaning": "top-arc",
+        "consistency": 1.0,
+        "hits": [
+          2,
+          6,
+          9
+        ],
+        "violations": [],
+        "neutral(model-silent)": [
+          0,
+          1,
+          3,
+          5,
+          7
+        ]
+      },
+      "c4": {
+        "meaning": "edge/diagonal",
+        "consistency": 1.0,
+        "hits": [
+          2,
+          3,
+          4,
+          5,
+          7
+        ],
+        "violations": [],
+        "neutral(model-silent)": [
+          0,
+          1,
+          6
+        ]
+      }
+    },
+    "violations": [],
+    "summary": {
+      "overall_consistency": 1.0,
+      "n_hits": 19,
+      "n_violations": 0,
+      "verdict": "CONSISTENT"
+    }
+  },
+  "reconstructed_rules": {
+    "0": "loop",
+    "1": "NOT junction/bar , NOT loop",
+    "2": "top-arc , edge/diagonal",
+    "3": "NOT straight stem , NOT edge/diagonal , NOT loop",
+    "4": "junction/bar , edge/diagonal",
+    "5": "junction/bar , NOT edge/diagonal",
+    "6": "NOT top-arc",
+    "7": "junction/bar , edge/diagonal , loop",
+    "8": "junction/bar , loop , straight stem",
+    "9": "junction/bar , top-arc , edge/diagonal , loop"
+  }
+}
