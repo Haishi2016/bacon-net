@@ -875,6 +875,31 @@ def save_tree_structure_to_json(model, filename, feature_names=None):
     return filename
 
 
+def read_model_metadata(file_name):
+    """Read the display/inference metadata embedded in a saved model checkpoint.
+
+    This is a lightweight accessor: it loads only the checkpoint dictionary (not
+    a reconstructed model) and returns the JSON-decoded ``bacon_metadata`` stored
+    by ``binaryTreeLogicNet.save_model(..., metadata=...)``.
+
+    Args:
+        file_name (str): Path to the ``.pth`` checkpoint.
+
+    Returns:
+        dict | None: The decoded metadata, or ``None`` if the checkpoint has none.
+    """
+    import json
+
+    checkpoint = torch.load(file_name, weights_only=True)
+    raw_metadata = checkpoint.get('bacon_metadata', None) if isinstance(checkpoint, dict) else None
+    if not raw_metadata:
+        return None
+    try:
+        return json.loads(raw_metadata)
+    except (TypeError, ValueError):
+        return None
+
+
 # ============================================================================
 # Pruned Tree Export - critical subtree retained after pruning analysis
 # ============================================================================

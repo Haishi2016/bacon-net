@@ -440,13 +440,17 @@ class binaryTreeLogicNet(nn.Module):
             nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0.5)  
-    def save_model(self, file_name):
+    def save_model(self, file_name, metadata=None):
         """Save the model state to a file.
 
         Args:
             file_name (str): Path to save the model.
+            metadata (dict, optional): JSON-serializable display metadata (e.g.
+                feature names, aggregator family, accuracy, tree) stored inside
+                the checkpoint so a single .pth supports display/train/inference.
         """
         import logging
+        import json
         num_trans = len(self.transformation_layer.transformations) if self.transformation_layer else 0
         
         checkpoint = {
@@ -458,6 +462,8 @@ class binaryTreeLogicNet(nn.Module):
             # Save transformation configuration
             'use_transformation_layer': self.use_transformation_layer,
             'num_transformations': num_trans,
+            # JSON-encoded display/inference metadata (optional)
+            'bacon_metadata': json.dumps(metadata) if metadata is not None else None,
         }
         
         logging.info(f"💾 Saving model to {file_name}")
@@ -482,6 +488,14 @@ class binaryTreeLogicNet(nn.Module):
         self.is_frozen = checkpoint.get('is_frozen', False)
         self.locked_perm = checkpoint.get('locked_perm', None)
         self.tree_layout = checkpoint.get('tree_layout', getattr(self, 'tree_layout', 'left'))
+
+        # Restore optional display/inference metadata embedded in the checkpoint.
+        import json
+        raw_metadata = checkpoint.get('bacon_metadata', None)
+        try:
+            self.bacon_metadata = json.loads(raw_metadata) if raw_metadata else None
+        except (TypeError, ValueError):
+            self.bacon_metadata = None
         
         # Check transformation configuration compatibility
         saved_use_trans = checkpoint.get('use_transformation_layer', True)

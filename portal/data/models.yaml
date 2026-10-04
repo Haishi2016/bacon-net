@@ -1,0 +1,41 @@
+# BACON-NET portal model catalog.
+#
+# This file is the source of truth for the Models screen. The portal reads and
+# writes it server-side (see src/app/catalog/models/route.ts); there is no
+# external backend.
+#
+# Models are created by the Model Editor's "Save" button. The trained bacon
+# checkpoint (.pth, pointed to by `location`) is the single source of truth for
+# display/train/inference; the learned tree and feature names are embedded in
+# the checkpoint's metadata. This file is a lightweight catalog index.
+#
+# Fields:
+#   id          unique slug
+#   name        display name
+#   dataset     dataset id this model references
+#   datasetName dataset display name
+#   aggregator  aggregator family used (bacon.baconNet._aggregator_registry key)
+#   accuracy    final accuracy (0..1) when trained, else null
+#   features    list of feature names
+#   nodes       node count in the tree
+#   links       edge count in the tree
+#   status      draft | staging | production
+#   updated     YYYY-MM-DD
+#   location    repo-relative path to the .pth checkpoint (tree embedded inside)
+
+models:
+  - id: new-world
+    name: new-world
+    dataset: hello-world-a-or-b-and-c
+    datasetName: Hello World · ((A or B) and C)
+    aggregator: bool.min_max
+    accuracy: 1
+    features:
+      - A
+      - B
+      - C
+    nodes: 5
+    links: 4
+    status: draft
+    updated: '2026-10-04'
+    location: portal/data/models/new-world.pth

@@ -1,0 +1,63 @@
+# BACON-NET portal dataset catalog.
+#
+# This file is the source of truth for the Datasets screen. The portal reads it
+# server-side (see src/app/catalog/datasets/route.ts) and renders the table from
+# it, so there is no external backend to run.
+#
+# Each entry describes one dataset and points to where the actual data lives
+# via `location` (a repo-relative path or a URL).
+#
+# Fields:
+#   id        unique slug
+#   name      display name
+#   source    short provenance label
+#   modality  Tabular | Boolean | Imaging | FHIR R4 | ...
+#   samples   number of rows / samples
+#   features  number of input columns
+#   labeled   number of labeled rows
+#   updated   YYYY-MM-DD
+#   status    ready | syncing | review
+#   location  repo-relative path or URL to the actual dataset
+#   notes     optional free text
+
+datasets:
+  - id: hello-world-a-or-b-and-c
+    name: Hello World · ((A or B) and C)
+    source: Synthetic · Boolean expression
+    modality: Boolean
+    samples: 8
+    features: 3
+    labeled: 8
+    updated: '2026-10-04'
+    status: ready
+    location: portal/data/datasets/hello-world-a-or-b-and-c.csv
+  - id: wbcd
+    name: Wisconsin Breast Cancer Diagnostic
+    source: UCI · CSV
+    modality: Tabular
+    samples: 569
+    features: 30
+    labeled: 569
+    updated: '2026-03-10'
+    status: ready
+    location: https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic
+  - id: heart-disease
+    name: Heart Disease (Cleveland)
+    source: UCI · CSV
+    modality: Tabular
+    samples: 303
+    features: 13
+    labeled: 303
+    updated: '2026-01-18'
+    status: ready
+    location: samples/heart-disease
+  - id: diabetes
+    name: Pima Indians Diabetes
+    source: UCI · CSV
+    modality: Tabular
+    samples: 768
+    features: 8
+    labeled: 768
+    updated: '2026-02-02'
+    status: ready
+    location: samples/diabetes

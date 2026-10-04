@@ -497,22 +497,31 @@ class VectorFullTreeHead(nn.Module):
 
     @torch.no_grad()
     def _sample_routes(self, temperature: float, greedy: bool = False) -> list:
-        """One candidate discrete routing: a list of hard one-hots ``[H,w_in,w_out]``.
+        """One candidate discrete routing: a list of hard {0,1} maps ``[H,w_in,w_out]``.
 
-        Each source picks a single destination -- greedily (argmax) or sampled
-        from the routing categorical at ``temperature`` (the soft egress is a
-        *distribution over trees*; sampling explores that candidate range)."""
+        Each source commits to its top-``max_egress`` destination(s) -- greedily
+        (top-k, matching ``freeze_egress``) or sampled WITHOUT replacement from the
+        routing categorical at ``temperature`` (the soft egress is a *distribution
+        over trees*; sampling explores that candidate range). ``max_egress==1``
+        gives a single-parent tree; ``k>1`` gives a k-hot relaxed DAG."""
         routes = []
+        k_eg = max(int(self.max_egress), 1)
         for l in range(self.depth):
             logits = self.route_logits[l] / max(temperature, 1e-4)
             probs = F.softmax(logits, dim=2)                 # [H, w_in, w_out]
             H, w_in, w_out = probs.shape
+            k = min(k_eg, w_out)
+            hard = torch.zeros_like(probs)
             if greedy or w_out == 1:
-                idx = probs.argmax(dim=2, keepdim=True)      # [H, w_in, 1]
-            else:
+                idx = probs.topk(k, dim=2).indices           # [H, w_in, k] (top-k)
+            elif k == 1:
                 idx = torch.multinomial(probs.reshape(H * w_in, w_out), 1
                                         ).reshape(H, w_in, 1)
-            hard = torch.zeros_like(probs)
+            else:
+                # k distinct destinations per source (softmax probs are all > 0,
+                # so sampling k <= w_out without replacement is always valid).
+                idx = torch.multinomial(probs.reshape(H * w_in, w_out), k,
+                                        replacement=False).reshape(H, w_in, k)
             hard.scatter_(2, idx, 1.0)
             routes.append(hard)
         return routes
@@ -538,11 +547,8 @@ class VectorFullTreeHead(nn.Module):
             self.egress_frozen = torch.tensor(True, device=self.egress_frozen.device)
             self._freeze_transform()
             return torch.zeros((), device=self.temperature.device)
-        if self.max_egress > 1:
-            # The scan samples single-parent routings; for a relaxed DAG
-            # (max_egress>1) use the deterministic top-k freeze instead.
-            self.freeze_egress()
-            return torch.zeros((), device=self.temperature.device)
+        # Candidates are k-hot for max_egress>1 (see _sample_routes); candidate 0
+        # is the deterministic top-k, so the scan never loses to freeze_egress().
 
         was_training = self.training
         was_frozen = bool(self.egress_frozen)

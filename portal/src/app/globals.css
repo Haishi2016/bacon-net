@@ -1,0 +1,56 @@
+:root {
+  --bg: #08111d;
+  --bg-soft: #101b2a;
+  --panel: rgba(13, 21, 35, 0.82);
+  --panel-strong: #111c2d;
+  --panel-border: rgba(161, 182, 214, 0.12);
+  --text: #e8eef8;
+  --muted: #99abc3;
+  --accent: #69d2ff;
+  --accent-2: #a78bfa;
+  --success: #52d39c;
+  --warning: #f3b84f;
+  --danger: #ff7f8f;
+  --shadow: 0 24px 60px rgba(1, 5, 11, 0.42);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(105, 210, 255, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(167, 139, 250, 0.18), transparent 24%),
+    linear-gradient(180deg, #050b13 0%, #09111c 45%, #0d1725 100%);
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--text);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(105, 210, 255, 0.35);
+}

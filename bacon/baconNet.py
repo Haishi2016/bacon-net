@@ -335,14 +335,16 @@ class baconNet(nn.Module):
             accuracy = (predictions == y).float().mean()
             return accuracy.item()
         
-    def save_model(self, filepath):
+    def save_model(self, filepath, metadata=None):
         directory = os.path.dirname(filepath)
         if directory:
             os.makedirs(directory, exist_ok=True)
-        self.assembler.save_model(filepath)
+        self.assembler.save_model(filepath, metadata=metadata)
 
     def load_model(self, filepath):
         self.assembler.load_model(filepath)
+        # Expose any display/inference metadata embedded in the checkpoint.
+        self.bacon_metadata = getattr(self.assembler, 'bacon_metadata', None)
 
     def make_param_groups(self):        
         param_groups = []
