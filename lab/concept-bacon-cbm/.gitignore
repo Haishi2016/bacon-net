@@ -14,3 +14,6 @@ cream/cache_clothing/
 cub/cache/
 cub/_*.txt
 **/__pycache__/
+
+# third-party reference repo, cloned locally (nested git repo, not a submodule)
+LogicCBMs/
