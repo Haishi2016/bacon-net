@@ -502,6 +502,335 @@ class VectorRectTreeHead(nn.Module):
             self.transform_frozen.fill_(True)
         self.frozen.fill_(True)
 
+    # ------------------------------------------------------------- scheduled fit
+    def fit(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        *,
+        epochs: int = 600,
+        lr: float = 0.05,
+        anneal_cap: float = 1.0,
+        anneal_frac: float = 0.6,
+        edge_l0_lam: Optional[float] = None,
+        edge_l0_warmup: float = 0.3,
+        binarize_lam: float = 2.0,
+        binarize_warmup: float = 0.3,
+        freeze_frac: float = 0.7,
+        progress=None,
+        log_every: int = 100,
+    ) -> dict:
+        """Train this rectangular head with the real OCBM single-run harden protocol.
+
+        This mirrors the rect-head schedule of ``cub_emergent.train_one`` (the
+        machinery behind ``run_cub`` / ``run_awa`` / ``run_cifar``): a **single
+        training run** — *not* multiple attempts — in which the soft routing is
+        progressively committed, hardened once, then fine-tuned frozen. For the
+        hardening to be faithful the head must be built with
+        ``straight_through=True`` (hard forward / soft backward, so soft ≈ hard)
+        and ``edge_l0_lam > 0`` (L0 edge gates that prune to exactly ``0``); use
+        the :meth:`train` classmethod to construct it correctly.
+
+        Schedule over ``epochs``:
+
+        1. **Anneal** routing sharpness to ``anneal_cap`` over the first
+           ``anneal_frac`` of the run, then hold.
+        2. **L0 edge warmup**: ramp the edge-gate penalty ``0 -> edge_l0_lam``
+           over the first ``edge_l0_warmup`` fraction so the tree forms useful
+           edges *before* sparsity pressure prunes them to ``{0}``.
+        3. **Binarize warmup**: ramp the gate-entropy penalty ``0 -> binarize_lam``
+           *after* the L0 warmup so edges polarize to ``{0, 1}``.
+        4. **Best-soft tracking**: snapshot the peak-accuracy soft state, but only
+           once the L0 warmup is complete (an earlier peak is a dense, un-pruned
+           tree whose hardening would discard the sparsification).
+        5. **Harden** at ``freeze_frac`` of the run: restore the best-soft
+           snapshot and commit it into the frozen DAG with :meth:`harden`.
+        6. **Frozen fine-tune**: train the remaining epochs on the frozen
+           topology (per-node andness only), keeping the best hard checkpoint.
+
+        Args:
+            x: Input tensor ``(N, K)``.
+            y: Target tensor ``(N,)`` or ``(N, 1)`` (binary, single head).
+            epochs: Total training epochs (soft + frozen fine-tune).
+            lr: Adam learning rate (held for the whole run).
+            anneal_cap: Routing-sharpness cap reached at ``anneal_frac``.
+            anneal_frac: Fraction of the run over which to anneal to the cap.
+            edge_l0_lam: Peak L0 edge penalty; defaults to the head's construction
+                ``edge_l0_lam``. Only applied when the head has L0 gates.
+            edge_l0_warmup: Fraction of the run to ramp the L0 penalty over.
+            binarize_lam: Peak gate-entropy (polarization) penalty.
+            binarize_warmup: Fraction of the run to ramp the binarize penalty over
+                (starting after the L0 warmup).
+            freeze_frac: Fraction of the run after which to harden.
+            progress: Optional callback ``fn(info: dict)`` invoked with
+                ``{phase, epoch, epochs, loss, acc}`` for logging.
+            log_every: How often to invoke ``progress`` during each phase.
+
+        Returns:
+            dict: ``{soft_accuracy, hard_accuracy, final_accuracy}``.
+        """
+        import torch.nn.functional as F
+
+        device = next(self.parameters()).device
+        x = x.to(device)
+        y = y.to(device)
+        yv = y.squeeze(-1) if (y.dim() > 1 and y.size(-1) == 1) else y
+
+        def forward_prob():
+            out = self(x)
+            if out.dim() == 2 and out.size(1) == 1:
+                out = out.squeeze(1)
+            return out.clamp(1e-6, 1.0 - 1e-6)
+
+        def accuracy(prob):
+            return ((prob > 0.5).float() == yv).float().mean().item()
+
+        def snapshot():
+            return {k: v.detach().clone() for k, v in self.state_dict().items()}
+
+        def report(phase, epoch, total, loss_val, acc):
+            if progress and (epoch % log_every == 0 or epoch == total - 1):
+                progress({
+                    "phase": phase,
+                    "epoch": epoch,
+                    "epochs": total,
+                    "loss": None if loss_val is None else float(loss_val),
+                    "acc": acc,
+                })
+
+        l0_target = self.edge_l0_lam if edge_l0_lam is None else float(edge_l0_lam)
+        l0_warmup = int(edge_l0_warmup * epochs)
+        bin_warmup = int(binarize_warmup * epochs)
+        force_at = int(freeze_frac * epochs)
+        anneal_denom = max(1.0, anneal_frac * (epochs - 1))
+
+        opt = torch.optim.Adam(self.parameters(), lr=lr)
+        best_soft = -1.0
+        best_soft_state = None
+        best_hard = -1.0
+        best_hard_state = None
+        soft_accuracy = 0.0
+        hard_accuracy = 0.0
+        frozen = False
+
+        for epoch in range(epochs):
+            if not frozen:
+                # --- soft phase: anneal + L0 warmup + binarize warmup --------
+                self.train()
+                raw = min(1.0, epoch / anneal_denom)
+                self.anneal(anneal_cap * raw)
+                if self.use_l0 and l0_warmup > 0:
+                    self.edge_l0_lam = l0_target * min(1.0, epoch / float(l0_warmup))
+                if bin_warmup > 0:
+                    self.binarize_lam = binarize_lam * min(
+                        1.0, max(0.0, epoch - l0_warmup) / float(bin_warmup))
+                opt.zero_grad()
+                prob = forward_prob()
+                loss = F.binary_cross_entropy(prob, yv) + self.regularization()
+                loss.backward()
+                opt.step()
+                acc = accuracy(prob.detach())
+                report("soft", epoch, epochs, loss.item(), acc)
+
+                # track the soft peak, but only once L0 pruning has warmed up
+                l0_ready = (not self.use_l0) or epoch >= l0_warmup
+                if l0_ready and acc > best_soft:
+                    best_soft = acc
+                    best_soft_state = snapshot()
+
+                if epoch >= force_at:
+                    # restore the peak soft routing, then commit the discrete tree
+                    if best_soft_state is not None:
+                        self.load_state_dict(best_soft_state)
+                    self.eval()
+                    with torch.no_grad():
+                        soft_accuracy = accuracy(forward_prob())
+                    self.harden()
+                    frozen = True
+                    with torch.no_grad():
+                        hard_accuracy = accuracy(forward_prob())
+                    best_hard = hard_accuracy
+                    best_hard_state = snapshot()
+                    if progress:
+                        progress({"phase": "harden", "epoch": epoch, "epochs": epochs,
+                                  "loss": None, "acc": hard_accuracy})
+            else:
+                # --- frozen fine-tune: andness only, on the committed topology
+                self.train()
+                opt.zero_grad()
+                prob = forward_prob()
+                loss = F.binary_cross_entropy(prob, yv)
+                loss.backward()
+                opt.step()
+                acc = accuracy(prob.detach())
+                report("finetune", epoch, epochs, loss.item(), acc)
+                if acc > best_hard:
+                    best_hard = acc
+                    best_hard_state = snapshot()
+
+        # restore the best hardened checkpoint for export / save
+        if best_hard_state is not None:
+            self.load_state_dict(best_hard_state)
+        self.eval()
+        with torch.no_grad():
+            final_accuracy = accuracy(forward_prob())
+
+        return {
+            "soft_accuracy": soft_accuracy,
+            "hard_accuracy": hard_accuracy,
+            "final_accuracy": final_accuracy,
+        }
+
+    # ------------------------------------------------- canonical training entry
+    @classmethod
+    def train_head(
+        cls,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        *,
+        input_size: int,
+        depth: int = 4,
+        max_parents: int = 1,
+        use_negation: bool = True,
+        normalize_andness: bool = True,
+        temperature: float = 2.0,
+        final_temperature: float = 0.1,
+        edge_l0_lam: float = 1e-3,
+        straight_through: bool = True,
+        head_kwargs: Optional[dict] = None,
+        progress=None,
+        **fit_kwargs,
+    ):
+        """Build a rect head configured for faithful hardening and :meth:`fit` it once.
+
+        This is the single canonical training entry for the rectangular head,
+        matching the real OCBM protocol (``cub_emergent.train_one``): one run, no
+        multiple attempts. The head is constructed with ``straight_through=True``
+        and ``edge_l0_lam > 0`` so that :meth:`fit`'s L0-warmup / binarize-warmup /
+        harden / frozen fine-tune schedule discretizes faithfully (soft ≈ hard).
+
+        Args:
+            x, y: Training tensors (see :meth:`fit`).
+            input_size: Number of input concepts/features ``K``.
+            depth: Rectangular head depth.
+            max_parents: Max fan-in per node (edges committed at harden).
+            use_negation: Allow learned per-leaf negation.
+            normalize_andness: Map andness bias through ``sigmoid*3-1``.
+            temperature, final_temperature: Gate temperatures.
+            edge_l0_lam: Peak L0 edge-gate penalty (must be > 0 for clean pruning).
+            straight_through: Hard-forward / soft-backward routing (keep ``True``).
+            head_kwargs: Extra keyword args forwarded to the constructor.
+            progress: Optional ``fn(info)`` logging callback.
+            **fit_kwargs: Forwarded to :meth:`fit`.
+
+        Returns:
+            tuple: ``(head, result)`` with ``head`` already hardened and
+            ``result`` the :meth:`fit` dict.
+        """
+        head = cls(
+            input_size,
+            num_heads=1,
+            depth=depth,
+            max_parents=max_parents,
+            use_negation=use_negation,
+            normalize_andness=normalize_andness,
+            temperature=temperature,
+            final_temperature=final_temperature,
+            edge_l0_lam=edge_l0_lam,
+            straight_through=straight_through,
+            **(head_kwargs or {}),
+        )
+        result = head.fit(x, y, progress=progress, **fit_kwargs)
+        return head, result
+
+    # ------------------------------------------------------------- tree export
+    def export_hardened_tree(self, feature_names: Optional[Sequence[str]] = None, head: int = 0) -> list:
+        """Walk the hardened DAG into a nested aggregation tree.
+
+        Must be called after :meth:`harden`. Returns a single-rooted nested list
+        ``[{label, count, operator, andness, children}]`` where leaves carry the
+        (optionally negated) feature name and aggregator nodes carry the learned
+        per-node andness (``operator`` = ``AND`` if andness >= 0.5 else ``OR``).
+        """
+        if not bool(self.frozen):
+            raise RuntimeError("Call harden() before export_hardened_tree().")
+
+        from bacon.utils import andness_to_gcd_code
+
+        h = int(head)
+        names = list(feature_names) if feature_names else [f"feature{i}" for i in range(self.input_size)]
+        neg_identity = self.frozen_transform[h] if self.use_negation else None
+
+        def leaf_label(i: int) -> str:
+            base = names[i] if i < len(names) else f"feature{i}"
+            if neg_identity is not None and float(neg_identity[i]) < 0.5:
+                return f"NOT {base}"
+            return base
+
+        def node_andness(step: int, j: int) -> float:
+            a = self.andness_bias[step][h, j].detach()
+            if self.normalize_andness:
+                a = torch.sigmoid(a) * 3.0 - 1.0
+            return round(float(a), 3)
+
+        def build(layer: int, j: int) -> dict:
+            step = layer - 1  # edges/andness for this output node live at step=layer-1
+            edges = getattr(self, f"frozen_edge_{step}")[h]  # [src, w_out]
+            src_idx = (edges[:, j] > 0.5).nonzero(as_tuple=True)[0].tolist()
+            children = []
+            for i in src_idx:
+                if step == 0:
+                    children.append({"label": leaf_label(i), "count": 1})
+                elif self.leaf_shortcut and i >= self.widths[step]:
+                    children.append({"label": leaf_label(i - self.widths[step]), "count": 1})
+                else:
+                    children.append(build(layer - 1, i))
+            # Collapse redundant single-child aggregators (aggregating one input is
+            # an identity passthrough) so the displayed tree is clean.
+            if len(children) == 1:
+                return children[0]
+            a = node_andness(step, j)
+            op = andness_to_gcd_code(a)
+            count = sum(c["count"] for c in children) if children else 1
+            return {"label": op, "count": count, "operator": op, "andness": a, "children": children}
+
+        root = int(self.frozen_root[h].argmax().item())
+        return [build(self.depth, root)]
+
+    # --------------------------------------------------------------- save/load
+    def save_model(self, file_name: str, metadata=None) -> None:
+        """Persist the rect head as a self-describing checkpoint.
+
+        Stores the state dict, the construction config needed to rebuild the
+        head, and optional JSON display/inference ``metadata`` under the same
+        ``bacon_metadata`` key used by the binary tree head, so a single .pth
+        supports display/train/inference.
+        """
+        import os
+        import json
+
+        directory = os.path.dirname(file_name)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        checkpoint = {
+            "model_state_dict": self.state_dict(),
+            "head_type": "rect",
+            "config": {
+                "input_size": self.input_size,
+                "num_heads": self.num_heads,
+                "widths": list(self.widths),
+                "depth": self.depth,
+                "max_parents": self.max_parents,
+                "normalize_andness": self.normalize_andness,
+                "use_negation": self.use_negation,
+                "use_coefficients": self.use_coefficients,
+                "leaf_shortcut": self.leaf_shortcut,
+            },
+            "frozen": bool(self.frozen),
+            "bacon_metadata": json.dumps(metadata) if metadata is not None else None,
+        }
+        torch.save(checkpoint, file_name)
+
 
 def _bin_entropy(p: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     """Binary entropy of gate probabilities (minimized -> polarizes to 0/1)."""

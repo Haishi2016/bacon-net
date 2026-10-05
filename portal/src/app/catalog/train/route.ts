@@ -58,6 +58,9 @@ export async function GET(request: Request) {
   const id = url.searchParams.get("id");
   const requestedAggregator = url.searchParams.get("aggregator") ?? "bool.min_max";
   const aggregator = ALLOWED_AGGREGATORS.has(requestedAggregator) ? requestedAggregator : "bool.min_max";
+  const headType = url.searchParams.get("headType") === "rect" ? "rect" : "left";
+  const rectDepthRaw = Number(url.searchParams.get("rectDepth") ?? "4");
+  const rectDepth = Number.isFinite(rectDepthRaw) ? Math.max(1, Math.min(8, Math.floor(rectDepthRaw))) : 4;
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -104,7 +107,7 @@ export async function GET(request: Request) {
 
         const child = spawn(
           pythonCmd,
-          [scriptPath, "--csv", csvPath, "--repo", repoRoot, "--aggregator", aggregator, "--save-model", stagingPath],
+          [scriptPath, "--csv", csvPath, "--repo", repoRoot, "--aggregator", aggregator, "--save-model", stagingPath, "--head-type", headType, "--rect-depth", String(rectDepth)],
           {
             cwd: repoRoot,
             env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" }

@@ -875,6 +875,54 @@ def save_tree_structure_to_json(model, filename, feature_names=None):
     return filename
 
 
+# ---- GCD operator naming (Graded Logic, Dujmović) --------------------------
+
+# Named Graded Conjunction/Disjunction operators and their andness (the same
+# scale bacon uses: sigmoid(bias)*3 - 1 in [-1, 2]). Range operators (HHC, LHC,
+# LHD, HHD) use a representative andness within their interval.
+_GCD_OPERATORS = [
+    ("CC", 2.0),           # Drastic conjunction
+    ("HHC", 1.625),        # High hyper-conjunction
+    ("CP", 1.25),          # Product t-norm
+    ("LHC", 1.125),        # Low hyper-conjunction
+    ("C", 1.0),            # Pure conjunction
+    ("HC+", 13.0 / 14.0),  # High hard conjunction
+    ("HC", 12.0 / 14.0),   # Medium hard conjunction
+    ("HC-", 11.0 / 14.0),  # Low hard conjunction
+    ("SC+", 10.0 / 14.0),  # High soft conjunction
+    ("SC", 9.0 / 14.0),    # Medium soft conjunction
+    ("SC-", 8.0 / 14.0),   # Low soft conjunction
+    ("A", 7.0 / 14.0),     # Arithmetic mean (neutral)
+    ("SD-", 6.0 / 14.0),   # Low soft disjunction
+    ("SD", 5.0 / 14.0),    # Medium soft disjunction
+    ("SD+", 4.0 / 14.0),   # High soft disjunction
+    ("HD-", 3.0 / 14.0),   # Low hard disjunction
+    ("HD", 2.0 / 14.0),    # Medium hard disjunction
+    ("HD+", 1.0 / 14.0),   # High hard disjunction
+    ("D", 0.0),            # Pure disjunction
+    ("LHD", -0.125),       # Low hyper-disjunction
+    ("DP", -0.25),         # Product t-conorm
+    ("HHD", -0.625),       # High hyper-disjunction
+    ("DD", -1.0),          # Drastic disjunction
+]
+
+
+def andness_to_gcd_code(andness):
+    """Map a continuous andness value to the nearest named GCD operator code.
+
+    Args:
+        andness (float): andness in bacon's scale (sigmoid(bias)*3 - 1, in [-1, 2]).
+
+    Returns:
+        str: the GCD operator code (e.g. "SC+", "CP", "A", "HD-", "DD").
+    """
+    try:
+        a = float(andness)
+    except (TypeError, ValueError):
+        return "A"
+    return min(_GCD_OPERATORS, key=lambda kv: abs(kv[1] - a))[0]
+
+
 def read_model_metadata(file_name):
     """Read the display/inference metadata embedded in a saved model checkpoint.
 

@@ -394,10 +394,12 @@ export default function Page() {
   const [training, setTraining] = useState(false);
   const [trainSettingsOpen, setTrainSettingsOpen] = useState(false);
   const [trainAggregator, setTrainAggregator] = useState("bool.min_max");
+  const [trainHeadType, setTrainHeadType] = useState<"left" | "rect">("left");
+  const [trainRectDepth, setTrainRectDepth] = useState("4");
   const [trainedAggregator, setTrainedAggregator] = useState<string | null>(null);
   const [trainLogs, setTrainLogs] = useState<string[]>([]);
   const [trainStatus, setTrainStatus] = useState<"running" | "done" | "error">("running");
-  const [trainSummary, setTrainSummary] = useState<{ accuracy?: number; bestAccuracy?: number } | null>(null);
+  const [trainSummary, setTrainSummary] = useState<{ accuracy?: number; hardAccuracy?: number }  | null>(null);
   const [trainModelStaging, setTrainModelStaging] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
   const completedRef = useRef(false);
@@ -538,8 +540,10 @@ export default function Page() {
     setTraining(true);
 
     const aggregator = trainAggregator;
+    const headType = trainHeadType;
+    const rectDepth = Math.max(1, Math.min(8, Number(trainRectDepth) || 4));
     const es = new EventSource(
-      `/catalog/train?id=${encodeURIComponent(editorDatasetId)}&aggregator=${encodeURIComponent(aggregator)}`
+      `/catalog/train?id=${encodeURIComponent(editorDatasetId)}&aggregator=${encodeURIComponent(aggregator)}&headType=${headType}&rectDepth=${rectDepth}`
     );
     esRef.current = es;
 
@@ -556,7 +560,9 @@ export default function Page() {
       try {
         const tree = JSON.parse((event as MessageEvent).data) as DiagnosisTreeNode[];
         applyLearnedTree(tree);
-        setTrainedAggregator(aggregator);
+        // The rect head uses the graded full-weight power mean; reflect that in
+        // the palette. The left head uses the selected aggregator family.
+        setTrainedAggregator(headType === "rect" ? "lsp.full_weight" : aggregator);
       } catch {
         /* ignore */
       }
@@ -806,16 +812,42 @@ export default function Page() {
               <h3>Training settings</h3>
             </div>
             <label className="train-field">
-              <span>Aggregator family</span>
-              <select value={trainAggregator} onChange={(event) => setTrainAggregator(event.target.value)}>
-                {AGGREGATOR_FAMILIES.map((family) => (
-                  <option key={family.value} value={family.value}>
-                    {family.label}
-                  </option>
-                ))}
+              <span>Head type</span>
+              <select value={trainHeadType} onChange={(event) => setTrainHeadType(event.target.value as "left" | "rect")}>
+                <option value="left">Left-associative tree</option>
+                <option value="rect">Rectangular head (pruned into a tree)</option>
               </select>
-              <small>The graded-logic operator family BACON uses at each tree node. More parameters coming soon.</small>
+              <small>
+                {trainHeadType === "rect"
+                  ? "A rectangular graded-logic stack that is pruned into a tree during training."
+                  : "A left-associative aggregation tree (as in the hello-world sample)."}
+              </small>
             </label>
+            {trainHeadType === "rect" ? (
+              <label className="train-field">
+                <span>Rect head depth</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={trainRectDepth}
+                  onChange={(event) => setTrainRectDepth(event.target.value)}
+                />
+                <small>Number of stacked aggregation layers above the inputs.</small>
+              </label>
+            ) : (
+              <label className="train-field">
+                <span>Aggregator family</span>
+                <select value={trainAggregator} onChange={(event) => setTrainAggregator(event.target.value)}>
+                  {AGGREGATOR_FAMILIES.map((family) => (
+                    <option key={family.value} value={family.value}>
+                      {family.label}
+                    </option>
+                  ))}
+                </select>
+                <small>The graded-logic operator family BACON uses at each tree node.</small>
+              </label>
+            )}
             <div className="train-modal-actions train-settings-actions">
               <button type="button" className="ghost-button" onClick={() => setTrainSettingsOpen(false)}>
                 Cancel

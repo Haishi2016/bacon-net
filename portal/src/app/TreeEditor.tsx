@@ -42,25 +42,41 @@ type DropPayload = {
 const X_GAP = 170;
 const Y_GAP = 104;
 
-// ~30 aggregator operators. andness spans -2 (most disjunctive) to 1 (most
-// conjunctive); higher andness == a stronger AND-like operator.
-const AGG_COUNT = 30;
+type PaletteOperator = { label: string; andness: number; name?: string };
 
-function aggLetter(index: number) {
-  if (index < 26) return String.fromCharCode(65 + index);
-  return "A" + String.fromCharCode(65 + (index - 26));
-}
-
-const AGGREGATORS = Array.from({ length: AGG_COUNT }, (_, i) => {
-  const andness = -2 + (3 * i) / (AGG_COUNT - 1);
-  return { label: aggLetter(i), andness: Number(andness.toFixed(2)) };
-});
-
-type PaletteOperator = { label: string; andness: number };
+// The graded Conjunction/Disjunction (GCD) operator set (Dujmović, Graded
+// Logic). andness spans -1 (drastic disjunction) to 2 (drastic conjunction),
+// matching bacon's andness = sigmoid(bias)*3 - 1. Range operators (HHC, LHC,
+// LHD, HHD) use a representative andness within their interval.
+const AGGREGATORS: PaletteOperator[] = [
+  { label: "CC", andness: 2, name: "Drastic conjunction" },
+  { label: "HHC", andness: 1.625, name: "High hyper-conjunction" },
+  { label: "CP", andness: 1.25, name: "Product t-norm" },
+  { label: "LHC", andness: 1.125, name: "Low hyper-conjunction" },
+  { label: "C", andness: 1, name: "Pure conjunction" },
+  { label: "HC+", andness: 0.929, name: "High hard conjunction" },
+  { label: "HC", andness: 0.857, name: "Medium hard conjunction" },
+  { label: "HC-", andness: 0.786, name: "Low hard conjunction" },
+  { label: "SC+", andness: 0.714, name: "High soft conjunction" },
+  { label: "SC", andness: 0.643, name: "Medium soft conjunction" },
+  { label: "SC-", andness: 0.571, name: "Low soft conjunction" },
+  { label: "A", andness: 0.5, name: "Arithmetic mean (neutral)" },
+  { label: "SD-", andness: 0.429, name: "Low soft disjunction" },
+  { label: "SD", andness: 0.357, name: "Medium soft disjunction" },
+  { label: "SD+", andness: 0.286, name: "High soft disjunction" },
+  { label: "HD-", andness: 0.214, name: "Low hard disjunction" },
+  { label: "HD", andness: 0.143, name: "Medium hard disjunction" },
+  { label: "HD+", andness: 0.071, name: "High hard disjunction" },
+  { label: "D", andness: 0, name: "Pure disjunction" },
+  { label: "LHD", andness: -0.125, name: "Low hyper-disjunction" },
+  { label: "DP", andness: -0.25, name: "Product t-conorm" },
+  { label: "HHD", andness: -0.625, name: "High hyper-disjunction" },
+  { label: "DD", andness: -1, name: "Drastic disjunction" }
+];
 
 // The palette reflects the aggregator family used to train the model. Discrete
 // families (bool.min_max, math operator sets) expose named operators; LSP / GL
-// families are graded and use the andness spectrum above.
+// families are graded and use the GCD andness spectrum above.
 function paletteForFamily(family?: string): PaletteOperator[] {
   const AND: PaletteOperator = { label: "AND", andness: 2 };
   const OR: PaletteOperator = { label: "OR", andness: -1 };
@@ -92,9 +108,9 @@ function isGradedFamily(family?: string): boolean {
   );
 }
 
-// map andness [-2, 1] -> hue (warm/orange = disjunctive, cool/cyan = conjunctive)
+// map andness [-1, 2] -> hue (warm/orange = disjunctive, cool/cyan = conjunctive)
 function andnessColor(andness: number, alpha = 1) {
-  const norm = Math.min(1, Math.max(0, (andness + 2) / 3));
+  const norm = Math.min(1, Math.max(0, (andness + 1) / 3));
   const hue = 25 + norm * 175;
   return `hsla(${hue.toFixed(0)}, 78%, 62%, ${alpha})`;
 }
@@ -699,7 +715,11 @@ function EditorCanvas({
                 onDoubleClick={() =>
                   addToCenter({ kind: "aggregator", label: agg.label, operator: agg.label, andness: agg.andness })
                 }
-                title={gradedPalette ? `Operator ${agg.label} · andness ${agg.andness}` : `Operator ${agg.label}`}
+                title={
+                  agg.name
+                    ? `${agg.label} · ${agg.name} · andness ${agg.andness}`
+                    : `Operator ${agg.label}`
+                }
               >
                 {agg.label}
               </button>

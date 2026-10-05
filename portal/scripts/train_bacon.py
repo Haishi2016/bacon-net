@@ -78,8 +78,19 @@ def load_csv(path: Path):
     return feature_names, features, labels
 
 
-def to_editor_tree(structure: dict):
-    """Convert export_tree_structure_to_json output to the editor's nested form."""
+def to_editor_tree(structure: dict, graded: bool = False):
+    """Convert export_tree_structure_to_json output to the editor's nested form.
+
+    When `graded` is True, aggregator nodes are labeled with the named GCD
+    operator code (e.g. SC+, CP) matching the palette; otherwise they use the
+    discrete AND/OR label (for bool / operator-set families).
+    """
+
+    def op_label(andness: float) -> str:
+        if graded:
+            from bacon.utils import andness_to_gcd_code
+            return andness_to_gcd_code(andness)
+        return "AND" if andness >= 0.5 else "OR"
 
     def feature_node(name: str) -> dict:
         return {"label": name, "count": 1}
@@ -94,7 +105,7 @@ def to_editor_tree(structure: dict):
         def build(index: int) -> dict:
             node = nodes[index]
             andness = node["andness"]
-            op = "AND" if andness >= 0.5 else "OR"
+            op = op_label(andness)
             left_in = node["left_input"]
             right_in = node["right_input"]
             left = build(left_in["layer"]) if left_in["type"] == "aggregator" else feature_node(left_in["name"])
@@ -115,7 +126,7 @@ def to_editor_tree(structure: dict):
             if node.get("type") == "feature":
                 return feature_node(node["name"])
             andness = node["andness"]
-            op = "AND" if andness >= 0.5 else "OR"
+            op = op_label(andness)
             left = build(node["left_input"])
             right = build(node["right_input"])
             return {
@@ -137,6 +148,8 @@ def main() -> int:
     parser.add_argument("--csv", required=True)
     parser.add_argument("--repo", default=str(DEFAULT_REPO))
     parser.add_argument("--aggregator", default="bool.min_max")
+    parser.add_argument("--head-type", default="left", choices=["left", "rect"])
+    parser.add_argument("--rect-depth", type=int, default=4)
     parser.add_argument("--save-model", default="", help="Path to save the trained model (.pth) via bacon's save_model")
     parser.add_argument("--attempts", type=int, default=5)
     parser.add_argument("--max-epochs", type=int, default=0, help="0 = auto (min(input*300, 8000))")
@@ -177,7 +190,93 @@ def main() -> int:
     x = torch.tensor(features, dtype=torch.float32, device=device)
     y = torch.tensor(labels, dtype=torch.float32, device=device)
 
-    # Same configuration as samples/hello-world/main.py (aggregator is tunable).
+    def count_nodes(nodes):
+        total = 0
+        for node in nodes:
+            total += 1 + count_nodes(node.get("children", []))
+        return total
+
+    if args.head_type == "rect":
+        # Rectangular graded-logic head pruned into a tree during training.
+        from bacon.vectorizedRectTree import VectorRectTreeHead
+
+        depth = max(1, int(args.rect_depth))
+        y_vec = y.squeeze(-1) if y.dim() > 1 else y
+        epochs = args.max_epochs if args.max_epochs > 0 else 600
+        emit("LOG", f"🏋️ Training rect head · depth={depth} · width={input_size} · epochs={epochs}")
+
+        # The real OCBM single-run harden protocol (anneal -> L0 edge warmup ->
+        # binarize warmup -> harden@freeze_frac -> frozen fine-tune) lives in the
+        # bacon library (VectorRectTreeHead.train / .fit), the same machinery
+        # behind run_cub / run_awa / run_cifar. Here we just drive it and relay
+        # progress to the UI. No multiple attempts.
+        def on_progress(info):
+            phase = info.get("phase")
+            if phase == "soft":
+                emit(
+                    "LOG",
+                    f"   🏋️ Epoch {info['epoch']}/{info['epochs']} - Loss: {info['loss']:.4f} - Acc: {info['acc'] * 100:.1f}%",
+                )
+            elif phase == "harden":
+                emit("LOG", f"✂️ Hardened into a tree · accuracy: {info['acc'] * 100:.2f}%")
+            elif phase == "finetune":
+                emit("LOG", f"   🔧 Fine-tune {info['epoch']}/{info['epochs']} - Acc: {info['acc'] * 100:.1f}%")
+
+        try:
+            head, result = VectorRectTreeHead.train_head(
+                x,
+                y_vec,
+                input_size=input_size,
+                depth=depth,
+                max_parents=1,
+                use_negation=True,
+                normalize_andness=True,
+                temperature=2.0,
+                final_temperature=0.1,
+                epochs=epochs,
+                progress=on_progress,
+            )
+        except Exception as exc:  # noqa: BLE001
+            emit("ERROR", f"Training failed: {exc}")
+            return 1
+
+        soft_accuracy = result["soft_accuracy"]
+        hard_accuracy = result["hard_accuracy"]
+        final_accuracy = result["final_accuracy"]
+        emit("LOG", f"📏 soft {soft_accuracy * 100:.2f}% · hardened {hard_accuracy * 100:.2f}% · final {final_accuracy * 100:.2f}%")
+
+        try:
+            editor_tree = head.export_hardened_tree(feature_names)
+        except Exception as exc:  # noqa: BLE001
+            emit("ERROR", f"Could not export learned tree: {exc}")
+            return 1
+
+        node_count = count_nodes(editor_tree)
+        link_count = max(0, node_count - len(editor_tree))
+        metadata = {
+            "feature_names": feature_names,
+            "head_type": "rect",
+            "rect_depth": depth,
+            "aggregator": "lsp.full_weight",
+            "accuracy": round(final_accuracy, 4),
+            "hard_accuracy": round(hard_accuracy, 4),
+            "tree": editor_tree,
+            "nodes": node_count,
+            "links": link_count,
+        }
+        if args.save_model:
+            try:
+                head.save_model(args.save_model, metadata=metadata)
+                emit("LOG", f"💾 Saved model checkpoint: {Path(args.save_model).name}")
+                emit("MODEL", Path(args.save_model).name)
+            except Exception as exc:  # noqa: BLE001
+                emit("LOG", f"⚠️ Could not save model checkpoint: {exc}")
+
+        emit("TREE", json.dumps(editor_tree, ensure_ascii=False))
+        emit("DONE", json.dumps({"accuracy": round(final_accuracy, 4), "hardAccuracy": round(hard_accuracy, 4)}))
+        return 0
+
+    # Left-associative tree (default), as in samples/hello-world/main.py.
     bacon = baconNet(
         input_size,
         aggregator=args.aggregator,
@@ -211,16 +310,11 @@ def main() -> int:
 
     try:
         structure = export_tree_structure_to_json(bacon.assembler, feature_names)
-        editor_tree = to_editor_tree(structure)
+        graded = args.aggregator.startswith("lsp.") or args.aggregator == "gl.generic"
+        editor_tree = to_editor_tree(structure, graded=graded)
     except Exception as exc:  # noqa: BLE001
         emit("ERROR", f"Could not export learned tree: {exc}")
         return 1
-
-    def count_nodes(nodes):
-        total = 0
-        for node in nodes:
-            total += 1 + count_nodes(node.get("children", []))
-        return total
 
     node_count = count_nodes(editor_tree)
     link_count = max(0, node_count - len(editor_tree))
@@ -231,6 +325,7 @@ def main() -> int:
     if args.save_model:
         metadata = {
             "feature_names": feature_names,
+            "head_type": "left",
             "aggregator": args.aggregator,
             "accuracy": round(final_accuracy, 4),
             "best_accuracy": round(best_accuracy, 4),
