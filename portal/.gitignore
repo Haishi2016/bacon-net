@@ -21,3 +21,7 @@ next-env.d.ts
 # os / editor
 .DS_Store
 Thumbs.db
+
+# transient training scratch: uncommitted model checkpoints staged by the
+# train route; only models promoted into data/models/ (via the catalog) are kept
+data/models/.staging/
